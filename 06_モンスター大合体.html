@@ -296,6 +296,17 @@
       score += newLv * 10;
       maxLv = Math.max(maxLv, newLv);
 
+      const empty = [];
+      for (let er = 0; er < GRID_SIZE; er++) {
+        for (let ec = 0; ec < GRID_SIZE; ec++) {
+          if (!grid[er][ec]) empty.push({r: er, c: ec});
+        }
+      }
+      if (empty.length > 0) {
+        const slot = empty[Math.floor(Math.random() * empty.length)];
+        grid[slot.r][slot.c] = { lv: 1 };
+      }
+
       mergeAnimations.push({
         r: dst.r,
         c: dst.c,

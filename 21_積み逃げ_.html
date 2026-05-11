@@ -106,7 +106,7 @@
             <div>クリック/タップで</div>
             <div>ブロックを落とします</div>
             <div style="margin-top: 15px; font-size: 12px;">高さが50以上になったら</div>
-            <div style="font-size: 12px; margin-bottom: 15px;">もう一度クリックで脱出！</div>
+            <div style="font-size: 12px; margin-bottom: 15px;">クリックで脱出！</div>
             <div style="margin-top: 15px; color: #4ade80; font-weight: bold;">クリックして開始</div>
         </div>
         <div id="resultScreen">
@@ -185,7 +185,7 @@
                     const dx = b1.x - b2.x;
                     const dy = b1.y - b2.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
-                    const threshold = b1.size * 4;
+                    const threshold = b1.size * 40;
                     const key = [b1.id, b2.id].sort().join('-');
                     if (dist < threshold) {
                         if (!gameState.mergeTracking[key]) {
@@ -309,12 +309,26 @@
                 block.x += block.vx;
                 block.y += block.vy;
                 if (block.x < 0) block.x = 0;
-                if (block.x + block.size * 2 > canvas.width) {
-                    block.x = canvas.width - block.size * 2;
+                if (block.x + block.size * 20 > canvas.width) {
+                    block.x = canvas.width - block.size * 20;
                 }
-                if (block.y + block.size * 2 >= canvas.height) {
-                    block.y = canvas.height - block.size * 2;
+                if (block.y + block.size * 20 >= canvas.height) {
+                    block.y = canvas.height - block.size * 20;
                     block.vy = 0;
+                }
+                if (block.vy > 0) {
+                    const bsize = block.size * 20;
+                    for (let other of gameState.blocks) {
+                        if (other === block || other.vy !== 0) continue;
+                        const osize = other.size * 20;
+                        if (block.x < other.x + osize && block.x + bsize > other.x) {
+                            if (block.y + bsize >= other.y && block.y + bsize < other.y + osize * 1.5) {
+                                block.y = other.y - bsize;
+                                block.vy = 0;
+                                break;
+                            }
+                        }
+                    }
                 }
             });
 
@@ -375,10 +389,10 @@
 
             gameState.blocks.forEach(block => {
                 ctx.fillStyle = block.color;
-                ctx.fillRect(block.x, block.y, block.size * 2, block.size * 2);
+                ctx.fillRect(block.x, block.y, block.size * 20, block.size * 20);
                 ctx.strokeStyle = 'rgba(0,0,0,0.2)';
                 ctx.lineWidth = 1;
-                ctx.strokeRect(block.x, block.y, block.size * 2, block.size * 2);
+                ctx.strokeRect(block.x, block.y, block.size * 20, block.size * 20);
             });
 
             drawParticles();

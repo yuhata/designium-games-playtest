@@ -170,8 +170,8 @@
             state: 'playing',
             score: 0,
             bubbles: [],
-            shots: 5,
-            maxShots: 5,
+            shots: 10,
+            maxShots: 10,
             particles: [],
             isAiming: false,
             mouseX: 0,
@@ -234,14 +234,10 @@
                     game.bubbles.splice(i, 1);
                     game.score += 10;
                     createExplosion(bubble.x, bubble.y, bubble.color);
-                    game.ballFired = false;
-                    game.vx = 0;
-                    game.vy = 0;
-                    
+
                     if (game.bubbles.length === 0) {
                         endGame(true);
                     }
-                    return;
                 }
             }
         }
@@ -272,7 +268,7 @@
         function restart() {
             game.state = 'playing';
             game.score = 0;
-            game.shots = 5;
+            game.shots = 10;
             game.particles = [];
             game.isAiming = false;
             game.ballFired = false;
@@ -346,15 +342,24 @@
                 game.ballX += game.vx;
                 game.ballY += game.vy;
                 game.vy += game.gravity;
-                
-                if (game.ballY > canvas.height || game.ballX < 0 || game.ballX > canvas.width) {
+
+                if (game.ballX - game.ballRadius < 0 || game.ballX + game.ballRadius > canvas.width) {
+                    game.vx *= -1;
+                    game.ballX = Math.max(game.ballRadius, Math.min(canvas.width - game.ballRadius, game.ballX));
+                }
+                if (game.ballY - game.ballRadius < 0) {
+                    game.vy *= -1;
+                    game.ballY = game.ballRadius;
+                }
+
+                if (game.ballY > canvas.height) {
                     game.ballFired = false;
                     game.vx = 0;
                     game.vy = 0;
                     game.ballX = 400;
                     game.ballY = 560;
                 }
-                
+
                 checkCollisions();
             }
             

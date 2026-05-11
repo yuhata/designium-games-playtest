@@ -233,7 +233,7 @@
                 const dx = this.x - mouseX;
                 const dy = this.y - mouseY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                const detectionRadius = this.size * 2.5;
+                const detectionRadius = this.size * 5;
 
                 if (distance < detectionRadius && !this.discovered) {
                     this.hoverIntensity = Math.min(1, this.hoverIntensity + 0.08);
@@ -251,7 +251,7 @@
 
                 if (!this.discovered) {
                     // 未発見時：薄い、謎めいた表示
-                    const baseAlpha = 0.15 + this.hoverIntensity * 0.35;
+                    const baseAlpha = 0.30 + this.hoverIntensity * 0.35;
                     
                     // 背景円
                     ctx.fillStyle = `hsla(${this.baseHue}, 70%, 40%, ${baseAlpha})`;

@@ -296,6 +296,10 @@
             if (gameState.lastCardId === cardId) {
                 gameState.combo++;
             } else {
+                if (gameState.combo > 1) {
+                    comboDisplay.textContent = 'COMBO BREAK!';
+                    comboDisplay.style.color = '#ff4444';
+                }
                 gameState.combo = 1;
             }
             gameState.lastCardId = cardId;

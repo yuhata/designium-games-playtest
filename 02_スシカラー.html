@@ -168,6 +168,7 @@
             const y = e.clientY - rect.top;
             const colIdx = Math.floor(x / COLUMN_WIDTH);
             if (colIdx < 0 || colIdx >= COLUMNS) return;
+            game.columnGlows[colIdx] = 0.6;
             const col = game.columns[colIdx];
             if (col.length === 0) return;
             const pieceY = canvas.height - (col.length * (PIECE_SIZE + PIECE_GAP) + PIECE_GAP);
@@ -224,7 +225,7 @@
             if (topColor && game.columnGlows[idx] > 0) {
                 ctx.fillStyle = `rgba(255, 255, 255, ${game.columnGlows[idx] * 0.6})`;
                 ctx.fillRect(sx, 0, COLUMN_WIDTH, canvas.height);
-                game.columnGlows[idx] -= 0.02;
+                game.columnGlows[idx] -= 0.005;
             }
 
             ctx.strokeStyle = '#999';
@@ -331,11 +332,11 @@
         }
 
         function gameLoop() {
-            updateTime();
             if (game.gameState === 'playing' && checkAllMono()) {
                 game.gameState = 'win';
                 generateWinParticles();
             }
+            updateTime();
             draw();
             requestAnimationFrame(gameLoop);
         }

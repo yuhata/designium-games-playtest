@@ -208,7 +208,7 @@ class Enemy {
         this.height = 28;
         this.hp = 3;
         this.maxHp = 3;
-        this.speed = 1 + waveNum * 0.25;
+        this.speed = 0.8 + waveNum * 0.15;
         this.hue = Math.random() * 60;
         this.damageFlash = 0;
     }
@@ -343,7 +343,7 @@ function initGame() {
 
 function spawnWave() {
     gameState.waveNumber++;
-    const enemyCount = 2 + gameState.waveNumber;
+    const enemyCount = 1 + gameState.waveNumber;
     const baseX = canvas.width / 2;
     
     for (let i = 0; i < enemyCount; i++) {

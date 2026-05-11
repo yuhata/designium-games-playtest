@@ -136,6 +136,7 @@
     let mouseX = 0;
     let mouseY = 0;
     let previewTower = false;
+    let waveState = 'idle';
 
     const TOWER_COST = 50;
     const TOWER_RANGE = 120;
@@ -304,9 +305,13 @@
     function spawnWave() {
       const count = 2 + gameState.wave * 1.5;
       gameState.spawnedZombiesThisWave = Math.floor(count);
+      waveState = 'spawning';
       for (let i = 0; i < gameState.spawnedZombiesThisWave; i++) {
         setTimeout(() => {
-          if (!gameState.gameOver) zombies.push(new Zombie());
+          if (!gameState.gameOver) {
+            zombies.push(new Zombie());
+            waveState = 'active';
+          }
         }, i * 400);
       }
     }
@@ -370,19 +375,19 @@
         }
       }
 
-      // Wave進行チェック
-      if (zombies.length === 0 && gameState.wave < 10) {
-        gameState.wave++;
-        document.getElementById('waveNum').textContent = gameState.wave;
-        setTimeout(() => spawnWave(), 600);
-      }
-
-      // 勝利条件
-      if (gameState.wave === 10 && zombies.length === 0 && !gameState.gameOver) {
-        gameState.gameOver = true;
-        gameState.won = true;
-        saveScore(gameState.coins);
-        showEndScreen();
+      // Wave進行チェック（waveActive時のみ: spawning中のrace conditionを防ぐ）
+      if (waveState === 'active' && zombies.length === 0 && !gameState.gameOver) {
+        waveState = 'idle';
+        if (gameState.wave < 10) {
+          gameState.wave++;
+          document.getElementById('waveNum').textContent = gameState.wave;
+          setTimeout(() => spawnWave(), 600);
+        } else {
+          gameState.gameOver = true;
+          gameState.won = true;
+          saveScore(gameState.coins);
+          showEndScreen();
+        }
       }
 
       // 敗北条件

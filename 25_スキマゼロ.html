@@ -229,7 +229,7 @@
       game.gameState = 'win';
       game.flashAlpha = 1;
       playSound('victory', 1000, 0.4);
-      
+
       const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1'];
       for (let i = 0; i < 300; i++) {
         const angle = (Math.PI * 2 * i) / 300;
@@ -242,15 +242,12 @@
           colors[i % colors.length]
         ));
       }
-      
-      setTimeout(() => { initGame(); }, 2500);
     }
 
     function triggerFailEffect() {
       game.lives--;
       if (game.lives <= 0) {
         game.gameState = 'fail';
-        setTimeout(() => { initGame(); }, 2500);
       } else {
         game.timeSec = 60;
         game.fillRate = 0;
@@ -332,6 +329,10 @@
         ctx.font = '24px Arial';
         ctx.fillStyle = 'white';
         ctx.fillText('スキマゼロを達成！', canvas.width / 2, canvas.height / 2 + 40);
+        ctx.font = '18px Arial';
+        ctx.fillStyle = '#aaffaa';
+        ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 90);
+        ctx.shadowBlur = 0;
       } else if (game.gameState === 'fail') {
         ctx.globalAlpha = 0.75;
         ctx.fillStyle = '#333';
@@ -346,10 +347,21 @@
         ctx.font = '20px Arial';
         ctx.fillStyle = 'white';
         ctx.fillText('埋め率: ' + game.fillRate + '%', canvas.width / 2, canvas.height / 2 + 40);
+        ctx.font = '18px Arial';
+        ctx.fillStyle = '#ffaaaa';
+        ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 80);
+        ctx.shadowBlur = 0;
       }
 
       requestAnimationFrame(gameLoop);
     }
+
+    canvas.addEventListener('click', (e) => {
+      if (game.gameState === 'win' || game.gameState === 'fail') {
+        initGame();
+        game.lastFrameTime = Date.now();
+      }
+    });
 
     canvas.addEventListener('pointerdown', (e) => {
       const rect = canvas.getBoundingClientRect();

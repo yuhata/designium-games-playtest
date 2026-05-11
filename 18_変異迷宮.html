@@ -389,6 +389,7 @@
         
         canvas.addEventListener('mousemove', (e) => {
             const r = canvas.getBoundingClientRect();
+            game.player.x = e.clientX - r.left;
         });
         
         function loop() {

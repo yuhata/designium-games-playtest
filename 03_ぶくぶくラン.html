@@ -50,7 +50,7 @@ const MILESTONES = {
   80:'ぼよんぼよん🎵',
   100:'もはや球体か…？',
   120:'地面が揺れてる気がする',
-  150:'WIN条件達成！走り続けろ！！',
+  150:'ヤバい…もう限界か？走り続けろ！！',
   180:'ロールケーキみたいになってきた',
   200:'本格的にやばい！！',
   250:'もう止まれない…止まれるわけがない',
@@ -307,7 +307,7 @@ function drawTitle(){
   ctx.fillStyle='#aaa'; ctx.font='14px sans-serif';
   ctx.fillText('← → キー または マウスドラッグで操作',c.width/2,360);
   ctx.fillStyle='#44ff88'; ctx.font='bold 15px sans-serif';
-  ctx.fillText('体重150kgを超えてゴール到達でクリア！',c.width/2,395);
+  ctx.fillText('体重300kg超えずにゴール到達でクリア！',c.width/2,395);
   ctx.fillStyle='#ff6644'; ctx.font='13px sans-serif';
   ctx.fillText('体重300kg超またはタイム切れで失敗',c.width/2,420);
   ctx.fillStyle='#ffcc00';
@@ -490,7 +490,7 @@ function loop(ts){
       if(foods[i].y>c.height+60) foods.splice(i,1);
     }
     checkCols();
-    if(dist>=GOAL&&wt>150){
+    if(dist>=GOAL){
       gs=STATES.WIN; score+=Math.ceil(tm)*120;
     } else if(wt>300){
       gs=STATES.FAIL; failReason='fat';

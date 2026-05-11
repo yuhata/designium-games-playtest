@@ -122,6 +122,7 @@
     <canvas id="gameCanvas"></canvas>
     <div id="ui">
       <div>人口: <span id="population">0</span> / 500,000</div>
+      <div>残り: <span id="remaining">500,000</span>人</div>
       <div>残り時間: <span id="timer">02:00</span></div>
       <div class="goal">▸ 目標: 人口50万人達成</div>
     </div>
@@ -264,6 +265,7 @@
       }
 
       populationSpan.textContent = Math.floor(state.population).toLocaleString();
+      document.getElementById('remaining').textContent = Math.max(0, 500000 - Math.floor(state.population)).toLocaleString();
       const minutes = Math.max(0, Math.floor(state.time / 60));
       const seconds = Math.max(0, Math.floor(state.time % 60));
       timerSpan.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;

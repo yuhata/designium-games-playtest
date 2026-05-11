@@ -231,7 +231,11 @@ function judgeNotes(clickX, clickY) {
                 note.judgeType = judgeType;
                 gameState.score += points * (1 + gameState.combo * 0.05);
                 gameState.scoreFloat = gameState.score;
-                gameState.combo++;
+                if (judgeType !== 'miss') {
+                    gameState.combo++;
+                } else {
+                    gameState.combo = 0;
+                }
                 gameState.accuracy += (JUDGE_WINDOW - errorTime) / JUDGE_WINDOW;
                 gameState.totalJudges++;
                 

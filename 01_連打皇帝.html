@@ -38,7 +38,7 @@
     
     const game = {
       playerTPS: 0,
-      enemyTPS: 2.0,
+      enemyTPS: 1.5,
       playerGauge: 50,
       enemyGauge: 50,
       tapTimes: [],
@@ -82,6 +82,7 @@
     
     function updateGauge() {
       if (game.state === 'playing') {
+        if (Date.now() - game.startTime < 3000) return;
         const tpsDiff = game.playerTPS - game.enemyTPS;
         game.playerGauge += tpsDiff * 0.3;
         game.playerGauge = Math.max(0, Math.min(100, game.playerGauge));
@@ -158,7 +159,18 @@
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 16px Arial';
       ctx.textAlign = 'left';
-      ctx.fillText('【操作方法】画面をタップ・クリックして連打してください！', margin, 30);
+      const elapsed = Date.now() - game.startTime;
+      if (elapsed < 3000) {
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('準備… ' + (3 - Math.floor(elapsed / 1000)), canvas.width / 2, canvas.height / 2);
+        ctx.font = 'bold 16px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('【操作方法】画面をタップ・クリックして連打してください！', canvas.width / 2, 30);
+      } else {
+        ctx.fillText('【操作方法】画面をタップ・クリックして連打してください！', margin, 30);
+      }
       
       // プレイヤーTPS（左上、大型）
       ctx.fillStyle = '#00aaff';

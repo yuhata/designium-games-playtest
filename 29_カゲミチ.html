@@ -123,7 +123,7 @@
   <canvas id="gameCanvas" width="800" height="548"></canvas>
   <div class="instruction" id="instruction">
     💡 マウスで光源をドラッグして、隠された文字の影を重ねよう。<br>
-    発見度が80%以上で次のルームへ！
+    発見度が30%以上で次のルームへ！
   </div>
   <div class="overlay" id="gameOverlay">
     <div class="overlay-title" id="overlayTitle">クリア</div>
@@ -304,7 +304,7 @@ function calculateLitPixels() {
     if (a > 20) {
       totalPixels++;
       // Check if pixel is in light area (bright)
-      if (r + g + b > 300 && a > 100) {
+      if (r + g + b > 150 && a > 100) {
         litPixels++;
       }
     }
@@ -315,6 +315,7 @@ function calculateLitPixels() {
 }
 
 function drawRoom() {
+  if (gameState.rooms >= rooms.length) return;
   // Background
   ctx.fillStyle = '#0a0a14';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -354,10 +355,10 @@ function checkRoomCleared() {
   if (gameState.discoverHistory.length > 3) {
     gameState.discoverHistory.shift();
   }
-  
+
   if (gameState.discoverHistory.length >= 3) {
     const last3 = gameState.discoverHistory.slice(-3);
-    if (last3.every(d => d >= 80)) {
+    if (last3.every(d => d >= 40)) {
       return true;
     }
   }
@@ -380,7 +381,7 @@ function advanceRoom() {
     ));
   }
   
-  gameState.roomClearCountdown = 0.8;
+  gameState.roomClearCountdown = 3.0;
   gameState.rooms++;
   gameState.discoverHistory = [];
 }

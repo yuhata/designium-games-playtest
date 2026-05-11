@@ -152,7 +152,7 @@
       🖱️ キャンバスをクリック → 施設追加（1,000円）<br/>
       ⚙️ 施設1つ = 毎秒+1,000生産<br/>
       💰 資金0 → 破産 ⚠️<br/>
-      🎯 目標: 生産量を1兆突破！
+      🎯 目標: 生産量を1000万突破！
     </div>
     
     <div id="gameOverScreen">
@@ -403,7 +403,7 @@
       
       game.totalProduction += game.facilityCount * game.baseOutputPerFacility;
       
-      if (game.totalProduction >= 1e12) {
+      if (game.totalProduction >= 1e7) {
         game.isGameOver = true;
         game.isWin = true;
         

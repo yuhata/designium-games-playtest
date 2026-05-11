@@ -306,6 +306,13 @@
       ctx.strokeStyle = '#ffd700';
       ctx.lineWidth = 2;
       ctx.stroke();
+
+      if (ball.vx === 0 && ball.vy === 0 && gameState === 'playing') {
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('▲ ドラッグして発射！', ball.x, ball.y - 22);
+      }
       
       ctx.fillStyle = '#00ff00';
       ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);

@@ -74,8 +74,8 @@
       const coin = {
         x: 200,
         y: 50,
-        vx: speed * Math.cos(angle),
-        vy: speed * Math.sin(angle),
+        vx: speed * Math.sin(angle),
+        vy: speed * Math.cos(angle),
         radius: 8,
         collected: false,
         fade_time: 0
@@ -285,7 +285,7 @@
       
       const dx = coords.x - 200;
       const dy = coords.y - 30;
-      let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      let angle = Math.atan2(dx, dy) * 180 / Math.PI;
       angle = Math.max(-45, Math.min(45, angle));
       gameState.launcher_angle = angle;
     });
@@ -313,7 +313,7 @@
       
       const dx = coords.x - 200;
       const dy = coords.y - 30;
-      let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      let angle = Math.atan2(dx, dy) * 180 / Math.PI;
       angle = Math.max(-45, Math.min(45, angle));
       gameState.launcher_angle = angle;
     });

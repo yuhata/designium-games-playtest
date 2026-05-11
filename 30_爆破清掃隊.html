@@ -104,7 +104,7 @@ function initGame() {
 }
 
 function tapExplosion(x, y) {
-  const explosionRadius = 100;
+  const explosionRadius = 120;
   const hitIndices = [];
   for (let i = rubblesArray.length - 1; i >= 0; i--) {
     const r = rubblesArray[i];
@@ -249,12 +249,6 @@ function gameLoop() {
 
   if (gameState === GAME_STATE.PLAYING) {
     time -= dt;
-    if (Math.random() < 0.018) {
-      rubblesArray.push(new Rubble(
-        Math.random() * (canvas.width - 80) + 40,
-        Math.random() * (canvas.height - 80) + 40
-      ));
-    }
     if (rubblesArray.length === 0) gameState = GAME_STATE.WIN;
     if (time <= 0) gameState = GAME_STATE.LOSE;
   }

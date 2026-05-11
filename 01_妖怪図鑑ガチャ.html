@@ -121,19 +121,6 @@
         }
 
         // イベントリスナー
-        document.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            handleTap(e.clientX - rect.left, e.clientY - rect.top);
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            // マウスムーブイベント処理（オプション）
-        });
-
-        document.addEventListener('mouseup', (e) => {
-            // マウスアップイベント処理（オプション）
-        });
-
         document.addEventListener('click', (e) => {
             const rect = canvas.getBoundingClientRect();
             handleTap(e.clientX - rect.left, e.clientY - rect.top);

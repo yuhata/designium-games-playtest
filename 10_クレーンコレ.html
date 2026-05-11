@@ -192,7 +192,7 @@ function drawMachine(){
     const by=Math.sin(it.bob)*2;
     ctx.save();
     ctx.font=it.sz+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(it.e,it.x,it.y+by);
+    ctx.fillText(it.t.e,it.x,it.y+by);
     ctx.globalAlpha=0.18;ctx.fillStyle='#000';
     ctx.beginPath();ctx.ellipse(it.x,it.y+it.sz*0.55+by,it.sz*0.38,3.5,0,0,Math.PI*2);ctx.fill();
     ctx.restore();
@@ -200,7 +200,7 @@ function drawMachine(){
 
   if(gs.caughtItem){
     ctx.save();ctx.font=gs.caughtItem.sz+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(gs.caughtItem.e,gs.caughtItem.x,gs.caughtItem.y);ctx.restore();
+    ctx.fillText(gs.caughtItem.t.e,gs.caughtItem.x,gs.caughtItem.y);ctx.restore();
   }
 
   ctx.strokeStyle='#aaaacc';ctx.lineWidth=2;

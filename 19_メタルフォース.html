@@ -237,6 +237,21 @@
                 ctx.fillRect(x + size * 0.02, y + size * 0.25, size * 0.18, size * 0.45);
             }
             
+            // Dock zone indicator
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.arc(x, y, 120, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(0, 255, 136, 0.6)';
+            ctx.font = 'bold 11px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText('← ここへドラッグ', x, y + 135);
+            ctx.restore();
+
             // HP Bar
             ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
             ctx.fillRect(x - size * 0.5, y - size * 0.9, size * 1.0, 12);

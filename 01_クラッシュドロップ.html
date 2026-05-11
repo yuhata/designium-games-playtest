@@ -85,8 +85,6 @@
     }
     
     document.addEventListener('mousedown', handleInput);
-    document.addEventListener('mouseup', handleInput);
-    document.addEventListener('mousemove', handleInput);
     document.addEventListener('click', handleInput);
     document.addEventListener('touchstart', (e) => {
       e.preventDefault();
@@ -100,7 +98,7 @@
       
       const elapsed = (Date.now() - game.startTime) / 1000;
       
-      game.velocity = Math.min(game.velocity + 0.4 * dt, 25);
+      game.velocity = Math.min(game.velocity + 0.05 * dt, 25);
       game.depth += game.velocity * 50 * dt;
       
       for (let obs of obstacles) {

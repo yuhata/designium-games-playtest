@@ -337,8 +337,22 @@
     </div>
 
     <script>
+        const WORD_POOL = [
+            'あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの',
+            'あかさたな', 'いきしちに', 'うくすつぬ', 'えけせてね', 'おこそとの'
+        ];
+
+        function pickWords() {
+            const pool = WORD_POOL.slice();
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+            return pool.slice(0, 5);
+        }
+
         const game = {
-            words: ['あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの'],
+            words: pickWords(),
             currentWordIndex: 0,
             secretWord: '',
             input: '',
@@ -356,6 +370,7 @@
                          'な', 'に', 'ぬ', 'ね', 'の'];
 
         function initGame() {
+            game.words = pickWords();
             game.currentWordIndex = 0;
             game.score = 0;
             game.startTime = Date.now();

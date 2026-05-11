@@ -40,11 +40,19 @@
   }
   a.card:hover { background: #22222c; border-color: #444; color: #fff; }
   a.card.priority { border-color: #f87171; }
+  a.card.priority { border-color: #f87171; }
   a.card.priority::after {
     content: "要確認";
     position: absolute; top: 8px; right: 8px;
     font-size: 10px; padding: 1px 6px;
     background: #7f1d1d; color: #f87171; border-radius: 99px;
+  }
+  a.card.fixed { border-color: #22c55e; }
+  a.card.fixed::after {
+    content: "修正済";
+    position: absolute; top: 8px; right: 8px;
+    font-size: 10px; padding: 1px 6px;
+    background: #14532d; color: #4ade80; border-radius: 99px;
   }
   .num { font-size: 11px; color: #555; margin-bottom: 2px; }
   .note { font-size: 11px; color: #666; margin-top: 4px; }
@@ -53,7 +61,7 @@
 <body>
 
 <h1>ゲームプレイテスト</h1>
-<p class="meta">73本フルコンプリート — 実ブラウザ確認用インデックス / 「要確認」= 設計評価のみ（Playwright未通過）</p>
+<p class="meta">73本フルコンプリート — 実ブラウザ確認用インデックス / 「要確認」= 設計評価のみ（Playwright未通過）/ <span style="color:#4ade80;">修正済</span> = William FB対応完了（39本中31本）</p>
 <div style="margin-bottom:28px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
   <a href="https://www.notion.so/d24dce3085f041dab1d43a7ba055abd9" target="_blank"
      style="display:inline-block;padding:8px 18px;background:#2d2d3a;border:1px solid #444;border-radius:8px;
@@ -79,45 +87,45 @@
     v2/v3 Gate合格 — 39本
   </div>
   <div class="grid">
-    <a class="card" href="01_クラッシュドロップ.html" target="_blank"><div class="num">01</div>クラッシュドロップ</a>
+    <a class="card fixed" href="01_クラッシュドロップ.html" target="_blank"><div class="num">01</div>クラッシュドロップ</a>
     <a class="card" href="01_ニャン突破.html" target="_blank"><div class="num">01</div>ニャン突破</a>
-    <a class="card" href="01_パーク帝王.html" target="_blank"><div class="num">01</div>パーク帝王</a>
-    <a class="card" href="01_工場帝国.html" target="_blank"><div class="num">01</div>工場帝国</a>
-    <a class="card" href="01_砦の最終夜.html" target="_blank"><div class="num">01</div>砦の最終夜</a>
+    <a class="card fixed" href="01_パーク帝王.html" target="_blank"><div class="num">01</div>パーク帝王</a>
+    <a class="card fixed" href="01_工場帝国.html" target="_blank"><div class="num">01</div>工場帝国</a>
+    <a class="card fixed" href="01_砦の最終夜.html" target="_blank"><div class="num">01</div>砦の最終夜</a>
     <a class="card" href="01_残光バトル.html" target="_blank"><div class="num">01</div>残光バトル</a>
-    <a class="card" href="01_秒速スポーツ王.html" target="_blank"><div class="num">01</div>秒速スポーツ王</a>
+    <a class="card fixed" href="01_秒速スポーツ王.html" target="_blank"><div class="num">01</div>秒速スポーツ王</a>
     <a class="card" href="01_墨弾幕レター.html" target="_blank"><div class="num">01</div>墨弾幕レター</a>
-    <a class="card" href="01_妖怪図鑑ガチャ.html" target="_blank"><div class="num">01</div>妖怪図鑑ガチャ</a>
-    <a class="card" href="01_連打皇帝.html" target="_blank"><div class="num">01</div>連打皇帝</a>
-    <a class="card" href="02_スシカラー.html" target="_blank"><div class="num">02</div>スシカラー</a>
-    <a class="card" href="03_ぶくぶくラン.html" target="_blank"><div class="num">03</div>ぶくぶくラン</a>
+    <a class="card fixed" href="01_妖怪図鑑ガチャ.html" target="_blank"><div class="num">01</div>妖怪図鑑ガチャ</a>
+    <a class="card fixed" href="01_連打皇帝.html" target="_blank"><div class="num">01</div>連打皇帝</a>
+    <a class="card fixed" href="02_スシカラー.html" target="_blank"><div class="num">02</div>スシカラー</a>
+    <a class="card fixed" href="03_ぶくぶくラン.html" target="_blank"><div class="num">03</div>ぶくぶくラン</a>
     <a class="card" href="04_墨斬り.html" target="_blank"><div class="num">04</div>墨斬り</a>
-    <a class="card" href="05_ニャンクエスト.html" target="_blank"><div class="num">05</div>ニャンクエスト</a>
-    <a class="card" href="06_モンスター大合体.html" target="_blank"><div class="num">06</div>モンスター大合体</a>
-    <a class="card" href="07_ビル帝国.html" target="_blank"><div class="num">07</div>ビル帝国</a>
-    <a class="card" href="08_鍵穴探偵.html" target="_blank"><div class="num">08</div>鍵穴探偵</a>
-    <a class="card" href="09_刹那デッキ.html" target="_blank"><div class="num">09</div>刹那デッキ</a>
-    <a class="card" href="10_クレーンコレ.html" target="_blank"><div class="num">10</div>クレーンコレ</a>
-    <a class="card" href="11_ハジケバブル.html" target="_blank"><div class="num">11</div>ハジケバブル</a>
+    <a class="card fixed" href="05_ニャンクエスト.html" target="_blank"><div class="num">05</div>ニャンクエスト</a>
+    <a class="card fixed" href="06_モンスター大合体.html" target="_blank"><div class="num">06</div>モンスター大合体</a>
+    <a class="card fixed" href="07_ビル帝国.html" target="_blank"><div class="num">07</div>ビル帝国</a>
+    <a class="card fixed" href="08_鍵穴探偵.html" target="_blank"><div class="num">08</div>鍵穴探偵</a>
+    <a class="card fixed" href="09_刹那デッキ.html" target="_blank"><div class="num">09</div>刹那デッキ</a>
+    <a class="card fixed" href="10_クレーンコレ.html" target="_blank"><div class="num">10</div>クレーンコレ</a>
+    <a class="card fixed" href="11_ハジケバブル.html" target="_blank"><div class="num">11</div>ハジケバブル</a>
     <a class="card" href="12_うみつり館.html" target="_blank"><div class="num">12</div>うみつり館</a>
-    <a class="card" href="13_ゾンビ砦.html" target="_blank"><div class="num">13</div>ゾンビ砦</a>
+    <a class="card fixed" href="13_ゾンビ砦.html" target="_blank"><div class="num">13</div>ゾンビ砦</a>
     <a class="card" href="14_モグラ烈打.html" target="_blank"><div class="num">14</div>モグラ烈打</a>
-    <a class="card" href="15_星ビート.html" target="_blank"><div class="num">15</div>星ビート</a>
+    <a class="card fixed" href="15_星ビート.html" target="_blank"><div class="num">15</div>星ビート</a>
     <a class="card" href="16_たねコレ_.html" target="_blank"><div class="num">16</div>たねコレ</a>
     <a class="card" href="17_グレイズン.html" target="_blank"><div class="num">17</div>グレイズン</a>
-    <a class="card" href="18_変異迷宮.html" target="_blank"><div class="num">18</div>変異迷宮</a>
-    <a class="card" href="19_メタルフォース.html" target="_blank"><div class="num">19</div>メタルフォース</a>
-    <a class="card" href="20_マグナブレイク.html" target="_blank"><div class="num">20</div>マグナブレイク</a>
-    <a class="card" href="21_積み逃げ_.html" target="_blank"><div class="num">21</div>積み逃げ</a>
-    <a class="card" href="22_まぜいろ.html" target="_blank"><div class="num">22</div>まぜいろ</a>
-    <a class="card" href="23_ワンショット.html" target="_blank"><div class="num">23</div>ワンショット</a>
-    <a class="card" href="24_フロウパイプ.html" target="_blank"><div class="num">24</div>フロウパイプ</a>
-    <a class="card" href="25_スキマゼロ.html" target="_blank"><div class="num">25</div>スキマゼロ</a>
-    <a class="card" href="26_コレコイン.html" target="_blank"><div class="num">26</div>コレコイン</a>
-    <a class="card" href="27_コトバ探偵.html" target="_blank"><div class="num">27</div>コトバ探偵</a>
-    <a class="card" href="28_ピタジャンプ.html" target="_blank"><div class="num">28</div>ピタジャンプ</a>
-    <a class="card" href="29_カゲミチ.html" target="_blank"><div class="num">29</div>カゲミチ</a>
-    <a class="card" href="30_爆破清掃隊.html" target="_blank"><div class="num">30</div>爆破清掃隊</a>
+    <a class="card fixed" href="18_変異迷宮.html" target="_blank"><div class="num">18</div>変異迷宮</a>
+    <a class="card fixed" href="19_メタルフォース.html" target="_blank"><div class="num">19</div>メタルフォース</a>
+    <a class="card fixed" href="20_マグナブレイク.html" target="_blank"><div class="num">20</div>マグナブレイク</a>
+    <a class="card fixed" href="21_積み逃げ_.html" target="_blank"><div class="num">21</div>積み逃げ</a>
+    <a class="card fixed" href="22_まぜいろ.html" target="_blank"><div class="num">22</div>まぜいろ</a>
+    <a class="card fixed" href="23_ワンショット.html" target="_blank"><div class="num">23</div>ワンショット</a>
+    <a class="card fixed" href="24_フロウパイプ.html" target="_blank"><div class="num">24</div>フロウパイプ</a>
+    <a class="card fixed" href="25_スキマゼロ.html" target="_blank"><div class="num">25</div>スキマゼロ</a>
+    <a class="card fixed" href="26_コレコイン.html" target="_blank"><div class="num">26</div>コレコイン</a>
+    <a class="card fixed" href="27_コトバ探偵.html" target="_blank"><div class="num">27</div>コトバ探偵</a>
+    <a class="card fixed" href="28_ピタジャンプ.html" target="_blank"><div class="num">28</div>ピタジャンプ</a>
+    <a class="card fixed" href="29_カゲミチ.html" target="_blank"><div class="num">29</div>カゲミチ</a>
+    <a class="card fixed" href="30_爆破清掃隊.html" target="_blank"><div class="num">30</div>爆破清掃隊</a>
   </div>
 </div>
 
