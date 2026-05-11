@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>かくれんぼ部屋</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      background: white;
+      border: 4px solid #333;
+      cursor: crosshair;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+  </div>
+
+  <script>
+    // デバッグコントラクト初期化
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 10, phase: "playing" },
+      tapObject: function(id) {}
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ゲーム状態
+    const GameState = {
+      remaining: 10,
+      score: 0,
+      startTime: Date.now(),
+      timeLimit: 60000,
+      found: [],
+      items: [],
+      gamePhase: 'playing',
+      popups: [],
+      hitParticles: [],
+      
+      init: function() {
+        this.remaining = 10;
+        this.score = 0;
+        this.startTime = Date.now();
+        this.found = [];
+        this.items = [];
+        this.gamePhase = 'playing';
+        this.popups = [];
+        this.hitParticles = [];
+        this.generateItems();
+      },
+      
+      generateItems: function() {
+        this.items = [];
+        const itemRadius = 15;
+        const minDistance = 100;
+        const maxAttempts = 1000;
+        
+        for (let i = 0; i < 10; i++) {
+          let x, y, valid;
+          let attempts = 0;
+          
+          do {
+            x = Math.random() * (canvas.width - 100) + 50;
+            y = Math.random() * (canvas.height - 200) + 100;
+            valid = true;
+            
+            for (let j = 0; j < this.items.length; j++) {
+              const dist = Math.hypot(x - this.items[j].x, y - this.items[j].y);
+              if (dist < minDistance) {
+                valid = false;
+                break;
+              }
+            }
+            attempts++;
+          } while (!valid && attempts < maxAttempts);
+          
+          if (valid) {
+            this.items.push({
+              id: `item_${i}`,
+              x: x,
+              y: y,
+              found: false,
+              radius: itemRadius
+            });
+          }
+        }
+      },
+      
+      handleTap: function(tx, ty) {
+        if (this.gamePhase !== 'playing') return;
+        
+        for (let i = 0; i < this.items.length; i++) {
+          const item = this.items[i];
+          if (!item.found) {
+            const distance = Math.hypot(tx - item.x, ty - item.y);
+            if (distance <= 50) {
+              this.handleHit(item, i);
+              return;
+            }
+          }
+        }
+      },
+      
+      handleHit: function(item, index) {
+        item.found = true;
+        this.remaining--;
+        this.score += 100;
+        
+        // パーティクルエフェクト
+        for (let i = 0; i < 8; i++) {
+          const angle = (Math.PI * 2 * i) / 8;
+          this.hitParticles.push({
+            x: item.x,
+            y: item.y,
+            vx: Math.cos(angle) * 3,
+            vy: Math.sin(angle) * 3,
+            life: 500,
+            maxLife: 500
+          });
+        }
+        
+        // ポップアップ追加
+        this.popups.push({
+          x: item.x,
+          y: item.y,
+          text: `あと${this.remaining}個`,
+          startTime: Date.now(),
+          duration: 1500
+        });
+        
+        this.checkWinCondition();
+        updateDebug();
+      },
+      
+      checkWinCondition: function() {
+        const elapsed = Date.now() - this.startTime;
+        
+        if (this.remaining === 0 && elapsed < this.timeLimit) {
+          this.gamePhase = 'win';
+        } else if (elapsed >= this.timeLimit && this.remaining >= 1) {
+          this.gamePhase = 'fail';
+        }
+      },
+      
+      update: function() {
+        const elapsed = Date.now() - this.startTime;
+        
+        if (elapsed >= this.timeLimit && this.gamePhase === 'playing') {
+          if (this.remaining >= 1) {
+            this.gamePhase = 'fail';
+          }
+        }
+        
+        // ポップアップ更新
+        this.popups = this.popups.filter(p => {
+          return Date.now() - p.startTime < p.duration;
+        });
+        
+        // パーティクル更新
+        this.hitParticles = this.hitParticles.filter(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= 16;
+          p.vy += 0.2;
+          return p.life > 0;
+        });
+        
+        updateDebug();
+      },
+      
+      draw: function() {
+        // 背景
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // ヘッダー背景
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(0, 0, canvas.width, 120);
+        
+        // タイトル
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 32px Arial';
+        ctx.fillText('🔍 かくれんぼ部屋', 30, 45);
+        
+        // 操作説明
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#ecf0f1';
+        ctx.fillText('隠されたアイテムをクリックして見つけよう！', 30, 75);
+        
+        // UI情報バー
+        const elapsed = Math.max(0, Date.now() - this.startTime);
+        const remaining = Math.max(0, Math.floor((this.timeLimit - elapsed) / 1000));
+        
+        ctx.font = 'bold 18px Arial';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText(`スコア: ${this.score}`, 30, 105);
+        
+        ctx.fillStyle = '#3498db';
+        ctx.fillText(`残り: ${this.remaining}/10`, 320, 105);
+        
+        ctx.fillStyle = remaining <= 10 ? '#e74c3c' : '#27ae60';
+        ctx.fillText(`⏱ ${remaining}s`, 580, 105);
+        
+        // 進捗バー
+        const progress = (10 - this.remaining) / 10;
+        ctx.fillStyle = '#ecf0f1';
+        ctx.fillRect(800, 30, 430, 35);
+        
+        const barColors = ['#e74c3c', '#e67e22', '#f39c12', '#27ae60'];
+        let color = barColors[0];
+        if (progress > 0.3) color = barColors[1];
+        if (progress > 0.6) color = barColors[2];
+        if (progress > 0.9) color = barColors[3];
+        
+        ctx.fillStyle = color;
+        ctx.fillRect(800, 30, 430 * progress, 35);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(800, 30, 430, 35);
+        
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText(`${Math.round(progress * 100)}%`, 1010, 52);
+        
+        // ゲーム領域
+        for (let i = 0; i < this.items.length; i++) {
+          const item = this.items[i];
+          if (!item.found) {
+            // 薄いヒント円
+            ctx.fillStyle = 'rgba(149, 165, 166, 0.15)';
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, 35, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // アイテム本体
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // ボーダー
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            
+            // ハイライト（光沢）
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(item.x - 6, item.y - 6, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 中心のアイコン
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('?', item.x, item.y);
+          }
+        }
+        
+        // パーティクル描画
+        for (let p of this.hitParticles) {
+          const alpha = Math.max(0, p.life / p.maxLife);
+          ctx.fillStyle = `rgba(231, 76, 60, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        // ポップアップ描画
+        for (let p of this.popups) {
+          const progress = (Date.now() - p.startTime) / p.duration;
+          const alpha = Math.max(0, 1 - progress);
+          const scale = 1 + progress * 0.3;
+          
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate(p.x, p.y);
+          ctx.scale(scale, scale);
+          
+          ctx.fillStyle = '#fff';
+          ctx.strokeStyle = '#333';
+          ctx.lineWidth = 2;
+          ctx.font = 'bold 18px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          ctx.strokeText(p.text, 0, 0);
+          ctx.fillText(p.text, 0, 0);
+          
+          ctx.restore();
+        }
+        
+        // ゲーム終了画面
+        if (this.gamePhase === 'win') {
+          this.drawWinScreen();
+        } else if (this.gamePhase === 'fail') {
+          this.drawFailScreen();
+        }
+      },
+      
+      drawWinScreen: function() {
+        // オーバーレイ
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // ウィンドウ
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(200, 120, 880, 480);
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 20;
+        
+        // クリアテキスト
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 80px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'transparent';
+        ctx.fillText('🎉 CLEAR! 🎉', canvas.width / 2, 240);
+        
+        // スコア
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 40px Arial';
+        ctx.fillText(`最終スコア: ${this.score}`, canvas.width / 2, 330);
+        
+        // ランク判定
+        let rank = 'S';
+        let rankColor = '#f39c12';
+        if (this.score < 500) {
+          rank = 'C';
+          rankColor = '#95a5a6';
+        } else if (this.score < 800) {
+          rank = 'B';
+          rankColor = '#3498db';
+        } else if (this.score < 1000) {
+          rank = 'A';
+          rankColor = '#e74c3c';
+        }
+        
+        ctx.fillStyle = rankColor;
+        ctx.font = 'bold 60px Arial';
+        ctx.fillText(`ランク: ${rank}`, canvas.width / 2, 410);
+        
+        // リスタート指示
+        ctx.fillStyle = '#7f8c8d';
+        ctx.font = '18px Arial';
+        ctx.fillText('クリックでリスタート', canvas.width / 2, 500);
+      },
+      
+      drawFailScreen: function() {
+        // オーバーレイ
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // ウィンドウ
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(200, 120, 880, 480);
+        
+        // ゲームオーバーテキスト
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 80px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('⏰ TIME UP!', canvas.width / 2, 240);
+        
+        // 統計
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 40px Arial';
+        ctx.fillText(`見つけた: ${10 - this.remaining}/10個`, canvas.width / 2, 330);
+        ctx.fillText(`スコア: ${this.score}`, canvas.width / 2, 390);
+        
+        // リスタート指示
+        ctx.fillStyle = '#7f8c8d';
+        ctx.font = '18px Arial';
+        ctx.fillText('クリックでリスタート', canvas.width / 2, 500);
+      }
+    };
+
+    // デバッグ関数
+    function updateDebug() {
+      window.__gameDebug.objects = GameState.items.map(item => ({
+        id: item.id,
+        enabled: !item.found,
+        matchId: null,
+        x: item.x,
+        y: item.y
+      }));
+      
+      window.__gameDebug.metrics = {
+        score: GameState.score,
+        progress: (10 - GameState.remaining) / 10,
+        remaining: GameState.remaining,
+        phase: GameState.gamePhase
+      };
+    }
+
+    // tapObject実装
+    window.__gameDebug.tapObject = function(id) {
+      const idx = parseInt(id.split('_').pop(), 10);
+      if (idx >= 0 && idx < GameState.items.length) {
+        const item = GameState.items[idx];
+        if (!item.found) {
+          GameState.handleHit(item, idx);
+        }
+      }
+    };
+
+    // マウスイベント処理
+    function handleMouseInput(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      if (GameState.gamePhase === 'playing') {
+        GameState.handleTap(x, y);
+      } else if (GameState.gamePhase === 'win' || GameState.gamePhase === 'fail') {
+        GameState.init();
+      }
+    }
+
+    canvas.addEventListener('mousedown', handleMouseInput);
+    canvas.addEventListener('mousemove', (e) => {
+      // マウスムーブ処理（将来的なホバーエフェクト用）
+    });
+    canvas.addEventListener('mouseup', (e) => {
+      // マウスアップ処理
+    });
+    canvas.addEventListener('click', handleMouseInput);
+
+    // ゲームループ
+    function gameLoop() {
+      GameState.update();
+      GameState.draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // 初期化と開始
+    GameState.init();
+    updateDebug();
+    gameLoop();
+  </script>
+</body>
+</html>

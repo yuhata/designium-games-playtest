@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三柱図鑑</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Arial', sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 600px;
+      height: 800px;
+      background: linear-gradient(180deg, #2a2a3e 0%, #16213e 100%);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <script>
+    // ========== デバッグコントラクト初期化 ==========
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, phase: "title" },
+      tapObject: function(id) {
+        // 実装後述
+      }
+    };
+
+    // ========== ゲーム状態管理 ==========
+    const state = {
+      phase: "title",
+      coins: 30,
+      zukanCount: 0,
+      zukanEntries: new Set(),
+      spinCount: 0,
+      
+      leverEnabled: true,
+      spinning: false,
+      reels: [
+        { items: Array.from({length:88}, (_,i) => i), activeIndex: 0, targetIndex: 0, rotation: 0, targetRotation: 0 },
+        { items: Array.from({length:88}, (_,i) => i), activeIndex: 0, targetIndex: 0, rotation: 0, targetRotation: 0 },
+        { items: Array.from({length:88}, (_,i) => i), activeIndex: 0, targetIndex: 0, rotation: 0, targetRotation: 0 }
+      ],
+      
+      lastResult: null,
+      resultDisplayTime: 0,
+      resultDisplayDuration: 2000,
+      
+      lastTapTime: 0,
+      tapCooldown: 100
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 600;
+    canvas.height = 800;
+
+    // ========== ゲーム初期化 ==========
+    function init() {
+      state.phase = "title";
+      state.coins = 30;
+      state.zukanCount = 0;
+      state.zukanEntries.clear();
+      state.spinCount = 0;
+      state.leverEnabled = true;
+      state.spinning = false;
+      state.reels.forEach(reel => {
+        reel.activeIndex = 0;
+        reel.rotation = 0;
+        reel.targetRotation = 0;
+      });
+      state.lastResult = null;
+      updateDebug();
+    }
+
+    // ========== ゲーム開始 ==========
+    function startGame() {
+      state.phase = "playing";
+      state.coins = 30;
+      state.zukanCount = 0;
+      state.zukanEntries.clear();
+      state.spinCount = 0;
+      state.leverEnabled = true;
+      state.spinning = false;
+      state.reels.forEach(reel => {
+        reel.activeIndex = 0;
+        reel.rotation = 0;
+        reel.targetRotation = 0;
+      });
+      state.lastResult = null;
+      updateDebug();
+    }
+
+    // ========== レバー引く処理 ==========
+    function pullLever() {
+      if (state.phase !== "playing" || state.spinning || !state.leverEnabled) return;
+      if (state.coins <= 0) {
+        state.phase = "fail";
+        updateDebug();
+        return;
+      }
+
+      state.leverEnabled = false;
+      state.spinning = true;
+      state.coins--;
+      state.spinCount++;
+
+      // リール抽選
+      state.reels.forEach(reel => {
+        reel.targetIndex = Math.floor(Math.random() * 88);
+        reel.targetRotation = reel.targetIndex * (360 / 88);
+      });
+
+      // 回転アニメーション
+      const spinStartTime = performance.now();
+      const spinDuration = 800;
+
+      const animateSpin = (currentTime) => {
+        const elapsed = currentTime - spinStartTime;
+        const progress = Math.min(elapsed / spinDuration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        state.reels.forEach(reel => {
+          reel.rotation = reel.targetRotation * easedProgress;
+          reel.activeIndex = Math.round(reel.rotation / (360 / 88)) % 88;
+        });
+
+        if (progress < 1) {
+          requestAnimationFrame(animateSpin);
+        } else {
+          finalizeSpin();
+        }
+      };
+
+      requestAnimationFrame(animateSpin);
+    }
+
+    function finalizeSpin() {
+      state.spinning = false;
+      const resultEntryNo = state.reels[0].activeIndex;
+      const isNew = !state.zukanEntries.has(resultEntryNo);
+
+      if (isNew) {
+        state.zukanEntries.add(resultEntryNo);
+        state.zukanCount++;
+        state.lastResult = { entryNo: resultEntryNo, isNew: true };
+      } else {
+        state.lastResult = { entryNo: resultEntryNo, isNew: false };
+      }
+
+      state.resultDisplayTime = performance.now();
+
+      // 勝利判定
+      if (state.zukanCount >= 88) {
+        state.phase = "win";
+      } else if (state.coins <= 0) {
+        state.phase = "fail";
+      } else {
+        state.leverEnabled = true;
+      }
+
+      updateDebug();
+    }
+
+    // ========== デバッグ更新 ==========
+    function updateDebug() {
+      window.__gameDebug.objects = [];
+
+      if (state.phase === "title") {
+        window.__gameDebug.objects.push({
+          id: "start",
+          enabled: true,
+          matchId: null,
+          x: 300,
+          y: 600,
+          w: 150,
+          h: 60
+        });
+      } else {
+        window.__gameDebug.objects.push({
+          id: "lever",
+          x: 300,
+          y: 680,
+          radius: 50,
+          enabled: state.leverEnabled && !state.spinning,
+          matchId: null
+        });
+
+        state.reels.forEach((reel, idx) => {
+          window.__gameDebug.objects.push({
+            id: `reel_${idx}`,
+            x: 100 + idx * 150,
+            y: 350,
+            w: 100,
+            h: 200,
+            enabled: false,
+            matchId: null,
+            activeIndex: reel.activeIndex
+          });
+        });
+
+        if (state.lastResult && state.lastResult.isNew) {
+          window.__gameDebug.objects.push({
+            id: `zukan_new_${state.lastResult.entryNo}`,
+            entryNo: state.lastResult.entryNo,
+            enabled: false,
+            matchId: null
+          });
+        }
+      }
+
+      window.__gameDebug.metrics = {
+        score: state.spinCount,
+        progress: state.zukanCount / 88,
+        remaining: state.coins,
+        phase: state.phase
+      };
+    }
+
+    // ========== tapObject実装（デバッグコントラクト） ==========
+    window.__gameDebug.tapObject = function(id) {
+      if (id === "start") {
+        startGame();
+        return;
+      }
+
+      if (id === "lever") {
+        pullLever();
+        return;
+      }
+
+      if (id.startsWith("reel_")) {
+        const reelIdx = parseInt(id.split("_")[1]);
+        if (reelIdx >= 0 && reelIdx < 3) {
+          state.reels[reelIdx].targetIndex = Math.floor(Math.random() * 88);
+          state.reels[reelIdx].rotation = state.reels[reelIdx].targetIndex * (360 / 88);
+          state.reels[reelIdx].activeIndex = state.reels[reelIdx].targetIndex;
+        }
+      }
+    };
+
+    // ========== マウスイベント処理 ==========
+    let mouseX = 0, mouseY = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mouseup', () => {});
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+
+      if (state.phase === "title") {
+        if (mouseX >= 225 && mouseX <= 375 && mouseY >= 570 && mouseY <= 630) {
+          startGame();
+          return;
+        }
+      }
+
+      if (state.phase === "playing" && !state.spinning) {
+        const leverX = 300, leverY = 680;
+        const dist = Math.sqrt((mouseX - leverX) ** 2 + (mouseY - leverY) ** 2);
+        if (dist <= 60) {
+          pullLever();
+          return;
+        }
+      }
+
+      if (state.phase === "win" || state.phase === "fail") {
+        if (mouseY > canvas.height - 80) {
+          init();
+          return;
+        }
+      }
+    });
+
+    // ========== 描画 ==========
+    function draw() {
+      ctx.fillStyle = "#1a1a2e";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (state.phase === "title") {
+        drawTitleScreen();
+      } else {
+        drawGameScreen();
+        if (state.phase === "win") drawWinScreen();
+        if (state.phase === "fail") drawFailScreen();
+      }
+    }
+
+    function drawTitleScreen() {
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 48px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("三柱図鑑", 300, 150);
+
+      ctx.font = "16px Arial";
+      ctx.fillStyle = "#aaa";
+      ctx.fillText("レバーを引いて図鑑を集めよう", 300, 200);
+
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "#ccc";
+      let y = 280;
+      const instructions = [
+        "目標: 88個全ての図鑑エントリーを集める",
+        "操作: レバーをタップして引く",
+        "コイン: 30枚スタート（1回引くと1枚消費）",
+        "勝利: すべての図鑑を埋める",
+        "敗北: コイン0になっても88個未満"
+      ];
+      instructions.forEach(text => {
+        ctx.fillText(text, 300, y);
+        y += 30;
+      });
+
+      ctx.fillStyle = "#667eea";
+      ctx.fillRect(225, 570, 150, 60);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 20px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("START", 300, 605);
+    }
+
+    function drawGameScreen() {
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 16px Arial";
+      ctx.textAlign = "left";
+      ctx.fillText(`図鑑: ${state.zukanCount}/88`, 20, 30);
+      ctx.fillText(`コイン: ${state.coins}`, 20, 60);
+      ctx.fillText(`回転数: ${state.spinCount}`, 20, 90);
+
+      drawReels();
+      drawLever();
+
+      const elapsed = performance.now() - state.resultDisplayTime;
+      if (state.lastResult && elapsed < state.resultDisplayDuration) {
+        drawResultPopup();
+      }
+    }
+
+    function drawReels() {
+      ctx.fillStyle = "rgba(100, 100, 150, 0.3)";
+      ctx.fillRect(50, 250, 500, 250);
+      ctx.strokeStyle = "#667eea";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(50, 250, 500, 250);
+
+      state.reels.forEach((reel, idx) => {
+        const x = 100 + idx * 150;
+        const y = 350;
+        const w = 100;
+        const h = 200;
+
+        ctx.fillStyle = "rgba(50, 50, 100, 0.8)";
+        ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        ctx.strokeStyle = "#888";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x - w / 2, y - h / 2, w, h);
+        ctx.clip();
+
+        const itemHeight = 40;
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        
+        for (let i = -2; i <= 2; i++) {
+          const itemIdx = (reel.activeIndex + i + 88) % 88;
+          const itemY = y - h / 2 + h / 2 + i * itemHeight + (reel.rotation % (360 / 88)) * itemHeight / (360 / 88);
+          const entryNo = reel.items[itemIdx];
+
+          if (state.zukanEntries.has(entryNo)) {
+            ctx.fillStyle = "#ffd700";
+            ctx.fillText("★" + entryNo, x, itemY);
+          } else {
+            ctx.fillStyle = "#aaa";
+            ctx.fillText("?" + entryNo, x, itemY);
+          }
+        }
+
+        ctx.restore();
+      });
+    }
+
+    function drawLever() {
+      const leverX = 300;
+      const leverY = 680;
+      const radius = 50;
+
+      ctx.fillStyle = state.leverEnabled && !state.spinning ? "#667eea" : "#444";
+      ctx.beginPath();
+      ctx.arc(leverX, leverY, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 14px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("PULL", leverX, leverY);
+    }
+
+    function drawResultPopup() {
+      const entry = state.lastResult.entryNo;
+      const isNew = state.lastResult.isNew;
+
+      if (isNew) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(150, 200, 300, 250);
+
+        ctx.fillStyle = "#ffd700";
+        ctx.font = "bold 32px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("✨ NEW! ✨", 300, 280);
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 24px Arial";
+        ctx.fillText("No. " + entry, 300, 330);
+
+        ctx.font = "14px Arial";
+        ctx.fillStyle = "#aaa";
+        ctx.fillText("図鑑に追加されました", 300, 380);
+      } else {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(180, 250, 240, 100);
+
+        ctx.fillStyle = "#999";
+        ctx.font = "14px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("既に持ってます", 300, 290);
+        ctx.fillText("No. " + entry, 300, 320);
+      }
+    }
+
+    function drawWinScreen() {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "bold 48px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("🎉 完成! 🎉", 300, 250);
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 24px Arial";
+      ctx.fillText("図鑑を全て集めました", 300, 320);
+
+      ctx.font = "18px Arial";
+      ctx.fillStyle = "#aaa";
+      ctx.fillText(`スコア: ${state.spinCount}回`, 300, 370);
+
+      ctx.fillStyle = "#667eea";
+      ctx.fillRect(150, 420, 300, 60);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 18px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("もう一度プレイ", 300, 455);
+    }
+
+    function drawFailScreen() {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#ff6b6b";
+      ctx.font = "bold 48px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("GAME OVER", 300, 250);
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "18px Arial";
+      ctx.fillText(`集めた図鑑: ${state.zukanCount}/88`, 300, 320);
+      ctx.fillText(`回転数: ${state.spinCount}`, 300, 360);
+
+      ctx.fillStyle = "#667eea";
+      ctx.fillRect(150, 420, 300, 60);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 18px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("リトライ", 300, 455);
+    }
+
+    // ========== ユーティリティ ==========
+    function easeOutQuad(t) {
+      return 1 - (1 - t) * (1 - t);
+    }
+
+    // ========== メインループ ==========
+    function gameLoop() {
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    init();
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

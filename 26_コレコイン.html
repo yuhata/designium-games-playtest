@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>コレコイン</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+    }
+    canvas {
+      border: 4px solid #333;
+      background: linear-gradient(to bottom, #e8f4f8, #c8e6e8);
+      cursor: crosshair;
+      display: block;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let gameState = {
+      coins: 12,
+      collected: 0,
+      gameStatus: 'playing',
+      gameStartTime: Date.now(),
+      coins_in_play: [],
+      pegs: [],
+      launcher_angle: 0,
+      is_touching: false,
+      collected_animations: [],
+      win_time: null
+    };
+
+    function generatePegs() {
+      let pegs = [];
+      for (let row = 1; row <= 5; row++) {
+        for (let col = 0; col < 5; col++) {
+          pegs.push({
+            x: 60 + col * 70,
+            y: 120 + row * 70,
+            radius: 8
+          });
+        }
+      }
+      return pegs;
+    }
+
+    const holes = [
+      { x: 80, y: 520 },
+      { x: 200, y: 520 },
+      { x: 320, y: 520 }
+    ];
+
+    gameState.pegs = generatePegs();
+
+    function launchCoin() {
+      if (gameState.coins <= 0 || gameState.gameStatus !== 'playing') return;
+      
+      const angle = gameState.launcher_angle * Math.PI / 180;
+      const speed = 15;
+      const coin = {
+        x: 200,
+        y: 50,
+        vx: speed * Math.cos(angle),
+        vy: speed * Math.sin(angle),
+        radius: 8,
+        collected: false,
+        fade_time: 0
+      };
+      gameState.coins_in_play.push(coin);
+      gameState.coins--;
+    }
+
+    function checkPegCollision(coin) {
+      for (let peg of gameState.pegs) {
+        const dx = coin.x - peg.x;
+        const dy = coin.y - peg.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < 10 + coin.radius) {
+          const theta = Math.atan2(dy, dx);
+          const speed = Math.sqrt(coin.vx * coin.vx + coin.vy * coin.vy) * 0.7;
+          coin.vx = speed * Math.cos(theta);
+          coin.vy = speed * Math.sin(theta);
+          coin.x = peg.x + (10 + coin.radius) * Math.cos(theta);
+          coin.y = peg.y + (10 + coin.radius) * Math.sin(theta);
+        }
+      }
+    }
+
+    function checkHole(coin) {
+      for (let hole of holes) {
+        if (Math.abs(coin.x - hole.x) < 15 && coin.y > hole.y - 20) {
+          coin.collected = true;
+          gameState.collected++;
+          gameState.collected_animations.push({
+            x: hole.x,
+            y: hole.y,
+            duration: 30,
+            max_duration: 30
+          });
+          
+          if (gameState.collected >= 12) {
+            gameState.gameStatus = 'win';
+            gameState.win_time = Date.now();
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function update() {
+      const elapsed = (Date.now() - gameState.gameStartTime) / 1000;
+      
+      if (gameState.coins === 0 && gameState.coins_in_play.length === 0 && elapsed > 30) {
+        if (gameState.gameStatus === 'playing') {
+          gameState.gameStatus = 'fail';
+        }
+      }
+
+      for (let i = gameState.coins_in_play.length - 1; i >= 0; i--) {
+        let coin = gameState.coins_in_play[i];
+        
+        if (coin.collected) {
+          coin.fade_time += 1;
+          coin.radius = Math.max(0, 8 - coin.fade_time * 0.4);
+          if (coin.fade_time > 20) {
+            gameState.coins_in_play.splice(i, 1);
+          }
+          continue;
+        }
+
+        coin.vy += 0.3;
+        coin.x += coin.vx;
+        coin.y += coin.vy;
+
+        checkPegCollision(coin);
+        checkHole(coin);
+
+        if (coin.y > canvas.height + 50 || coin.x < -50 || coin.x > canvas.width + 50) {
+          gameState.coins_in_play.splice(i, 1);
+        }
+      }
+
+      for (let i = gameState.collected_animations.length - 1; i >= 0; i--) {
+        gameState.collected_animations[i].duration--;
+        if (gameState.collected_animations[i].duration <= 0) {
+          gameState.collected_animations.splice(i, 1);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#e8f4f8';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText(`Coins: ${gameState.coins}`, 20, 30);
+      ctx.fillText(`Collected: ${gameState.collected}/12`, 20, 60);
+
+      const elapsed = (Date.now() - gameState.gameStartTime) / 1000;
+      if (elapsed < 10) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.font = 'bold 14px Arial';
+        ctx.fillText('スワイプで角度調整、タップで投下！', 20, 90);
+      }
+
+      ctx.save();
+      ctx.translate(200, 30);
+      ctx.rotate(gameState.launcher_angle * Math.PI / 180);
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillRect(-8, -20, 16, 30);
+      ctx.restore();
+
+      ctx.fillStyle = '#4ecdc4';
+      for (let peg of gameState.pegs) {
+        ctx.beginPath();
+        ctx.arc(peg.x, peg.y, peg.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (gameState.gameStatus === 'win') {
+        const flash = Math.sin(Date.now() / 100) > 0;
+        if (flash) {
+          ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+          for (let peg of gameState.pegs) {
+            ctx.beginPath();
+            ctx.arc(peg.x, peg.y, peg.radius + 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      ctx.fillStyle = '#333';
+      for (let hole of holes) {
+        ctx.beginPath();
+        ctx.arc(hole.x, hole.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = '#ffd700';
+      ctx.strokeStyle = '#ffaa00';
+      ctx.lineWidth = 2;
+      for (let coin of gameState.coins_in_play) {
+        ctx.beginPath();
+        ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      for (let anim of gameState.collected_animations) {
+        const alpha = anim.duration / anim.max_duration;
+        ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('+1', anim.x, anim.y);
+        ctx.textAlign = 'left';
+      }
+
+      if (gameState.gameStatus === 'win') {
+        const winElapsed = (Date.now() - gameState.win_time) / 1000;
+        const progress = Math.min(1, winElapsed / 0.5);
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#FFD700';
+        ctx.font = `bold ${40 + progress * 40}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText('WIN!', canvas.width / 2, canvas.height / 2);
+        ctx.font = 'bold 18px Arial';
+        ctx.fillStyle = '#000';
+        ctx.fillText('Collected: ' + gameState.collected + '/12', canvas.width / 2, canvas.height / 2 + 60);
+        ctx.textAlign = 'left';
+      }
+
+      if (gameState.gameStatus === 'fail') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = 'bold 50px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('FAIL', canvas.width / 2, canvas.height / 2);
+        ctx.font = 'bold 18px Arial';
+        ctx.fillStyle = '#000';
+        ctx.fillText('Collected: ' + gameState.collected + '/12', canvas.width / 2, canvas.height / 2 + 60);
+        ctx.textAlign = 'left';
+      }
+    }
+
+    function getCanvasCoords(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    document.addEventListener('mousedown', (e) => {
+      const coords = getCanvasCoords(e.clientX, e.clientY);
+      if (coords.x >= 0 && coords.x < canvas.width && coords.y >= 0 && coords.y < canvas.height) {
+        gameState.is_touching = true;
+      }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!gameState.is_touching) return;
+      const coords = getCanvasCoords(e.clientX, e.clientY);
+      
+      const dx = coords.x - 200;
+      const dy = coords.y - 30;
+      let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      angle = Math.max(-45, Math.min(45, angle));
+      gameState.launcher_angle = angle;
+    });
+
+    document.addEventListener('mouseup', () => {
+      gameState.is_touching = false;
+      if (gameState.gameStatus === 'playing') {
+        launchCoin();
+      }
+    });
+
+    document.addEventListener('touchstart', (e) => {
+      const touch = e.touches[0];
+      const coords = getCanvasCoords(touch.clientX, touch.clientY);
+      if (coords.x >= 0 && coords.x < canvas.width && coords.y >= 0 && coords.y < canvas.height) {
+        gameState.is_touching = true;
+      }
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!gameState.is_touching) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const coords = getCanvasCoords(touch.clientX, touch.clientY);
+      
+      const dx = coords.x - 200;
+      const dy = coords.y - 30;
+      let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      angle = Math.max(-45, Math.min(45, angle));
+      gameState.launcher_angle = angle;
+    });
+
+    document.addEventListener('touchend', () => {
+      gameState.is_touching = false;
+      if (gameState.gameStatus === 'playing') {
+        launchCoin();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      const coords = getCanvasCoords(e.clientX, e.clientY);
+      if (coords.x >= 0 && coords.x < canvas.width && coords.y >= 0 && coords.y < canvas.height) {
+        if (gameState.gameStatus !== 'playing') {
+          gameState = {
+            coins: 12,
+            collected: 0,
+            gameStatus: 'playing',
+            gameStartTime: Date.now(),
+            coins_in_play: [],
+            pegs: generatePegs(),
+            launcher_angle: 0,
+            is_touching: false,
+            collected_animations: [],
+            win_time: null
+          };
+        }
+      }
+    });
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

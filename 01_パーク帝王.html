@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>パーク帝王</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #1a1a2e;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            cursor: pointer;
+            background: #16213e;
+        }
+        #uiContainer {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #fff;
+            font-size: 16px;
+            z-index: 10;
+            font-weight: bold;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
+        }
+        #uiContainer div {
+            margin: 8px 0;
+            background: rgba(0, 100, 200, 0.7);
+            padding: 8px 15px;
+            border-radius: 8px;
+            border-left: 4px solid #00d4ff;
+        }
+        #instruction {
+            font-size: 18px;
+            background: rgba(255, 150, 0, 0.8) !important;
+            border-left-color: #ffaa00 !important;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="uiContainer">
+        <div id="instruction">🎪 施設をタップして10個制圧！長く押すと建設開始</div>
+        <div id="territory">制圧数: <span id="territoryValue">0</span>/10</div>
+        <div id="money">💰 資金: <span id="moneyValue">100</span></div>
+        <div id="timer">⏱️ 時間: <span id="timerValue">0</span>秒</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let gameState = {
+            territory: 0,
+            money: 100,
+            startTime: Date.now(),
+            gameOver: false,
+            gameWon: false,
+            facilities: [],
+            particles: [],
+            moneyPopups: [],
+            explosions: [],
+            buildBuffer: []
+        };
+
+        const FACILITY_COST = 50;
+        const REVENUE_PER_FACILITY = 8;
+        const COST_MULTIPLIER = 1.25;
+
+        let mousePos = { x: 0, y: 0 };
+        let mouseDown = false;
+        let clickStartPos = { x: 0, y: 0 };
+
+        canvas.addEventListener('mousedown', (e) => {
+            mouseDown = true;
+            const rect = canvas.getBoundingClientRect();
+            clickStartPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            mousePos = { ...clickStartPos };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mousePos.x = e.clientX - rect.left;
+            mousePos.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (mouseDown) {
+                handleClick(clickStartPos.x, clickStartPos.y);
+            }
+            mouseDown = false;
+        });
+
+        canvas.addEventListener('click', () => {});
+
+        function handleClick(x, y) {
+            if (gameState.gameOver || gameState.gameWon) return;
+
+            const currentCost = Math.floor(FACILITY_COST * Math.pow(COST_MULTIPLIER, gameState.territory));
+            
+            if (gameState.money >= currentCost) {
+                gameState.money -= currentCost;
+                gameState.territory += 1;
+
+                addFacility(x, y);
+                createClickEffect(x, y, 'big');
+                createMoneyPopup(x, y, -currentCost);
+
+                if (gameState.territory >= 10) {
+                    gameState.gameWon = true;
+                    createWinExplosion();
+                }
+            } else {
+                createClickEffect(x, y, 'fail');
+                createMoneyPopup(x, y, 'コスト不足', '#ff6666');
+            }
+        }
+
+        function addFacility(clickX, clickY) {
+            const angle = (gameState.territory - 1) * (Math.PI * 2 / 10);
+            const baseDistance = 100 + gameState.territory * 30;
+            const x = canvas.width / 2 + Math.cos(angle) * baseDistance;
+            const y = canvas.height / 2 + Math.sin(angle) * baseDistance;
+            
+            gameState.facilities.push({
+                x: x,
+                y: y,
+                baseX: x,
+                baseY: y,
+                size: 20 + gameState.territory * 5,
+                index: gameState.territory,
+                animation: 0,
+                pulse: 0,
+                clickX: clickX,
+                clickY: clickY
+            });
+        }
+
+        function createClickEffect(x, y, type) {
+            if (type === 'big') {
+                // 爆発パーティクル
+                for (let i = 0; i < 20; i++) {
+                    const angle = (i / 20) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+                    const speed = 3 + Math.random() * 5;
+                    gameState.particles.push({
+                        x: x,
+                        y: y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        life: 60,
+                        maxLife: 60,
+                        size: 4 + Math.random() * 6,
+                        type: 'spark'
+                    });
+                }
+
+                // テキストエフェクト
+                for (let i = 0; i < 5; i++) {
+                    gameState.particles.push({
+                        x: x + (Math.random() - 0.5) * 30,
+                        y: y + (Math.random() - 0.5) * 30,
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: -2 - Math.random() * 3,
+                        life: 70,
+                        maxLife: 70,
+                        text: '✨',
+                        fontSize: 28,
+                        type: 'emoji'
+                    });
+                }
+            } else if (type === 'fail') {
+                // 失敗エフェクト（ダメージ演出）
+                for (let i = 0; i < 10; i++) {
+                    const angle = (i / 10) * Math.PI * 2;
+                    gameState.particles.push({
+                        x: x,
+                        y: y,
+                        vx: Math.cos(angle) * 2,
+                        vy: Math.sin(angle) * 2,
+                        life: 40,
+                        maxLife: 40,
+                        size: 3,
+                        type: 'spark'
+                    });
+                }
+            }
+        }
+
+        function createMoneyPopup(x, y, amount, color) {
+            gameState.moneyPopups.push({
+                x: x,
+                y: y,
+                text: typeof amount === 'number' ? (amount > 0 ? '+' : '') + amount : amount,
+                life: 80,
+                maxLife: 80,
+                color: color || (amount > 0 ? '#00ff88' : '#ff6666'),
+                size: 22
+            });
+        }
+
+        function createWinExplosion() {
+            // Win時の爆発的演出
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 100 + Math.random() * 300;
+                gameState.explosions.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    targetX: canvas.width / 2 + Math.cos(angle) * distance,
+                    targetY: canvas.height / 2 + Math.sin(angle) * distance,
+                    life: 60,
+                    maxLife: 60,
+                    size: 8 + Math.random() * 12
+                });
+            }
+        }
+
+        function updateGameState() {
+            if (gameState.gameOver || gameState.gameWon) return;
+
+            // 自動収益
+            const revenuePerFrame = (gameState.territory * REVENUE_PER_FACILITY) / 60;
+            gameState.money += revenuePerFrame;
+
+            // 30秒経過後で資金<0ならゲームオーバー
+            const elapsed = (Date.now() - gameState.startTime) / 1000;
+            if (gameState.money < 0 && elapsed > 30) {
+                gameState.gameOver = true;
+            }
+
+            // パーティクル更新
+            gameState.particles = gameState.particles.filter(p => {
+                p.life--;
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.type === 'spark') p.vy += 0.2;
+                return p.life > 0;
+            });
+
+            // ポップアップ更新
+            gameState.moneyPopups = gameState.moneyPopups.filter(p => {
+                p.life--;
+                p.y -= 1.5;
+                return p.life > 0;
+            });
+
+            // Win爆発更新
+            gameState.explosions = gameState.explosions.filter(e => {
+                e.life--;
+                return e.life > 0;
+            });
+
+            // 施設アニメーション
+            for (let facility of gameState.facilities) {
+                facility.animation = Math.min(facility.animation + 0.08, 1);
+                facility.pulse += 0.05;
+            }
+        }
+
+        function drawGame() {
+            // 背景：制圧度に応じて色が濃くなる
+            const intensity = gameState.territory / 10;
+            const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            const r1 = Math.floor(40 + (100 - 100 * intensity));
+            const g1 = Math.floor(100 + (80 - 80 * intensity));
+            const b1 = Math.floor(160 - 50 * intensity);
+            bgGradient.addColorStop(0, `rgb(${r1}, ${g1}, ${b1})`);
+            bgGradient.addColorStop(1, `rgb(${Math.max(r1 - 30, 0)}, ${g1 - 20}, ${b1 + 20})`);
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // グリッド支配演出（intensity大きいほど濃い）
+            ctx.strokeStyle = `rgba(100, 255, 200, ${0.08 + intensity * 0.2})`;
+            ctx.lineWidth = 2;
+            const cellSize = 50 - intensity * 30;
+            for (let x = -canvas.width; x < canvas.width * 2; x += cellSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, -canvas.height);
+                ctx.lineTo(x, canvas.height * 2);
+                ctx.stroke();
+            }
+            for (let y = -canvas.height; y < canvas.height * 2; y += cellSize) {
+                ctx.beginPath();
+                ctx.moveTo(-canvas.width, y);
+                ctx.lineTo(canvas.width * 2, y);
+                ctx.stroke();
+            }
+
+            // 中心オーブ：制圧度が高いほど大きく明るく
+            const centerSize = 50 + gameState.territory * 12;
+            const centerGradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, centerSize);
+            centerGradient.addColorStop(0, `rgba(255, 240, 100, ${0.9 + intensity * 0.1})`);
+            centerGradient.addColorStop(0.5, `rgba(255, 180, 0, ${0.6})`);
+            centerGradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
+            ctx.fillStyle = centerGradient;
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, centerSize, 0, Math.PI * 2);
+            ctx.fill();
+
+            // パルス波紋（中心から放射）
+            for (let i = 0; i < 3; i++) {
+                const wave = ((Date.now() / 1000) % 2 + i / 3) % 2;
+                const waveSize = wave * 300;
+                const waveOpacity = Math.max(0, 0.4 - wave * 0.2);
+                ctx.strokeStyle = `rgba(255, 200, 100, ${waveOpacity * (1 - intensity * 0.5)})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height / 2, centerSize + waveSize, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 施設描画
+            for (let facility of gameState.facilities) {
+                const scale = 0.3 + facility.animation * 0.7;
+                const size = facility.size * scale;
+                const pulse = Math.sin(facility.pulse) * 0.1;
+
+                // 施設背景の光
+                ctx.fillStyle = `rgba(255, 200, 100, ${(0.3 - facility.animation * 0.2) * (1 - pulse)})`;
+                ctx.beginPath();
+                ctx.arc(facility.x, facility.y, size * (1.3 + pulse), 0, Math.PI * 2);
+                ctx.fill();
+
+                // 施設本体
+                const hue = 50 + facility.index * 18;
+                ctx.fillStyle = `hsl(${hue}, 90%, ${45 + pulse * 15}%)`;
+                ctx.beginPath();
+                ctx.arc(facility.x, facility.y, size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 施設の外枠光
+                ctx.strokeStyle = `rgba(255, 255, 200, ${0.7 * scale})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(facility.x, facility.y, size + 6, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 中心マーク
+                ctx.fillStyle = '#ffff99';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🎪', facility.x, facility.y);
+            }
+
+            // パーティクル描画
+            for (let particle of gameState.particles) {
+                const opacity = particle.life / particle.maxLife;
+                if (particle.type === 'spark') {
+                    ctx.fillStyle = `rgba(255, 180, 80, ${opacity * 0.8})`;
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (particle.type === 'emoji') {
+                    ctx.font = particle.fontSize + 'px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.globalAlpha = opacity;
+                    ctx.fillText(particle.text, particle.x, particle.y);
+                    ctx.globalAlpha = 1;
+                }
+            }
+
+            // ポップアップ（数値とテキスト）描画
+            for (let popup of gameState.moneyPopups) {
+                const opacity = popup.life / popup.maxLife;
+                const scale = 0.8 + (1 - opacity) * 0.5;
+                ctx.font = 'bold ' + Math.floor(popup.size * scale) + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = popup.color;
+                ctx.globalAlpha = opacity;
+                ctx.fillText(popup.text, popup.x, popup.y);
+                ctx.globalAlpha = 1;
+            }
+
+            // Win爆発描画
+            for (let explosion of gameState.explosions) {
+                const progress = 1 - explosion.life / explosion.maxLife;
+                const x = explosion.x + (explosion.targetX - explosion.x) * progress;
+                const y = explosion.y + (explosion.targetY - explosion.y) * progress;
+                const size = explosion.size * (1 - progress * 0.5);
+                
+                ctx.fillStyle = `rgba(255, 215, 0, ${(1 - progress) * 0.9})`;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Win演出
+            if (gameState.gameWon) {
+                // 背景フラッシュ
+                const flash = Math.sin(Date.now() / 150) * 0.5 + 0.5;
+                ctx.fillStyle = `rgba(255, 215, 0, ${0.3 * flash})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 勝利テキスト
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetX = 3;
+                ctx.shadowOffsetY = 3;
+
+                ctx.fillStyle = '#ffff00';
+                ctx.font = 'bold 100px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🏆', canvas.width / 2, canvas.height / 2 - 80);
+
+                ctx.fillStyle = '#ffdd00';
+                ctx.font = 'bold 70px Arial';
+                ctx.fillText('パーク帝王達成！', canvas.width / 2, canvas.height / 2 + 40);
+
+                const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 28px Arial';
+                ctx.fillText('クリア時間: ' + elapsed + '秒', canvas.width / 2, canvas.height / 2 + 120);
+
+                ctx.shadowColor = 'transparent';
+            }
+
+            // Fail演出
+            if (gameState.gameOver) {
+                const flash = Math.sin(Date.now() / 120) * 0.5 + 0.5;
+                ctx.fillStyle = `rgba(255, 0, 0, ${0.25 * flash})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+                ctx.shadowBlur = 15;
+
+                ctx.fillStyle = '#ff6666';
+                ctx.font = 'bold 80px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('資金尽きた！', canvas.width / 2, canvas.height / 2 - 50);
+
+                ctx.fillStyle = '#ffaa88';
+                ctx.font = 'bold 32px Arial';
+                ctx.fillText('制圧度: ' + gameState.territory + ' / 10', canvas.width / 2, canvas.height / 2 + 60);
+
+                ctx.shadowColor = 'transparent';
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('territoryValue').textContent = gameState.territory;
+            document.getElementById('moneyValue').textContent = Math.floor(gameState.money);
+            const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+            document.getElementById('timerValue').textContent = elapsed;
+        }
+
+        function gameLoop() {
+            updateGameState();
+            drawGame();
+            updateUI();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

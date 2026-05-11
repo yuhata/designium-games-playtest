@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>墨弾幕レター</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1a1a1a;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #f5f5f5;
+      cursor: crosshair;
+      border: 3px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 800;
+    canvas.height = 600;
+
+    let state = {
+      destroys: 0,
+      hits: 0,
+      gameOver: false,
+      gameWon: false,
+      startTime: Date.now()
+    };
+
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 80,
+      radius: 15,
+      maxSpeed: 300
+    };
+
+    let enemies = [];
+    let particles = [];
+    let gameOverTime = 0;
+    let completeTime = 0;
+    let targetX = player.x;
+    let targetY = player.y;
+
+    const MAX_DESTROYS = 200;
+    const MAX_HITS = 5;
+
+    // マウス/タッチイベント登録
+    document.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      targetX = e.clientX - rect.left;
+      targetY = e.clientY - rect.top;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (e.buttons === 1) {
+        const rect = canvas.getBoundingClientRect();
+        targetX = e.clientX - rect.left;
+        targetY = e.clientY - rect.top;
+      }
+    });
+
+    document.addEventListener('touchstart', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      targetX = touch.clientX - rect.left;
+      targetY = touch.clientY - rect.top;
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      targetX = touch.clientX - rect.left;
+      targetY = touch.clientY - rect.top;
+    });
+
+    // クリック=敵撃墜判定 or リスタート
+    document.addEventListener('click', (e) => {
+      // リスタート判定
+      if (state.gameOver || (state.gameWon && Date.now() - completeTime > 3000)) {
+        state = { destroys: 0, hits: 0, gameOver: false, gameWon: false, startTime: Date.now() };
+        enemies = [];
+        particles = [];
+        player.x = canvas.width / 2;
+        player.y = canvas.height - 80;
+        return;
+      }
+
+      // 敵クリック判定（ゲーム中のみ）
+      if (state.gameOver || state.gameWon) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        const dx = clickX - enemy.x;
+        const dy = clickY - enemy.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < enemy.radius + 25) {
+          destroyEnemy(i, enemy.x, enemy.y);
+          break;
+        }
+      }
+    });
+
+    function destroyEnemy(index, x, y) {
+      state.destroys++;
+
+      // 白パーティクル30個放射状
+      for (let i = 0; i < 30; i++) {
+        const angle = (i / 30) * Math.PI * 2;
+        const speed = 150 + Math.random() * 100;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.3
+        });
+      }
+
+      enemies.splice(index, 1);
+
+      if (state.destroys >= MAX_DESTROYS) {
+        state.gameWon = true;
+        completeTime = Date.now();
+      }
+    }
+
+    function spawnEnemy() {
+      const x = Math.random() * (canvas.width - 100) + 50;
+      const y = Math.random() * (canvas.height / 3) + 30;
+      enemies.push({
+        x: x,
+        y: y,
+        radius: 20,
+        bullets: [],
+        lastShoot: Date.now() - Math.random() * 1000
+      });
+    }
+
+    function update(dt) {
+      // 敵数制限（段階的に増加）
+      const maxEnemies = 2 + Math.floor(state.destroys / 60);
+      if (enemies.length < maxEnemies && Math.random() < 0.02) {
+        spawnEnemy();
+      }
+
+      // プレイヤー移動（線形補間）
+      const dx = targetX - player.x;
+      const dy = targetY - player.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > player.maxSpeed * dt) {
+        player.x += (dx / dist) * player.maxSpeed * dt;
+        player.y += (dy / dist) * player.maxSpeed * dt;
+      } else {
+        player.x = targetX;
+        player.y = targetY;
+      }
+
+      player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+      player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
+      // 敵弾生成・更新
+      for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        const now = Date.now();
+
+        if (now - enemy.lastShoot > 1000 + Math.random() * 800) {
+          const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+          enemy.bullets.push({
+            x: enemy.x,
+            y: enemy.y,
+            vx: Math.cos(angle) * 150,
+            vy: Math.sin(angle) * 150
+          });
+          enemy.lastShoot = now;
+        }
+
+        for (let j = enemy.bullets.length - 1; j >= 0; j--) {
+          const bullet = enemy.bullets[j];
+          bullet.x += bullet.vx * dt;
+          bullet.y += bullet.vy * dt;
+
+          if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+            enemy.bullets.splice(j, 1);
+          }
+        }
+      }
+
+      // 被弾判定（重要：この判定でstate.gameOverが立つと、次フレームでは更新されない）
+      for (let i = 0; i < enemies.length; i++) {
+        for (let j = enemies[i].bullets.length - 1; j >= 0; j--) {
+          const bullet = enemies[i].bullets[j];
+          const bdx = bullet.x - player.x;
+          const bdy = bullet.y - player.y;
+          const bdist = Math.hypot(bdx, bdy);
+
+          if (bdist < player.radius + 8) {
+            state.hits++;
+            enemies[i].bullets.splice(j, 1);
+
+            if (state.hits >= MAX_HITS) {
+              state.gameOver = true;
+              gameOverTime = Date.now();
+              return; // 被弾判定を即中止
+            }
+          }
+        }
+      }
+
+      // パーティクル更新
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 敵弾
+      ctx.fillStyle = '#ff6b6b';
+      for (let i = 0; i < enemies.length; i++) {
+        for (let j = 0; j < enemies[i].bullets.length; j++) {
+          const b = enemies[i].bullets[j];
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 敵
+      ctx.fillStyle = '#333';
+      for (let i = 0; i < enemies.length; i++) {
+        ctx.beginPath();
+        ctx.arc(enemies[i].x, enemies[i].y, enemies[i].radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // プレイヤー
+      ctx.fillStyle = '#0066ff';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // パーティクル
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        ctx.globalAlpha = p.life / 0.3;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0;
+
+      // UI
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`撃墜: ${state.destroys}/${MAX_DESTROYS}`, 20, 35);
+
+      ctx.textAlign = 'right';
+      ctx.fillText(`被弾: ${state.hits}/${MAX_HITS}`, canvas.width - 20, 35);
+
+      // 操作説明（ゲーム中）
+      if (!state.gameOver && !state.gameWon) {
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        ctx.fillText('敵をクリック / ドラッグで自機移動', canvas.width / 2, canvas.height - 15);
+      }
+
+      // GAME OVER
+      if (state.gameOver) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#ff0000';
+        ctx.font = 'bold 70px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 60);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '28px Arial';
+        ctx.fillText(`撃墜数: ${state.destroys}`, canvas.width / 2, canvas.height / 2 + 30);
+        ctx.font = '20px Arial';
+        ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 90);
+      }
+
+      // COMPLETE
+      if (state.gameWon) {
+        const elapsed = Date.now() - completeTime;
+
+        if (elapsed < 3000) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          ctx.fillStyle = '#00dd00';
+          ctx.font = 'bold 70px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('COMPLETE!', canvas.width / 2, canvas.height / 2 - 60);
+
+          ctx.fillStyle = '#fff';
+          ctx.font = '28px Arial';
+          ctx.fillText('200撃墜達成！', canvas.width / 2, canvas.height / 2 + 30);
+        } else {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 50px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('ゲームクリア！', canvas.width / 2, canvas.height / 2 - 30);
+          ctx.font = '28px Arial';
+          ctx.fillText(`最終撃墜数: ${state.destroys}`, canvas.width / 2, canvas.height / 2 + 40);
+          ctx.font = '20px Arial';
+          ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+        }
+      }
+    }
+
+    let lastTime = Date.now();
+    function gameLoop() {
+      const now = Date.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.016);
+      lastTime = now;
+
+      if (!state.gameOver && !state.gameWon) {
+        update(dt);
+      }
+
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

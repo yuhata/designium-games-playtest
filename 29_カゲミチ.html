@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>カゲミチ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #1a1a2e;
+      font-family: 'Arial', sans-serif;
+      overflow: hidden;
+    }
+    .game-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%);
+      border: 3px solid #16c784;
+      box-shadow: 0 0 20px rgba(22, 199, 132, 0.3);
+      display: flex;
+      flex-direction: column;
+    }
+    .hud {
+      background: rgba(0, 0, 0, 0.8);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #16c784;
+      color: #fff;
+      font-size: 14px;
+    }
+    .hud-item {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .hud-label { color: #16c784; font-weight: bold; }
+    .hud-value { color: #fff; font-weight: bold; min-width: 60px; }
+    #gameCanvas {
+      flex: 1;
+      display: block;
+      background: #0a0a14;
+      cursor: crosshair;
+    }
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 100;
+      flex-direction: column;
+      gap: 20px;
+      padding: 40px;
+      text-align: center;
+    }
+    .overlay.active { display: flex; }
+    .overlay-title {
+      font-size: 48px;
+      font-weight: bold;
+      color: #16c784;
+      text-shadow: 0 0 20px rgba(22, 199, 132, 0.5);
+    }
+    .overlay-text {
+      font-size: 24px;
+      color: #fff;
+    }
+    .overlay-score {
+      font-size: 36px;
+      color: #ffff00;
+      font-weight: bold;
+    }
+    .instruction {
+      position: absolute;
+      top: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #16c784;
+      font-size: 16px;
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      text-shadow: 0 0 10px rgba(22, 199, 132, 0.5);
+      max-width: 600px;
+      line-height: 1.4;
+    }
+    .timer-critical {
+      animation: pulse 0.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+<div class="game-container">
+  <div class="hud">
+    <div class="hud-item">
+      <span class="hud-label">ルーム:</span>
+      <span class="hud-value" id="roomsValue">1/10</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">タイマー:</span>
+      <span class="hud-value" id="timerValue">5:00</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">発見度:</span>
+      <span class="hud-value" id="discoverValue">0%</span>
+    </div>
+  </div>
+  <canvas id="gameCanvas" width="800" height="548"></canvas>
+  <div class="instruction" id="instruction">
+    💡 マウスで光源をドラッグして、隠された文字の影を重ねよう。<br>
+    発見度が80%以上で次のルームへ！
+  </div>
+  <div class="overlay" id="gameOverlay">
+    <div class="overlay-title" id="overlayTitle">クリア</div>
+    <div class="overlay-text" id="overlayText">準備中...</div>
+    <div class="overlay-score" id="overlayScore"></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('gameOverlay');
+const instruction = document.getElementById('instruction');
+
+const rooms = [
+  { text: '星', color: '#ffee58' },
+  { text: '月', color: '#e8eaf6' },
+  { text: '風', color: '#b3e5fc' },
+  { text: '火', color: '#ff6e40' },
+  { text: '水', color: '#4fc3f7' },
+  { text: '花', color: '#f48fb1' },
+  { text: '光', color: '#ffff8d' },
+  { text: '影', color: '#90caf9' },
+  { text: '道', color: '#dcedc8' },
+  { text: '心', color: '#f8bbd0' },
+];
+
+let gameState = {
+  rooms: 0,
+  timer: 300,
+  discovered: 0,
+  discoverHistory: [],
+  lightPos: { x: 400, y: 274 },
+  prevLightPos: { x: 400, y: 274 },
+  isDragging: false,
+  lastFrameTime: Date.now(),
+  gameOver: false,
+  gameWon: false,
+  instructionShown: true,
+  roomClearCountdown: 0,
+  elapsedTime: 0,
+};
+
+let particles = [];
+
+class Particle {
+  constructor(x, y, vx, vy, life, color) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.life = life;
+    this.maxLife = life;
+    this.color = color;
+    this.size = 5 + Math.random() * 5;
+  }
+  update(dt) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.vy += 150 * dt;
+    this.life -= dt;
+  }
+  draw(ctx) {
+    const alpha = Math.max(0, this.life / this.maxLife);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if (gameState.gameOver || gameState.gameWon || gameState.roomClearCountdown > 0) return;
+  const coords = getCanvasCoords(e);
+  gameState.isDragging = true;
+  gameState.prevLightPos = { x: gameState.lightPos.x, y: gameState.lightPos.y };
+  gameState.lightPos = { x: coords.x, y: coords.y };
+  if (gameState.instructionShown) {
+    instruction.style.opacity = '0.3';
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!gameState.isDragging) return;
+  const coords = getCanvasCoords(e);
+  gameState.prevLightPos = { x: gameState.lightPos.x, y: gameState.lightPos.y };
+  gameState.lightPos = { x: coords.x, y: coords.y };
+});
+
+canvas.addEventListener('mouseup', () => {
+  gameState.isDragging = false;
+});
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.gameOver || gameState.gameWon || gameState.roomClearCountdown > 0) return;
+  const coords = getCanvasCoords(e);
+  gameState.lightPos = { x: coords.x, y: coords.y };
+});
+
+function drawHiddenText(textContent, color) {
+  ctx.save();
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = color;
+  ctx.font = 'bold 140px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(textContent, 400, 274);
+  ctx.restore();
+}
+
+function drawLightAndShadow() {
+  const lightRadius = 180;
+  const shadowIntensity = 0.4;
+  
+  // Light glow
+  const gradient = ctx.createRadialGradient(
+    gameState.lightPos.x, gameState.lightPos.y, 0,
+    gameState.lightPos.x, gameState.lightPos.y, lightRadius
+  );
+  gradient.addColorStop(0, 'rgba(255, 255, 180, 0.5)');
+  gradient.addColorStop(0.6, 'rgba(255, 255, 150, 0.15)');
+  gradient.addColorStop(1, 'rgba(255, 255, 100, 0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(gameState.lightPos.x, gameState.lightPos.y, lightRadius, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Shadow overlay (radial darkness)
+  const shadowGradient = ctx.createRadialGradient(
+    gameState.lightPos.x, gameState.lightPos.y, lightRadius * 0.3,
+    gameState.lightPos.x, gameState.lightPos.y, lightRadius
+  );
+  shadowGradient.addColorStop(0, `rgba(0, 0, 0, 0)`);
+  shadowGradient.addColorStop(1, `rgba(0, 0, 0, ${shadowIntensity})`);
+  ctx.fillStyle = shadowGradient;
+  ctx.beginPath();
+  ctx.arc(gameState.lightPos.x, gameState.lightPos.y, lightRadius, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Light source center
+  ctx.fillStyle = '#ffff00';
+  ctx.beginPath();
+  ctx.arc(gameState.lightPos.x, gameState.lightPos.y, 10, 0, Math.PI * 2);
+  ctx.fill();
+  
+  ctx.strokeStyle = '#ffff88';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(gameState.lightPos.x, gameState.lightPos.y, lightRadius, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function calculateLitPixels() {
+  const room = rooms[gameState.rooms];
+  const textColor = room.color;
+  const imageData = ctx.getImageData(250, 150, 300, 248);
+  const data = imageData.data;
+  
+  let litPixels = 0;
+  let totalPixels = 0;
+  
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const a = data[i + 3];
+    
+    if (a > 20) {
+      totalPixels++;
+      // Check if pixel is in light area (bright)
+      if (r + g + b > 300 && a > 100) {
+        litPixels++;
+      }
+    }
+  }
+  
+  if (totalPixels === 0) return 0;
+  return Math.round((litPixels / totalPixels) * 100);
+}
+
+function drawRoom() {
+  // Background
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Hidden text
+  const room = rooms[gameState.rooms];
+  drawHiddenText(room.text, room.color);
+  
+  // Decorative obstacles
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.arc(200, 200, 70, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(600, 320, 80, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(350, 380, 60, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Light and shadow
+  drawLightAndShadow();
+  
+  // Particles
+  particles = particles.filter(p => p.life > 0);
+  for (let p of particles) {
+    p.update(0.016);
+    p.draw(ctx);
+  }
+}
+
+function checkRoomCleared() {
+  const discover = calculateLitPixels();
+  gameState.discovered = discover;
+  
+  gameState.discoverHistory.push(discover);
+  if (gameState.discoverHistory.length > 3) {
+    gameState.discoverHistory.shift();
+  }
+  
+  if (gameState.discoverHistory.length >= 3) {
+    const last3 = gameState.discoverHistory.slice(-3);
+    if (last3.every(d => d >= 80)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+function advanceRoom() {
+  const room = rooms[gameState.rooms];
+  
+  // Celebration particles
+  for (let i = 0; i < 40; i++) {
+    const angle = (Math.PI * 2 * i) / 40;
+    particles.push(new Particle(
+      400, 274,
+      Math.cos(angle) * 250,
+      Math.sin(angle) * 250,
+      1.2,
+      room.color
+    ));
+  }
+  
+  gameState.roomClearCountdown = 0.8;
+  gameState.rooms++;
+  gameState.discoverHistory = [];
+}
+
+function showGameOver(won) {
+  gameState.gameWon = won;
+  if (!won) gameState.gameOver = true;
+  
+  overlay.classList.add('active');
+  
+  if (won) {
+    document.getElementById('overlayTitle').textContent = '全ルームクリア！';
+    document.getElementById('overlayText').textContent = 
+      '10つの影の道をすべて歩破しました。\n隠された絵たちはあなたの光に導かれました。';
+    document.getElementById('overlayScore').textContent = `最終スコア: 10/10`;
+  } else {
+    document.getElementById('overlayTitle').textContent = 'タイムアップ';
+    document.getElementById('overlayText').textContent = 
+      `${gameState.rooms}ルームまで到達しました。\n時間切れです。`;
+    document.getElementById('overlayScore').textContent = `スコア: ${gameState.rooms}/10`;
+  }
+}
+
+function update(dt) {
+  gameState.elapsedTime += dt;
+  
+  // Timer only starts after 30 seconds of warm-up
+  if (gameState.elapsedTime > 30) {
+    gameState.timer -= dt;
+    if (gameState.timer < 0) {
+      gameState.timer = 0;
+      if (!gameState.gameOver && !gameState.gameWon) {
+        showGameOver(false);
+      }
+    }
+  } else {
+    gameState.timer = 300 - (gameState.elapsedTime * 0.3);
+  }
+  
+  if (gameState.roomClearCountdown > 0) {
+    gameState.roomClearCountdown -= dt;
+  }
+  
+  if (gameState.roomClearCountdown <= 0 && !gameState.gameOver && !gameState.gameWon) {
+    if (gameState.rooms === 10) {
+      showGameOver(true);
+    } else if (checkRoomCleared()) {
+      advanceRoom();
+    }
+  }
+}
+
+function draw() {
+  drawRoom();
+  
+  const mins = Math.floor(Math.max(0, gameState.timer) / 60);
+  const secs = Math.floor(Math.max(0, gameState.timer) % 60);
+  
+  document.getElementById('roomsValue').textContent = `${Math.min(10, gameState.rooms + 1)}/10`;
+  document.getElementById('discoverValue').textContent = `${gameState.discovered}%`;
+  
+  const timerDisplay = document.getElementById('timerValue');
+  timerDisplay.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+  
+  if (gameState.elapsedTime > 30 && gameState.timer <= 30) {
+    timerDisplay.classList.add('timer-critical');
+  } else {
+    timerDisplay.classList.remove('timer-critical');
+  }
+  
+  // CSS variable for timer color
+  let timerColor = '#ffffff';
+  if (gameState.elapsedTime > 30) {
+    if (gameState.timer <= 30) timerColor = '#ff6b6b';
+    else if (gameState.timer <= 60) timerColor = '#ffff00';
+  }
+  document.documentElement.style.setProperty('--timer-color', timerColor);
+}
+
+function gameLoop() {
+  const now = Date.now();
+  const dt = Math.min((now - gameState.lastFrameTime) / 1000, 0.05);
+  gameState.lastFrameTime = now;
+  
+  if (!gameState.gameOver && !gameState.gameWon) {
+    update(dt);
+  }
+  
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>

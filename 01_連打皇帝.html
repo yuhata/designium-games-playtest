@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>連打皇帝</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #1a1a1a;
+      font-family: 'Arial', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+    canvas {
+      display: block;
+      touch-action: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    const game = {
+      playerTPS: 0,
+      enemyTPS: 2.0,
+      playerGauge: 50,
+      enemyGauge: 50,
+      tapTimes: [],
+      state: 'playing',
+      startTime: Date.now(),
+      bestScore: localStorage.getItem('bestScore') ? parseInt(localStorage.getItem('bestScore')) : 0,
+      currentScore: 0,
+      newBestTime: 0,
+      flashTime: 0,
+      rotationAngle: 0,
+      lastClickTime: 0,
+      clickPulse: 0,
+    };
+    
+    const ranking = [
+      { name: '連打マスター', score: 250 },
+      { name: 'タップキング', score: 180 },
+      { name: '皇帝候補', score: 150 },
+      { name: 'あなた', score: 0 },
+      { name: 'クリッカー', score: 80 },
+    ];
+    
+    function registerTap(e) {
+      if (e) {
+        e.preventDefault();
+      }
+      if (game.state === 'playing') {
+        game.tapTimes.push(Date.now());
+        game.lastClickTime = Date.now();
+        game.clickPulse = 0.2;
+      }
+    }
+    
+    function updateTPS() {
+      const now = Date.now();
+      const oneSecAgo = now - 1000;
+      game.tapTimes = game.tapTimes.filter(t => t > oneSecAgo);
+      game.playerTPS = game.tapTimes.length;
+      game.currentScore = Math.floor(game.playerGauge);
+    }
+    
+    function updateGauge() {
+      if (game.state === 'playing') {
+        const tpsDiff = game.playerTPS - game.enemyTPS;
+        game.playerGauge += tpsDiff * 0.3;
+        game.playerGauge = Math.max(0, Math.min(100, game.playerGauge));
+        game.enemyGauge = 100 - game.playerGauge;
+        
+        if (game.playerGauge >= 100) {
+          game.state = 'win';
+          game.flashTime = 30;
+          if (Math.floor(game.playerGauge) > game.bestScore) {
+            game.bestScore = Math.floor(game.playerGauge);
+            localStorage.setItem('bestScore', game.bestScore);
+            game.newBestTime = 60;
+          }
+        }
+        
+        if (Date.now() - game.startTime > 30000 && game.playerGauge <= 0) {
+          game.state = 'lose';
+        }
+      }
+    }
+    
+    function updateRanking() {
+      ranking[3].score = Math.floor(game.playerGauge);
+      ranking.sort((a, b) => b.score - a.score);
+    }
+    
+    function restartGame() {
+      game.playerTPS = 0;
+      game.enemyTPS = 2.0;
+      game.playerGauge = 50;
+      game.enemyGauge = 50;
+      game.tapTimes = [];
+      game.state = 'playing';
+      game.startTime = Date.now();
+      game.currentScore = 0;
+      game.newBestTime = 0;
+      game.flashTime = 0;
+      game.rotationAngle = 0;
+      game.clickPulse = 0;
+      ranking[3].score = 0;
+    }
+    
+    // イベントリスナー登録
+    document.addEventListener('mousedown', registerTap);
+    document.addEventListener('mouseup', (e) => { if (e) e.preventDefault(); });
+    document.addEventListener('mousemove', (e) => { if (e) e.preventDefault(); });
+    document.addEventListener('click', registerTap);
+    document.addEventListener('touchstart', registerTap);
+    
+    function draw() {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      if (game.state === 'playing') {
+        drawGameUI();
+      } else if (game.state === 'win') {
+        drawWinScreen();
+      } else if (game.state === 'lose') {
+        drawLoseScreen();
+      }
+    }
+    
+    function drawGameUI() {
+      const margin = 20;
+      
+      // クリック時のパルス効果
+      if (game.clickPulse > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${game.clickPulse * 0.3})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        game.clickPulse -= 0.05;
+      }
+      
+      // 操作説明
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('【操作方法】画面をタップ・クリックして連打してください！', margin, 30);
+      
+      // プレイヤーTPS（左上、大型）
+      ctx.fillStyle = '#00aaff';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(Math.floor(game.playerTPS), margin, 90);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('あなたTPS', margin, 110);
+      
+      // 敵TPS（右上、大型）
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(Math.floor(game.enemyTPS), canvas.width - margin, 90);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText('敵TPS', canvas.width - margin, 110);
+      
+      // ベストスコア
+      ctx.fillStyle = '#ffff00';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Best: ${game.bestScore}`, margin, 150);
+      
+      // NEW BEST演出
+      if (game.newBestTime > 0) {
+        const alpha = Math.min(game.newBestTime / 60, 1);
+        const pulse = Math.sin(game.newBestTime * 0.2) * 0.5 + 1.5;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#ffff00';
+        ctx.shadowColor = '#ff9900';
+        ctx.shadowBlur = 20;
+        ctx.font = `bold ${32 * pulse}px Arial`;
+        ctx.textAlign = 'left';
+        ctx.fillText('🌟 NEW BEST! 🌟', margin, 190);
+        ctx.restore();
+        game.newBestTime--;
+      }
+      
+      // プレイヤーゲージ
+      const gaugeY = canvas.height - 100;
+      const gaugeWidth = canvas.width * 0.35;
+      const gaugeX = margin;
+      
+      ctx.fillStyle = '#333';
+      ctx.fillRect(gaugeX, gaugeY, gaugeWidth, 30);
+      ctx.fillStyle = '#00aaff';
+      ctx.fillRect(gaugeX, gaugeY, gaugeWidth * (game.playerGauge / 100), 30);
+      ctx.strokeStyle = '#00ffff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, 30);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.floor(game.playerGauge) + '%', gaugeX + gaugeWidth / 2, gaugeY + 21);
+      
+      // 敵ゲージ
+      const enemyGaugeX = canvas.width - margin - gaugeWidth;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(enemyGaugeX, gaugeY, gaugeWidth, 30);
+      ctx.fillStyle = '#ff4444';
+      ctx.fillRect(enemyGaugeX, gaugeY, gaugeWidth * (game.enemyGauge / 100), 30);
+      ctx.strokeStyle = '#ff9999';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(enemyGaugeX, gaugeY, gaugeWidth, 30);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.floor(game.enemyGauge) + '%', enemyGaugeX + gaugeWidth / 2, gaugeY + 21);
+      
+      // ランキング
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText('ランキング', canvas.width - margin, 200);
+      
+      ctx.font = '14px Arial';
+      for (let i = 0; i < ranking.length; i++) {
+        const yPos = 230 + i * 25;
+        let color = '#fff';
+        if (i === 3) color = '#ffff00';
+        
+        ctx.fillStyle = color;
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  ';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${medal} ${i + 1}. ${ranking[i].name} ${ranking[i].score}`, canvas.width - margin, yPos);
+      }
+      
+      // 経過時間
+      const elapsedTime = Math.floor((Date.now() - game.startTime) / 1000);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`時間: ${elapsedTime}秒`, margin, canvas.height - 30);
+    }
+    
+    function drawWinScreen() {
+      // フラッシュ背景
+      if (game.flashTime > 0) {
+        ctx.fillStyle = `rgba(255, 255, 100, ${game.flashTime / 30})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        game.flashTime--;
+      }
+      
+      // 回転テキスト
+      game.rotationAngle += 0.1;
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(game.rotationAngle);
+      
+      ctx.fillStyle = '#ffff00';
+      ctx.font = 'bold 80px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#ff9900';
+      ctx.shadowBlur = 30;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 5;
+      ctx.fillText('🎉 勝利 🎉', 0, 0);
+      
+      ctx.restore();
+      
+      // スコア
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+      ctx.fillText(`最終スコア: ${Math.floor(game.playerGauge)}`, canvas.width / 2, canvas.height / 2 + 100);
+      
+      ctx.font = '20px Arial';
+      ctx.fillText('クリックして再スタート', canvas.width / 2, canvas.height / 2 + 150);
+    }
+    
+    function drawLoseScreen() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 80px Arial';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 30;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 5;
+      ctx.fillText('💥 敗北 💥', canvas.width / 2, canvas.height / 2 - 50);
+      
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 32px Arial';
+      ctx.fillText(`最終スコア: ${Math.floor(game.playerGauge)}`, canvas.width / 2, canvas.height / 2 + 100);
+      ctx.font = '20px Arial';
+      ctx.fillText('クリックして再スタート', canvas.width / 2, canvas.height / 2 + 150);
+    }
+    
+    let restartPending = false;
+    
+    function gameLoop() {
+      updateTPS();
+      updateGauge();
+      updateRanking();
+      draw();
+      
+      if ((game.state === 'win' || game.state === 'lose') && !restartPending) {
+        restartPending = true;
+        const handleRestart = () => {
+          if (game.state !== 'playing') {
+            restartGame();
+            restartPending = false;
+            document.removeEventListener('click', handleRestart);
+            document.removeEventListener('mousedown', handleRestart);
+            document.removeEventListener('touchstart', handleRestart);
+          }
+        };
+        document.addEventListener('click', handleRestart);
+        document.addEventListener('mousedown', handleRestart);
+        document.addEventListener('touchstart', handleRestart);
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    gameLoop();
+  </script>
+</body>
+</html>

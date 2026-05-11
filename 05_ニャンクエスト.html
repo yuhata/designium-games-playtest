@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ニャンクエスト</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    canvas {
+      display: block;
+      background: #1a1a2e;
+      border: 3px solid #16213e;
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
+      cursor: crosshair;
+    }
+    #ui {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 18px;
+      z-index: 100;
+      min-width: 300px;
+    }
+    #instructions {
+      color: #ffff00;
+      font-weight: bold;
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+    #stats {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .stat-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .stat-label {
+      color: #aaa;
+    }
+    .stat-value {
+      color: #ffff00;
+      font-weight: bold;
+      font-size: 22px;
+    }
+    #gameOver {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.95);
+      color: white;
+      padding: 40px;
+      border-radius: 20px;
+      text-align: center;
+      display: none;
+      z-index: 1000;
+      border: 3px solid #ffff00;
+      min-width: 400px;
+    }
+    #gameOverTitle {
+      font-size: 48px;
+      margin: 0 0 20px 0;
+      animation: pulse 0.5s ease-in-out;
+    }
+    #gameOverText {
+      font-size: 24px;
+      margin: 20px 0;
+      color: #ffff00;
+    }
+    #finalScore {
+      font-size: 18px;
+      margin: 20px 0;
+      color: #aaa;
+    }
+    #restartBtn {
+      background: #ffff00;
+      color: #000;
+      border: none;
+      padding: 15px 30px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    #restartBtn:hover {
+      background: #cccc00;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+  <div id="ui">
+    <div id="instructions">🐱 クリックで領土を制圧！支配率80%でクリア</div>
+    <div id="stats">
+      <div class="stat-line">
+        <span class="stat-label">支配率:</span>
+        <span class="stat-value"><span id="domination">0</span>%</span>
+      </div>
+      <div class="stat-line">
+        <span class="stat-label">猫軍団:</span>
+        <span class="stat-value"><span id="catCount">1</span></span>
+      </div>
+      <div class="stat-line">
+        <span class="stat-label">時間:</span>
+        <span class="stat-value"><span id="timer">0</span>秒</span>
+      </div>
+    </div>
+  </div>
+  <div id="gameOver">
+    <h1 id="gameOverTitle"></h1>
+    <p id="gameOverText"></p>
+    <p id="finalScore"></p>
+    <button id="restartBtn" onclick="location.reload()">もう一度プレイ</button>
+  </div>
+
+  <script>
+    const GRID_WIDTH = 13;
+    const GRID_HEIGHT = 10;
+    const CELL_SIZE = 50;
+    const CANVAS_WIDTH = GRID_WIDTH * CELL_SIZE;
+    const CANVAS_HEIGHT = GRID_HEIGHT * CELL_SIZE;
+    
+    const COLOR_CAT = '#ff1493';
+    const COLOR_AI = '#0066ff';
+    
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+    
+    let grid = [];
+    let particles = [];
+    let catCount = 1;
+    let domination = 0;
+    let gameTime = 0;
+    let gameOver = false;
+    let gameWon = false;
+    let startTime = Date.now();
+    let invasionCounter = 0;
+    
+    function initGrid() {
+      grid = [];
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        grid[y] = [];
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          grid[y][x] = 'ai';
+        }
+      }
+      grid[GRID_HEIGHT - 1][GRID_WIDTH - 1] = 'cat';
+    }
+    
+    function calculateDomination() {
+      let catCells = 0;
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          if (grid[y][x] === 'cat') catCells++;
+        }
+      }
+      domination = Math.round((catCells / (GRID_WIDTH * GRID_HEIGHT)) * 100);
+      return domination;
+    }
+    
+    function createParticles(x, y) {
+      for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI * 2 * i) / 12;
+        particles.push({
+          x: x + CELL_SIZE / 2,
+          y: y + CELL_SIZE / 2,
+          vx: Math.cos(angle) * 4,
+          vy: Math.sin(angle) * 4,
+          life: 40,
+          maxLife: 40
+        });
+      }
+    }
+    
+    function updateParticles() {
+      particles = particles.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.93;
+        p.vy *= 0.93;
+        p.life--;
+        return p.life > 0;
+      });
+    }
+    
+    function drawParticles() {
+      for (let p of particles) {
+        const alpha = p.life / p.maxLife;
+        ctx.fillStyle = `rgba(255, 20, 147, ${alpha * 0.8})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameOver) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / CELL_SIZE);
+      const y = Math.floor((e.clientY - rect.top) / CELL_SIZE);
+      
+      if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
+        conquerTerritory(x, y);
+      }
+    });
+    
+    function conquerTerritory(cx, cy) {
+      const conquered = [];
+      grid[cy][cx] = 'cat';
+      conquered.push([cx, cy]);
+      createParticles(cx * CELL_SIZE, cy * CELL_SIZE);
+      
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+            if (grid[ny][nx] === 'ai' && Math.random() < 0.5) {
+              grid[ny][nx] = 'cat';
+              conquered.push([nx, ny]);
+              createParticles(nx * CELL_SIZE, ny * CELL_SIZE);
+            }
+          }
+        }
+      }
+    }
+    
+    function aiInvasion() {
+      invasionCounter++;
+      const rate = Math.max(2, 12 - catCount);
+      
+      if (invasionCounter % rate === 0) {
+        const candidates = [];
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+          for (let x = 0; x < GRID_WIDTH; x++) {
+            if (grid[y][x] === 'ai') {
+              let adjacent = false;
+              for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                  const nx = x + dx, ny = y + dy;
+                  if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+                    if (grid[ny][nx] === 'cat') adjacent = true;
+                  }
+                }
+              }
+              if (adjacent) candidates.push([x, y]);
+            }
+          }
+        }
+        
+        if (candidates.length > 0) {
+          const [x, y] = candidates[Math.floor(Math.random() * candidates.length)];
+          grid[y][x] = 'ai';
+        }
+      }
+    }
+    
+    function draw() {
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          const px = x * CELL_SIZE;
+          const py = y * CELL_SIZE;
+          
+          ctx.fillStyle = grid[y][x] === 'cat' ? COLOR_CAT : COLOR_AI;
+          ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+          
+          ctx.strokeStyle = '#333';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+          
+          if (grid[y][x] === 'cat') {
+            ctx.shadowColor = COLOR_CAT;
+            ctx.shadowBlur = 10;
+            ctx.strokeStyle = COLOR_CAT;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px + 3, py + 3, CELL_SIZE - 6, CELL_SIZE - 6);
+            ctx.shadowBlur = 0;
+          }
+        }
+      }
+      
+      drawParticles();
+    }
+    
+    function gameLoop() {
+      if (!gameOver) {
+        aiInvasion();
+        updateParticles();
+        calculateDomination();
+        catCount = Math.max(1, 1 + Math.floor(domination / 18));
+        
+        document.getElementById('domination').textContent = domination;
+        document.getElementById('catCount').textContent = catCount;
+        gameTime = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('timer').textContent = gameTime;
+        
+        if (domination > 80) {
+          gameOver = true;
+          gameWon = true;
+          showGameOver();
+        } else if (domination === 0 && gameTime > 5) {
+          gameOver = true;
+          gameWon = false;
+          showGameOver();
+        }
+        
+        draw();
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    function showGameOver() {
+      const div = document.getElementById('gameOver');
+      const title = document.getElementById('gameOverTitle');
+      const text = document.getElementById('gameOverText');
+      const score = document.getElementById('finalScore');
+      
+      if (gameWon) {
+        title.textContent = '🎉 ニャンクエスト制覇！';
+        title.style.color = '#ff1493';
+        text.textContent = `世界の${domination}%を支配した！`;
+        score.textContent = `クリア時間: ${gameTime}秒 | 猫軍団: ${catCount}`;
+      } else {
+        title.textContent = '💀 敗北';
+        title.style.color = '#0066ff';
+        text.textContent = `AIに完全に支配されました`;
+        score.textContent = `最終支配率: ${domination}% | 時間: ${gameTime}秒`;
+      }
+      
+      div.style.display = 'block';
+    }
+    
+    initGrid();
+    gameLoop();
+  </script>
+</body>
+</html>

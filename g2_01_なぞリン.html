@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>なぞリン - Discovery Drawing Game</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+      overflow: hidden;
+    }
+    #gameContainer {
+      position: relative;
+      width: 600px;
+      height: 800px;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      background: white;
+    }
+    #uiOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      font-size: 24px;
+      color: #333;
+    }
+    .ui-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      border-bottom: 2px solid #eee;
+    }
+    .ui-bottom {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 15px;
+      border-radius: 10px;
+      font-size: 16px;
+      color: #666;
+      text-align: center;
+    }
+    .win-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(76, 175, 80, 0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 1000;
+      color: white;
+      text-align: center;
+    }
+    .fail-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(244, 67, 54, 0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 1000;
+      color: white;
+      text-align: center;
+    }
+    .result-text {
+      font-size: 56px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      animation: popIn 0.6s ease-out;
+    }
+    .result-details {
+      font-size: 24px;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+    .retry-button {
+      pointer-events: auto;
+      padding: 15px 40px;
+      font-size: 20px;
+      background: white;
+      color: #333;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.2s;
+    }
+    .retry-button:hover {
+      transform: scale(1.05);
+    }
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.5); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  <div id="uiOverlay">
+    <div class="ui-top">
+      <div>⏱️ <span id="timeDisplay">30</span>s</div>
+      <div>進度: <span id="rateDisplay">0</span>%</div>
+      <div>残り: <span id="remainingDisplay">3</span>本</div>
+    </div>
+    <div class="ui-bottom">
+      ✏️ 白い線をなぞってゲーム盤を完成させよう！
+    </div>
+  </div>
+  <div class="win-screen" id="winScreen">
+    <div class="result-text">🎉 成功！</div>
+    <div class="result-details">
+      すべての線を発見しました！<br>
+      スコア: <span id="winScore">100</span>点
+    </div>
+    <button class="retry-button" onclick="location.reload()">もう一度プレイ</button>
+  </div>
+  <div class="fail-screen" id="failScreen">
+    <div class="result-text">⏰ タイムアップ</div>
+    <div class="result-details">
+      進度: <span id="failRate">0</span>%<br>
+      もう一度チャレンジ！
+    </div>
+    <button class="retry-button" onclick="location.reload()">リトライ</button>
+  </div>
+</div>
+
+<script>
+window.__gameDebug = {
+  dragTargets: [],
+  objects: [],
+  metrics: { rate: 0.0, strokes: 0, phase: "playing" },
+  dragFill: function(id) {}
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = canvas.offsetWidth;
+canvas.height = canvas.offsetHeight;
+
+const game = {
+  timeLeft: 30,
+  startTime: Date.now(),
+  phase: "playing",
+  zones: [],
+  isDrawing: false
+};
+
+function generateBezierPoints(startX, startY, endX, endY, controlPoints = 100) {
+  const points = [];
+  for (let i = 0; i <= controlPoints; i++) {
+    const t = i / controlPoints;
+    const cx1 = startX + (endX - startX) * 0.33;
+    const cy1 = startY + (endY - startY) * 0.33 + Math.sin(t * Math.PI) * 50;
+    const cx2 = startX + (endX - startX) * 0.66;
+    const cy2 = startY + (endY - startY) * 0.66 - Math.cos(t * Math.PI) * 40;
+    
+    const xt = Math.pow(1-t, 3) * startX + 3 * Math.pow(1-t, 2) * t * cx1 + 
+               3 * (1-t) * Math.pow(t, 2) * cx2 + Math.pow(t, 3) * endX;
+    const yt = Math.pow(1-t, 3) * startY + 3 * Math.pow(1-t, 2) * t * cy1 + 
+               3 * (1-t) * Math.pow(t, 2) * cy2 + Math.pow(t, 3) * endY;
+    
+    points.push({ x: xt, y: yt });
+  }
+  return points;
+}
+
+function initializeZones() {
+  game.zones = [
+    {
+      id: "zone1",
+      points: generateBezierPoints(150, 200, 450, 250),
+      markedLength: 0,
+      totalLength: 0,
+      completed: false,
+      color: "#FF6B6B",
+      hintColor: "rgba(255, 107, 107, 0.15)"
+    },
+    {
+      id: "zone2",
+      points: generateBezierPoints(100, 400, 500, 420),
+      markedLength: 0,
+      totalLength: 0,
+      completed: false,
+      color: "#4ECDC4",
+      hintColor: "rgba(78, 205, 196, 0.15)"
+    },
+    {
+      id: "zone3",
+      points: generateBezierPoints(200, 600, 400, 650),
+      markedLength: 0,
+      totalLength: 0,
+      completed: false,
+      color: "#FFE66D",
+      hintColor: "rgba(255, 230, 109, 0.15)"
+    }
+  ];
+
+  game.zones.forEach(zone => {
+    zone.totalLength = 0;
+    for (let i = 1; i < zone.points.length; i++) {
+      const dx = zone.points[i].x - zone.points[i-1].x;
+      const dy = zone.points[i].y - zone.points[i-1].y;
+      zone.totalLength += Math.sqrt(dx*dx + dy*dy);
+    }
+  });
+}
+
+function findNearestPointOnZone(x, y, zone, threshold = 15) {
+  let minDist = Infinity;
+  let nearestSegment = -1;
+  let closestSegmentProgress = 0;
+
+  for (let i = 1; i < zone.points.length; i++) {
+    const p1 = zone.points[i-1];
+    const p2 = zone.points[i];
+    
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len2 = dx*dx + dy*dy;
+    let t = ((x - p1.x) * dx + (y - p1.y) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    
+    const closestX = p1.x + t * dx;
+    const closestY = p1.y + t * dy;
+    const dist = Math.hypot(x - closestX, y - closestY);
+    const yDiff = Math.abs(y - closestY);
+    
+    if (dist < minDist && yDiff < 8) {
+      minDist = dist;
+      nearestSegment = i - 1;
+      closestSegmentProgress = t;
+    }
+  }
+
+  if (minDist <= threshold && nearestSegment >= 0) {
+    const segmentLength = Math.hypot(
+      zone.points[nearestSegment+1].x - zone.points[nearestSegment].x,
+      zone.points[nearestSegment+1].y - zone.points[nearestSegment].y
+    );
+    return { segment: nearestSegment, progress: closestSegmentProgress, segmentLength };
+  }
+  return null;
+}
+
+function updateZoneMarking(x, y) {
+  if (!game.isDrawing) return;
+
+  game.zones.forEach(zone => {
+    if (zone.completed) return;
+    const result = findNearestPointOnZone(x, y, zone);
+    if (result) {
+      const inc = result.segmentLength * result.progress * 0.5;
+      zone.markedLength += inc;
+      zone.markedLength = Math.min(zone.markedLength, zone.totalLength);
+    }
+  });
+}
+
+function calculateRate() {
+  let completedCount = 0;
+  game.zones.forEach(zone => {
+    if (zone.markedLength >= zone.totalLength * 0.75) {
+      zone.completed = true;
+    }
+    if (zone.completed) completedCount++;
+  });
+  return completedCount / game.zones.length;
+}
+
+function updateDebug() {
+  const rate = calculateRate();
+  const completedCount = game.zones.filter(z => z.completed).length;
+  const remaining = game.zones.length - completedCount;
+
+  window.__gameDebug.dragTargets = game.zones
+    .filter(z => !z.completed)
+    .map(z => {
+      const idx = Math.floor((z.markedLength / z.totalLength) * (z.points.length - 1));
+      return {
+        id: z.id,
+        markedLength: z.markedLength,
+        remainingLength: Math.max(0, z.totalLength - z.markedLength),
+        nextPointX: z.points[Math.min(idx, z.points.length - 1)].x,
+        nextPointY: z.points[Math.min(idx, z.points.length - 1)].y
+      };
+    });
+
+  window.__gameDebug.objects = game.zones.map(z => ({
+    id: z.id,
+    type: "dragZone",
+    completed: z.completed,
+    progress: Math.min(1, z.markedLength / z.totalLength)
+  }));
+
+  window.__gameDebug.metrics = {
+    rate: Math.round(rate * 100) / 100,
+    strokes: game.zones.length - remaining,
+    phase: game.phase,
+    remaining: remaining,
+    timeLeft: game.timeLeft
+  };
+}
+
+window.__gameDebug.dragFill = function(id) {
+  const zone = game.zones.find(z => z.id === id);
+  if (zone && !zone.completed) {
+    zone.markedLength = zone.totalLength;
+    zone.completed = true;
+    updateDebug();
+    checkWinCondition();
+  }
+};
+
+function checkWinCondition() {
+  const rate = calculateRate();
+  const completedCount = game.zones.filter(z => z.completed).length;
+  
+  if (completedCount === game.zones.length && rate >= 0.8) {
+    game.phase = "win";
+    document.getElementById('winScreen').style.display = 'flex';
+    document.getElementById('winScore').textContent = Math.round(rate * 100);
+  }
+}
+
+function checkFailCondition() {
+  if (game.timeLeft <= 0) {
+    const rate = calculateRate();
+    if (rate < 0.8) {
+      game.phase = "fail";
+      document.getElementById('failScreen').style.display = 'flex';
+      document.getElementById('failRate').textContent = Math.round(rate * 100);
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  game.zones.forEach(zone => {
+    if (zone.completed) {
+      ctx.strokeStyle = zone.color;
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    } else {
+      ctx.strokeStyle = zone.hintColor;
+      ctx.lineWidth = 2;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(zone.points[0].x, zone.points[0].y);
+    for (let i = 1; i < zone.points.length; i++) {
+      ctx.lineTo(zone.points[i].x, zone.points[i].y);
+    }
+    ctx.stroke();
+
+    if (zone.markedLength > 0 && !zone.completed) {
+      const markedIdx = Math.floor((zone.markedLength / zone.totalLength) * (zone.points.length - 1));
+      ctx.strokeStyle = zone.color;
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(zone.points[0].x, zone.points[0].y);
+      for (let i = 1; i <= markedIdx; i++) {
+        ctx.lineTo(zone.points[i].x, zone.points[i].y);
+      }
+      ctx.stroke();
+    }
+  });
+}
+
+function updateUI() {
+  const rate = calculateRate();
+  const completedCount = game.zones.filter(z => z.completed).length;
+  
+  document.getElementById('timeDisplay').textContent = Math.max(0, game.timeLeft);
+  document.getElementById('rateDisplay').textContent = Math.round(rate * 100);
+  document.getElementById('remainingDisplay').textContent = game.zones.length - completedCount;
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (game.phase !== "playing") return;
+  game.isDrawing = true;
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (game.phase !== "playing" || !game.isDrawing) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  updateZoneMarking(x, y);
+});
+
+canvas.addEventListener('pointerup', () => {
+  game.isDrawing = false;
+});
+
+canvas.addEventListener('pointercancel', () => {
+  game.isDrawing = false;
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (game.phase !== "playing") return;
+  game.isDrawing = true;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (game.phase !== "playing" || !game.isDrawing) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  updateZoneMarking(x, y);
+});
+
+canvas.addEventListener('mouseup', () => {
+  game.isDrawing = false;
+});
+
+function gameLoop() {
+  const elapsed = Math.floor((Date.now() - game.startTime) / 1000);
+  game.timeLeft = 30 - elapsed;
+
+  if (game.phase === "playing") {
+    if (game.timeLeft <= 0) {
+      game.timeLeft = 0;
+      checkFailCondition();
+    }
+    checkWinCondition();
+  }
+
+  updateDebug();
+  updateUI();
+  draw();
+
+  requestAnimationFrame(gameLoop);
+}
+
+initializeZones();
+gameLoop();
+</script>
+</body>
+</html>

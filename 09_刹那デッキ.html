@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>刹那デッキ</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        #game-container {
+            width: 600px;
+            height: 800px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .hp-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .hp-bar {
+            width: 150px;
+            height: 25px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #fff;
+        }
+        .hp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #00aa00);
+            width: 100%;
+            transition: width 0.3s;
+        }
+        .enemy-hp .hp-fill {
+            background: linear-gradient(90deg, #ff0000, #aa0000);
+        }
+        .score-timer {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .instructions {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #aaa;
+            min-height: 20px;
+        }
+        #battle-area {
+            height: 250px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        .damage-float {
+            position: absolute;
+            font-weight: bold;
+            font-size: 28px;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #cards-container {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .card {
+            width: 120px;
+            height: 160px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: 3px solid #ffd700;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            user-select: none;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 20px rgba(255,215,0,0.5);
+        }
+        .card:active {
+            transform: scale(0.95);
+        }
+        .card-power {
+            font-size: 36px;
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+        .card-label {
+            font-size: 12px;
+            color: #ddd;
+        }
+        #combo-display {
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffd700;
+            margin-bottom: 20px;
+            min-height: 35px;
+            transition: color 0.2s;
+        }
+        #end-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            border-radius: 20px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #end-screen.show {
+            display: flex;
+        }
+        .end-title {
+            font-size: 56px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        .end-title.win {
+            color: #00ff00;
+            text-shadow: 0 0 30px #00ff00;
+        }
+        .end-title.fail {
+            color: #ff4444;
+            text-shadow: 0 0 30px #ff4444;
+        }
+        .end-score {
+            font-size: 28px;
+            margin: 15px 0;
+            color: #ffd700;
+        }
+        .high-score {
+            font-size: 20px;
+            margin: 10px 0;
+            color: #00ff00;
+        }
+        .prev-score {
+            font-size: 16px;
+            margin: 10px 0;
+            color: #aaa;
+        }
+        .replay-btn {
+            margin-top: 40px;
+            padding: 15px 50px;
+            font-size: 18px;
+            background: #667eea;
+            border: 2px solid #ffd700;
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .replay-btn:hover {
+            background: #764ba2;
+            box-shadow: 0 0 20px rgba(255,215,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div class="instructions" id="instructions">
+            ⚡ カードをクリックして敵にダメージを与えよう！同じカードを連続選択するとコンボで威力UP！
+        </div>
+        <div class="score-timer">
+            <div>スコア: <span id="score">0</span></div>
+            <div>時間: <span id="timer">0</span>秒</div>
+        </div>
+        <div class="info-bar">
+            <div class="hp-container player-hp">
+                <span>You</span>
+                <div class="hp-bar">
+                    <div class="hp-fill" style="width: 100%"></div>
+                </div>
+                <span id="player-hp-text">100/100</span>
+            </div>
+            <div class="hp-container enemy-hp" style="flex-direction: row-reverse;">
+                <span>Enemy</span>
+                <div class="hp-bar">
+                    <div class="hp-fill" style="width: 100%"></div>
+                </div>
+                <span id="enemy-hp-text">100/100</span>
+            </div>
+        </div>
+        <div id="combo-display">Ready!</div>
+        <div id="battle-area"></div>
+        <div id="cards-container"></div>
+        <div id="end-screen">
+            <div class="end-title win" id="end-title">WIN!</div>
+            <div class="end-score">スコア: <span id="final-score">0</span></div>
+            <div class="high-score" id="high-score-display"></div>
+            <div class="prev-score" id="prev-score-display"></div>
+            <button class="replay-btn" onclick="location.reload()">もう一度プレイ</button>
+        </div>
+    </div>
+
+    <script>
+        let gameState = {
+            playerHP: 100,
+            playerMaxHP: 100,
+            enemyHP: 100,
+            enemyMaxHP: 100,
+            combo: 0,
+            lastCardId: -1,
+            score: 0,
+            gameOver: false,
+            gameWon: false,
+            startTime: Date.now(),
+            elapsedTime: 0
+        };
+
+        const container = document.getElementById('game-container');
+        const endScreen = document.getElementById('end-screen');
+        const cardsContainer = document.getElementById('cards-container');
+        const comboDisplay = document.getElementById('combo-display');
+        const battleArea = document.getElementById('battle-area');
+
+        function loadHighScore() {
+            const stored = localStorage.getItem('setsunaDeckHighScore');
+            return stored ? parseInt(stored) : 0;
+        }
+
+        function loadPrevScore() {
+            const stored = localStorage.getItem('setsunaDeckPrevScore');
+            return stored ? parseInt(stored) : 0;
+        }
+
+        function saveScores() {
+            const highScore = loadHighScore();
+            if (gameState.score > highScore) {
+                localStorage.setItem('setsunaDeckHighScore', gameState.score);
+            }
+            localStorage.setItem('setsunaDeckPrevScore', gameState.score);
+        }
+
+        const cards = [
+            { id: 0, power: 8, label: 'Swift' },
+            { id: 1, power: 12, label: 'Strong' },
+            { id: 2, power: 16, label: 'Burst' }
+        ];
+
+        function initCards() {
+            cardsContainer.innerHTML = '';
+            cards.forEach(card => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card';
+                cardEl.innerHTML = `<div class="card-power">${card.power}</div><div class="card-label">${card.label}</div>`;
+                cardEl.addEventListener('mousedown', () => onCardClick(card.id, cardEl));
+                cardsContainer.appendChild(cardEl);
+            });
+        }
+
+        function onCardClick(cardId, cardEl) {
+            if (gameState.gameOver) return;
+
+            if (gameState.lastCardId === cardId) {
+                gameState.combo++;
+            } else {
+                gameState.combo = 1;
+            }
+            gameState.lastCardId = cardId;
+
+            const baseDamage = cards[cardId].power;
+            const comboDamage = baseDamage * (1 + gameState.combo * 0.2);
+            const finalDamage = Math.floor(comboDamage);
+
+            gameState.enemyHP = Math.max(0, gameState.enemyHP - finalDamage);
+            gameState.score += finalDamage;
+
+            cardEl.style.transform = 'scale(0.85)';
+            setTimeout(() => cardEl.style.transform = '', 150);
+
+            showDamageFloat(finalDamage, 'enemy');
+
+            if (gameState.enemyHP <= 0) {
+                endGame(true);
+                return;
+            }
+
+            setTimeout(() => {
+                if (!gameState.gameOver) {
+                    enemyAttack();
+                }
+            }, 300);
+
+            updateUI();
+        }
+
+        function enemyAttack() {
+            const healthPercent = gameState.enemyHP / gameState.enemyMaxHP;
+            const baseAttack = healthPercent > 0.5 ? 5 : (healthPercent > 0.2 ? 8 : 12);
+            const enemyDamage = Math.floor(Math.random() * 6) + baseAttack;
+            gameState.playerHP = Math.max(0, gameState.playerHP - enemyDamage);
+
+            showDamageFloat(enemyDamage, 'player');
+
+            if (gameState.playerHP <= 0) {
+                endGame(false);
+            }
+
+            updateUI();
+        }
+
+        function showDamageFloat(damage, target) {
+            const floatEl = document.createElement('div');
+            floatEl.className = 'damage-float';
+            floatEl.textContent = `-${damage}`;
+            floatEl.style.color = target === 'enemy' ? '#ffd700' : '#ff4444';
+            
+            const rect = battleArea.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            
+            if (target === 'enemy') {
+                floatEl.style.left = (rect.right - containerRect.left - 100) + 'px';
+            } else {
+                floatEl.style.left = (rect.left - containerRect.left + 50) + 'px';
+            }
+            floatEl.style.top = (rect.top - containerRect.top + 100) + 'px';
+
+            battleArea.parentElement.appendChild(floatEl);
+
+            let opacity = 1;
+            let y = parseFloat(floatEl.style.top);
+            const interval = setInterval(() => {
+                opacity -= 0.08;
+                y -= 4;
+                floatEl.style.opacity = opacity;
+                floatEl.style.top = y + 'px';
+                if (opacity <= 0) {
+                    clearInterval(interval);
+                    floatEl.remove();
+                }
+            }, 30);
+        }
+
+        function updateUI() {
+            const playerPercent = (gameState.playerHP / gameState.playerMaxHP) * 100;
+            const enemyPercent = (gameState.enemyHP / gameState.enemyMaxHP) * 100;
+
+            document.querySelector('.player-hp .hp-fill').style.width = playerPercent + '%';
+            document.querySelector('.enemy-hp .hp-fill').style.width = enemyPercent + '%';
+
+            document.getElementById('player-hp-text').textContent = `${gameState.playerHP}/${gameState.playerMaxHP}`;
+            document.getElementById('enemy-hp-text').textContent = `${gameState.enemyHP}/${gameState.enemyMaxHP}`;
+
+            if (gameState.combo > 0) {
+                comboDisplay.textContent = `COMBO x${gameState.combo}`;
+                comboDisplay.style.color = gameState.combo > 3 ? '#ff00ff' : '#ffd700';
+            } else {
+                comboDisplay.textContent = 'Ready!';
+                comboDisplay.style.color = '#ffd700';
+            }
+
+            document.getElementById('score').textContent = gameState.score;
+            gameState.elapsedTime = Math.floor((Date.now() - gameState.startTime) / 1000);
+            document.getElementById('timer').textContent = gameState.elapsedTime;
+        }
+
+        function endGame(won) {
+            gameState.gameOver = true;
+            gameState.gameWon = won;
+            saveScores();
+
+            const endTitle = document.getElementById('end-title');
+            const finalScoreEl = document.getElementById('final-score');
+            const highScoreDisplay = document.getElementById('high-score-display');
+            const prevScoreDisplay = document.getElementById('prev-score-display');
+
+            endTitle.textContent = won ? 'VICTORY!' : 'DEFEAT';
+            endTitle.className = 'end-title ' + (won ? 'win' : 'fail');
+            finalScoreEl.textContent = gameState.score;
+
+            const highScore = loadHighScore();
+            const prevScore = loadPrevScore();
+
+            if (gameState.score >= highScore) {
+                highScoreDisplay.innerHTML = `🏆 ハイスコア: ${gameState.score}`;
+            } else {
+                highScoreDisplay.innerHTML = `ハイスコア: ${highScore}`;
+            }
+            prevScoreDisplay.textContent = `前回: ${prevScore} | 現在: ${gameState.score}`;
+
+            endScreen.classList.add('show');
+        }
+
+        function gameLoop() {
+            updateUI();
+            requestAnimationFrame(gameLoop);
+        }
+
+        initCards();
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>破壊ピン</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Arial', sans-serif;
+            color: white;
+        }
+        #gameContainer {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+            border: 3px solid #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background: #000;
+        }
+        #uiOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            font-weight: bold;
+        }
+        .ui-text {
+            position: absolute;
+            color: white;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+            font-size: 14px;
+        }
+        #scoreDisplay {
+            top: 10px;
+            left: 10px;
+            font-size: 16px;
+            color: #ffff00;
+        }
+        #remainingDisplay {
+            top: 10px;
+            right: 10px;
+            font-size: 16px;
+            color: #ff6b6b;
+        }
+        #ballsDisplay {
+            top: 35px;
+            left: 10px;
+            font-size: 14px;
+            color: #88ff88;
+        }
+        #instructionText {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            text-align: center;
+            color: #88ccff;
+            opacity: 0.9;
+        }
+        #winOverlay, #failOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.8);
+            flex-direction: column;
+            gap: 20px;
+            pointer-events: all;
+            z-index: 10;
+        }
+        #winOverlay.show, #failOverlay.show {
+            display: flex;
+        }
+        .overlay-text {
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+        }
+        #winOverlay .overlay-text {
+            color: #ffff00;
+            text-shadow: 0 0 10px rgba(255, 255, 0, 0.8);
+        }
+        #failOverlay .overlay-text {
+            color: #ff6b6b;
+            text-shadow: 0 0 10px rgba(255, 107, 107, 0.8);
+        }
+        .score-text {
+            font-size: 24px;
+            color: #88ff88;
+        }
+        .restart-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #00ff88;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            pointer-events: all;
+        }
+        .restart-button:hover {
+            background: #00ffff;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div id="uiOverlay">
+            <div id="scoreDisplay">Score: 0</div>
+            <div id="remainingDisplay">Pins: 12</div>
+            <div id="ballsDisplay">Balls: 3</div>
+            <div id="instructionText">
+                ← Left / Right →<br>
+                Tap to flip & destroy!
+            </div>
+        </div>
+        <div id="winOverlay">
+            <div class="overlay-text">🎉 VICTORY! 🎉</div>
+            <div class="score-text">All Pins Destroyed!</div>
+            <button class="restart-button">Play Again</button>
+        </div>
+        <div id="failOverlay">
+            <div class="overlay-text">💥 GAME OVER</div>
+            <div class="score-text" id="failScore">Score: 0</div>
+            <button class="restart-button">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        // ========== Game Debug Contract ==========
+        window.__gameDebug = {
+            objects: [],
+            metrics: { score: 0, progress: 0.0, remaining: 12, phase: "playing" },
+            tapObject: function(id) {}
+        };
+
+        function updateDebug() {
+            const allObjects = [];
+            
+            gameState.flippers.forEach((flipper) => {
+                allObjects.push({
+                    id: flipper.id,
+                    type: 'flipper',
+                    enabled: true,
+                    matchId: null,
+                    x: flipper.x,
+                    y: flipper.y,
+                    w: flipper.width,
+                    h: flipper.height
+                });
+            });
+
+            gameState.pins.forEach((pin, idx) => {
+                if (!pin.destroyed) {
+                    allObjects.push({
+                        id: `pin_${idx}`,
+                        type: 'pin',
+                        enabled: true,
+                        matchId: null,
+                        x: pin.x,
+                        y: pin.y,
+                        w: pin.radius * 2,
+                        h: pin.radius * 2
+                    });
+                }
+            });
+
+            window.__gameDebug.objects = allObjects;
+            window.__gameDebug.metrics = {
+                score: gameState.score,
+                progress: (12 - gameState.remainingPins) / 12,
+                remaining: gameState.remainingPins,
+                phase: gameState.phase
+            };
+        }
+
+        // ========== Game State ==========
+        const gameState = {
+            phase: "playing",
+            score: 0,
+            balls: 3,
+            remainingPins: 12,
+            ballRadius: 6,
+            balls_list: [],
+            flippers: [],
+            pins: [],
+            particles: []
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // ========== Initialize Game ==========
+        function initGame() {
+            gameState.phase = "playing";
+            gameState.score = 0;
+            gameState.balls = 3;
+            gameState.remainingPins = 12;
+            gameState.balls_list = [];
+            gameState.flippers = [];
+            gameState.pins = [];
+            gameState.particles = [];
+
+            // Create flippers
+            gameState.flippers.push({
+                id: 'left',
+                x: 80,
+                y: 520,
+                width: 80,
+                height: 12,
+                angle: 0,
+                targetAngle: 0,
+                rotationSpeed: 0.3,
+                isActive: false,
+                activateTime: 0
+            });
+
+            gameState.flippers.push({
+                id: 'right',
+                x: 240,
+                y: 520,
+                width: 80,
+                height: 12,
+                angle: 0,
+                targetAngle: 0,
+                rotationSpeed: 0.3,
+                isActive: false,
+                activateTime: 0
+            });
+
+            // Create pins
+            const pinRadius = 8;
+            const pinRows = 3;
+            const pinCols = 4;
+            let pinIndex = 0;
+
+            for (let row = 0; row < pinRows; row++) {
+                for (let col = 0; col < pinCols; col++) {
+                    if (pinIndex < 12) {
+                        const x = 60 + col * 90 + (row % 2) * 45;
+                        const y = 80 + row * 90;
+                        gameState.pins.push({
+                            x: x,
+                            y: y,
+                            vx: 0,
+                            vy: 0,
+                            radius: pinRadius,
+                            mass: 0.5,
+                            destroyed: false,
+                            destroyTime: 0,
+                            color: `hsl(${Math.random() * 60 + 180}, 100%, 50%)`
+                        });
+                        pinIndex++;
+                    }
+                }
+            }
+
+            spawnBall();
+
+            document.getElementById('winOverlay').classList.remove('show');
+            document.getElementById('failOverlay').classList.remove('show');
+            updateUI();
+            updateDebug();
+        }
+
+        function spawnBall() {
+            gameState.balls_list.push({
+                x: 200,
+                y: 50,
+                vx: (Math.random() - 0.5) * 4,
+                vy: 0,
+                radius: gameState.ballRadius
+            });
+        }
+
+        // ========== Flipper Activation ==========
+        window.__gameDebug.tapObject = function(id) {
+            if (id === 'left') {
+                activateFlipper(0);
+            } else if (id === 'right') {
+                activateFlipper(1);
+            }
+        };
+
+        function activateFlipper(flipperIndex) {
+            const flipper = gameState.flippers[flipperIndex];
+            flipper.isActive = true;
+            flipper.activateTime = 0;
+
+            if (flipperIndex === 0) {
+                flipper.targetAngle = Math.PI / 4;
+            } else {
+                flipper.targetAngle = -Math.PI / 4;
+            }
+
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+        }
+
+        // ========== Physics & Collision ==========
+        function updatePhysics() {
+            const gravity = 0.3;
+            const friction = 0.98;
+            const damping = 0.95;
+
+            gameState.balls_list = gameState.balls_list.filter(ball => ball.y < 610);
+
+            gameState.balls_list.forEach(ball => {
+                ball.vy += gravity;
+                ball.vx *= friction;
+                ball.vy *= damping;
+
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                if (ball.x - ball.radius < 0) {
+                    ball.x = ball.radius;
+                    ball.vx *= -0.8;
+                }
+                if (ball.x + ball.radius > canvas.width) {
+                    ball.x = canvas.width - ball.radius;
+                    ball.vx *= -0.8;
+                }
+                if (ball.y - ball.radius < 0) {
+                    ball.y = ball.radius;
+                    ball.vy *= -0.8;
+                }
+
+                gameState.flippers.forEach((flipper) => {
+                    const flipperPos = getFlipperCollisionPoint(flipper);
+                    const dx = ball.x - flipperPos.x;
+                    const dy = ball.y - flipperPos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < ball.radius + 15) {
+                        const angle = Math.atan2(dy, dx);
+                        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+
+                        if (flipper.isActive) {
+                            const power = 15;
+                            ball.vx = Math.cos(angle) * power;
+                            ball.vy = Math.sin(angle) * power - 5;
+                            gameState.score += 10;
+                        } else {
+                            ball.vx = Math.cos(angle) * speed * 0.6;
+                            ball.vy = Math.sin(angle) * speed * 0.6;
+                        }
+
+                        const overlap = ball.radius + 15 - dist;
+                        ball.x += Math.cos(angle) * overlap;
+                        ball.y += Math.sin(angle) * overlap;
+                    }
+                });
+
+                gameState.pins.forEach((pin, idx) => {
+                    if (!pin.destroyed) {
+                        const dx = ball.x - pin.x;
+                        const dy = ball.y - pin.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < ball.radius + pin.radius) {
+                            const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+
+                            if (speed >= 3.0) {
+                                destroyPin(idx);
+                            }
+
+                            const angle = Math.atan2(dy, dx);
+                            ball.vx = Math.cos(angle) * speed * 0.7;
+                            ball.vy = Math.sin(angle) * speed * 0.7;
+
+                            const overlap = ball.radius + pin.radius - dist;
+                            ball.x += Math.cos(angle) * overlap;
+                            ball.y += Math.sin(angle) * overlap;
+                        }
+                    }
+                });
+            });
+
+            gameState.particles = gameState.particles.filter(p => p.life > 0);
+            gameState.particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2;
+                p.life--;
+            });
+        }
+
+        function destroyPin(pinIndex) {
+            const pin = gameState.pins[pinIndex];
+            if (pin.destroyed) return;
+
+            pin.destroyed = true;
+            gameState.remainingPins--;
+            gameState.score += 50;
+
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                const speed = 3 + Math.random() * 3;
+                gameState.particles.push({
+                    x: pin.x,
+                    y: pin.y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 30,
+                    color: pin.color,
+                    size: 3 + Math.random() * 3
+                });
+            }
+
+            updateDebug();
+        }
+
+        function getFlipperCollisionPoint(flipper) {
+            const cos = Math.cos(flipper.angle);
+            const sin = Math.sin(flipper.angle);
+            const length = flipper.width / 2;
+
+            return {
+                x: flipper.x + cos * length,
+                y: flipper.y + sin * length
+            };
+        }
+
+        // ========== Update Flippers ==========
+        function updateFlippers() {
+            gameState.flippers.forEach(flipper => {
+                if (flipper.isActive) {
+                    flipper.activateTime += 1 / 60;
+                    if (flipper.activateTime > 0.2) {
+                        flipper.isActive = false;
+                        flipper.targetAngle = 0;
+                    }
+                }
+
+                const angleDiff = flipper.targetAngle - flipper.angle;
+                flipper.angle += angleDiff * flipper.rotationSpeed;
+
+                if (Math.abs(flipper.targetAngle - flipper.angle) < 0.05) {
+                    flipper.angle = flipper.targetAngle;
+                }
+            });
+        }
+
+        // ========== Check Game Status ==========
+        function checkGameStatus() {
+            if (gameState.remainingPins === 0) {
+                gameState.phase = "win";
+                return;
+            }
+
+            if (gameState.balls_list.length === 0 && gameState.balls > 0) {
+                gameState.balls--;
+                if (gameState.balls > 0) {
+                    spawnBall();
+                } else {
+                    gameState.phase = "fail";
+                }
+            }
+        }
+
+        // ========== Render ==========
+        function render() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+            gameState.pins.forEach((pin) => {
+                if (!pin.destroyed) {
+                    ctx.fillStyle = pin.color;
+                    ctx.beginPath();
+                    ctx.arc(pin.x, pin.y, pin.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                } else if (pin.destroyTime < 400) {
+                    const progress = pin.destroyTime / 400;
+                    ctx.fillStyle = pin.color;
+                    ctx.globalAlpha = 1 - progress;
+                    ctx.beginPath();
+                    ctx.arc(pin.x, pin.y, pin.radius * (1 - progress), 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    pin.destroyTime += 16;
+                }
+            });
+
+            gameState.flippers.forEach((flipper) => {
+                ctx.save();
+                ctx.translate(flipper.x, flipper.y);
+                ctx.rotate(flipper.angle);
+
+                ctx.fillStyle = flipper.isActive ? '#ffff00' : '#00ffff';
+                ctx.fillRect(-flipper.width / 2, -flipper.height / 2, flipper.width, flipper.height);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-flipper.width / 2, -flipper.height / 2, flipper.width, flipper.height);
+
+                ctx.restore();
+            });
+
+            gameState.balls_list.forEach(ball => {
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+
+            gameState.particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 30;
+                ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+                ctx.globalAlpha = 1;
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('scoreDisplay').textContent = `Score: ${gameState.score}`;
+            document.getElementById('remainingDisplay').textContent = `Pins: ${gameState.remainingPins}`;
+            document.getElementById('ballsDisplay').textContent = `Balls: ${gameState.balls}`;
+
+            if (gameState.phase === 'win') {
+                document.getElementById('winOverlay').classList.add('show');
+            } else if (gameState.phase === 'fail') {
+                document.getElementById('failScore').textContent = `Score: ${gameState.score}`;
+                document.getElementById('failOverlay').classList.add('show');
+            }
+        }
+
+        // ========== Input Handling ==========
+        const tapStartTime = {};
+        const tapStartPos = {};
+
+        document.addEventListener('pointerdown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            tapStartTime[e.pointerId] = Date.now();
+            tapStartPos[e.pointerId] = { x, y };
+        });
+
+        document.addEventListener('pointerup', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const duration = Date.now() - (tapStartTime[e.pointerId] || 0);
+            if (duration < 200 && x > 0 && x < canvas.width && y > 0 && y < canvas.height) {
+                if (x < canvas.width / 2) {
+                    window.__gameDebug.tapObject('left');
+                } else {
+                    window.__gameDebug.tapObject('right');
+                }
+            }
+
+            delete tapStartTime[e.pointerId];
+            delete tapStartPos[e.pointerId];
+        });
+
+        document.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (x > 0 && x < canvas.width && y > 0 && y < canvas.height) {
+                if (x < canvas.width / 2) {
+                    window.__gameDebug.tapObject('left');
+                } else {
+                    window.__gameDebug.tapObject('right');
+                }
+            }
+        });
+
+        // ========== Game Loop ==========
+        function gameLoop() {
+            if (gameState.phase === 'playing') {
+                updatePhysics();
+                updateFlippers();
+                checkGameStatus();
+            }
+
+            render();
+            updateUI();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ========== Restart Button ==========
+        document.querySelectorAll('.restart-button').forEach(btn => {
+            btn.addEventListener('click', initGame);
+        });
+
+        // ========== Start Game ==========
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>

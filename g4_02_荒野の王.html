@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>荒野の王</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            width: 375px;
+            height: 812px;
+            margin: 0 auto;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+        }
+        #gameContainer {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #8B7355 0%, #D2B48C 100%);
+            display: flex;
+            flex-direction: column;
+        }
+        #header {
+            background: rgba(0, 0, 0, 0.7);
+            color: #FFD700;
+            padding: 10px;
+            font-size: 13px;
+            text-align: center;
+            line-height: 1.4;
+        }
+        #goalArea {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px;
+            font-size: 12px;
+            text-align: center;
+            border-bottom: 2px solid #FFD700;
+        }
+        #gameBoard {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, #8B7355 0%, #D2B48C 100%);
+            cursor: crosshair;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #controls {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+        }
+        button {
+            padding: 10px;
+            font-size: 12px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        #modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 375px;
+            height: 812px;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 1000;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            overflow-y: auto;
+        }
+        #modal.show {
+            display: flex;
+        }
+        #modal h1 {
+            font-size: 40px;
+            margin-bottom: 15px;
+            color: #FFD700;
+        }
+        #modal p {
+            font-size: 14px;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .scoreCard {
+            background: rgba(255, 215, 0, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 20px;
+            font-size: 13px;
+            border: 2px solid #FFD700;
+        }
+        .scoreCard div {
+            margin: 6px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .scoreName {
+            text-align: left;
+        }
+        .scoreValue {
+            text-align: right;
+            color: #FFD700;
+            font-weight: bold;
+        }
+        #modal button {
+            margin-top: 15px;
+            padding: 12px 30px;
+            font-size: 16px;
+        }
+        #craftModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            color: white;
+            z-index: 999;
+            width: 85%;
+            max-width: 320px;
+            border: 3px solid #FFD700;
+        }
+        #craftModal.show {
+            display: block;
+        }
+        #craftModal h2 {
+            color: #FFD700;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .craftOption {
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .craftOption:hover {
+            background: rgba(255, 215, 0, 0.2);
+            border-color: #FFD700;
+        }
+        .craftOption.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 375px;
+            height: 812px;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 998;
+        }
+        #overlay.show {
+            display: block;
+        }
+        .floatingText {
+            position: absolute;
+            font-weight: bold;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-30px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="goalArea">
+            <div>【最終ゴール】Day 7にボスを倒して荒野の王になる</div>
+            <div style="margin-top: 5px; font-size: 11px;">敵をタップして攻撃 | リソースをタップして採取 | クラフトで防具強化</div>
+        </div>
+        <div id="header">
+            <div>Day <span id="dayDisplay">1</span> / HP: <span id="hpDisplay">100</span>/100 | 防具Lv: <span id="armorDisplay">0</span></div>
+            <div>🌳木: <span id="woodDisplay">0</span> | 🪨石: <span id="stoneDisplay">0</span> | 🍗食: <span id="foodDisplay">0</span></div>
+        </div>
+        <div id="gameBoard">
+            <canvas id="gameCanvas"></canvas>
+            <div id="overlay"></div>
+            <div id="craftModal">
+                <h2>クラフト</h2>
+                <div id="craftOptions"></div>
+            </div>
+        </div>
+        <div id="controls">
+            <button id="craftBtn">🔨クラフト</button>
+            <button id="nextDayBtn">→次の日</button>
+            <button id="debugBtn">⚙DEBUG</button>
+        </div>
+        <div id="modal">
+            <h1 id="modalTitle">ゲームオーバー</h1>
+            <p id="modalMessage"></p>
+            <div class="scoreCard" id="scoreCard"></div>
+            <button id="restartBtn">🔄リトライ</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 375;
+        canvas.height = canvas.parentElement.clientHeight;
+
+        let gameState = {
+            day: 1,
+            playerHP: 100,
+            maxHP: 100,
+            armor: 0,
+            resources: { wood: 0, stone: 0, food: 0 },
+            resourceSpots: [],
+            enemies: [],
+            phase: 'playing',
+            resourcesCollected: 0,
+            totalDamageDealt: 0,
+            gameOver: false,
+            gameOverType: null
+        };
+
+        const ENEMY_TYPES = {
+            small: { hp: 20, attack: 5, color: '#FF6B6B', name: '雑魚' },
+            medium: { hp: 40, attack: 10, color: '#FFA500', name: '中敵' },
+            boss: { hp: 150, attack: 20, color: '#8B0000', name: 'ボス' }
+        };
+
+        function spawnResources() {
+            gameState.resourceSpots = [];
+            const count = Math.floor(Math.random() * 3) + 3;
+            for (let i = 0; i < count; i++) {
+                const types = ['wood', 'stone', 'food'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                gameState.resourceSpots.push({
+                    x: Math.random() * (canvas.width - 60) + 30,
+                    y: Math.random() * (canvas.height * 0.6 - 100) + 80,
+                    type: type,
+                    collected: false
+                });
+            }
+        }
+
+        function spawnEnemies() {
+            gameState.enemies = [];
+            if (gameState.day === 7) {
+                gameState.enemies.push({
+                    x: canvas.width / 2,
+                    y: 120,
+                    hp: ENEMY_TYPES.boss.hp,
+                    maxHP: ENEMY_TYPES.boss.hp,
+                    attack: ENEMY_TYPES.boss.attack,
+                    color: ENEMY_TYPES.boss.color,
+                    type: 'boss',
+                    name: ENEMY_TYPES.boss.name
+                });
+            } else {
+                const count = gameState.day <= 3 ? 2 : (gameState.day <= 6 ? 3 : 4);
+                const enemyType = gameState.day <= 3 ? 'small' : 'medium';
+                const typeData = ENEMY_TYPES[enemyType];
+                
+                for (let i = 0; i < count; i++) {
+                    gameState.enemies.push({
+                        x: Math.random() * (canvas.width - 60) + 30,
+                        y: Math.random() * 150 + 60,
+                        hp: typeData.hp,
+                        maxHP: typeData.hp,
+                        attack: typeData.attack,
+                        color: typeData.color,
+                        type: enemyType,
+                        name: typeData.name
+                    });
+                }
+            }
+        }
+
+        function handleResourceTap(x, y) {
+            for (let spot of gameState.resourceSpots) {
+                if (!spot.collected && Math.hypot(spot.x - x, spot.y - y) < 25) {
+                    spot.collected = true;
+                    gameState.resources[spot.type]++;
+                    gameState.resourcesCollected++;
+                    createFloatingText('+' + (spot.type === 'wood' ? '🌳' : (spot.type === 'stone' ? '🪨' : '🍗')), spot.x, spot.y);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function handleEnemyTap(x, y) {
+            for (let enemy of gameState.enemies) {
+                if (Math.hypot(enemy.x - x, enemy.y - y) < 22) {
+                    const damage = 15;
+                    enemy.hp -= damage;
+                    gameState.totalDamageDealt += damage;
+                    createFloatingText('-' + damage, enemy.x, enemy.y);
+                    
+                    if (enemy.hp <= 0) {
+                        gameState.enemies = gameState.enemies.filter(e => e !== enemy);
+                        if (gameState.enemies.length === 0 && gameState.day === 7) {
+                            endGame('win');
+                        }
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function createFloatingText(text, x, y) {
+            const floatingText = document.createElement('div');
+            floatingText.className = 'floatingText';
+            floatingText.textContent = text;
+            floatingText.style.left = (x + 187.5) + 'px';
+            floatingText.style.top = (y + canvas.parentElement.offsetTop) + 'px';
+            floatingText.style.color = text.startsWith('+') ? '#FFD700' : '#FF6B6B';
+            document.getElementById('gameBoard').appendChild(floatingText);
+            setTimeout(() => floatingText.remove(), 1000);
+        }
+
+        function advanceDay() {
+            gameState.day++;
+            
+            spawnResources();
+            
+            for (let enemy of gameState.enemies) {
+                let damageDealt = enemy.attack;
+                if (gameState.armor > 0) {
+                    const reduction = gameState.armor === 1 ? 0.7 : 0.5;
+                    damageDealt = Math.ceil(damageDealt * reduction);
+                }
+                gameState.playerHP -= damageDealt;
+            }
+            
+            if (gameState.playerHP <= 0) {
+                endGame('loss');
+                return;
+            }
+            
+            if (!gameState.gameOver) {
+                spawnEnemies();
+            }
+        }
+
+        function openCraftModal() {
+            const modal = document.getElementById('craftModal');
+            const optionsDiv = document.getElementById('craftOptions');
+            optionsDiv.innerHTML = '';
+            
+            const options = [
+                {
+                    label: '🍗食料1個 → HP +15',
+                    cost: { food: 1 },
+                    action: () => {
+                        gameState.resources.food--;
+                        gameState.playerHP = Math.min(gameState.playerHP + 15, gameState.maxHP);
+                    }
+                },
+                {
+                    label: '🌳木材3個 → 防具Lv1（ダメ0.7倍）',
+                    cost: { wood: 3 },
+                    action: () => {
+                        gameState.resources.wood -= 3;
+                        gameState.armor = 1;
+                    }
+                },
+                {
+                    label: '🪨石3個 → 防具Lv2（ダメ0.5倍）',
+                    cost: { stone: 3 },
+                    action: () => {
+                        gameState.resources.stone -= 3;
+                        gameState.armor = 2;
+                    }
+                }
+            ];
+            
+            for (let opt of options) {
+                const canCraft = Object.entries(opt.cost).every(([res, amount]) => gameState.resources[res] >= amount);
+                const optDiv = document.createElement('div');
+                optDiv.className = canCraft ? 'craftOption' : 'craftOption disabled';
+                optDiv.innerHTML = opt.label + (canCraft ? ' ✓' : ' (不足)');
+                if (canCraft) {
+                    optDiv.onclick = () => {
+                        for (let [res, amount] of Object.entries(opt.cost)) {
+                            gameState.resources[res] -= amount;
+                        }
+                        opt.action();
+                        advanceDay();
+                        closeCraftModal();
+                        updateUI();
+                    };
+                }
+                optionsDiv.appendChild(optDiv);
+            }
+            
+            const closeDiv = document.createElement('div');
+            closeDiv.className = 'craftOption';
+            closeDiv.innerHTML = '✕ キャンセル';
+            closeDiv.onclick = closeCraftModal;
+            closeDiv.style.marginTop = '10px';
+            optionsDiv.appendChild(closeDiv);
+            
+            modal.classList.add('show');
+            document.getElementById('overlay').classList.add('show');
+        }
+
+        function closeCraftModal() {
+            document.getElementById('craftModal').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+        }
+
+        function endGame(type) {
+            gameState.gameOver = true;
+            gameState.gameOverType = type;
+            gameState.phase = 'endgame';
+            
+            const modal = document.getElementById('modal');
+            const title = document.getElementById('modalTitle');
+            const message = document.getElementById('modalMessage');
+            const scoreCard = document.getElementById('scoreCard');
+            
+            const score = (gameState.day * 10) + (gameState.resourcesCollected * 2) + (gameState.totalDamageDealt * 3);
+            
+            if (type === 'win') {
+                title.textContent = '🏆 勝利！';
+                title.style.color = '#FFD700';
+                message.innerHTML = '荒野の王となった。<br>Day 7を制したあなたが、新時代の支配者だ。';
+                scoreCard.innerHTML = `
+                    <div><span class="scoreName">🎮 生存日数</span><span class="scoreValue">${gameState.day}日</span></div>
+                    <div><span class="scoreName">📦 採取リソース</span><span class="scoreValue">${gameState.resourcesCollected}個</span></div>
+                    <div><span class="scoreName">⚔️ 敵へのダメージ</span><span class="scoreValue">${gameState.totalDamageDealt}</span></div>
+                    <div style="margin-top: 8px; font-size: 16px; border-top: 1px solid #FFD700; padding-top: 8px;"><span class="scoreName">🏅 最終スコア</span><span class="scoreValue">${score}</span></div>
+                `;
+            } else {
+                title.textContent = '💀 敗北';
+                title.style.color = '#FF6B6B';
+                message.textContent = `Day ${gameState.day}で力尽きた...`;
+                scoreCard.innerHTML = `
+                    <div style="opacity: 0.7;"><span class="scoreName">🎮 生存日数</span><span class="scoreValue">${gameState.day}日</span></div>
+                    <div style="opacity: 0.7;"><span class="scoreName">📦 採取リソース</span><span class="scoreValue">${gameState.resourcesCollected}個</span></div>
+                    <div style="opacity: 0.7;"><span class="scoreName">⚔️ 敵へのダメージ</span><span class="scoreValue">${gameState.totalDamageDealt}</span></div>
+                    <div style="margin-top: 8px; font-size: 16px; border-top: 1px solid #FFD700; padding-top: 8px; opacity: 0.7;"><span class="scoreName">🏅 最終スコア</span><span class="scoreValue">${score}</span></div>
+                `;
+            }
+            
+            modal.classList.add('show');
+        }
+
+        function updateUI() {
+            document.getElementById('dayDisplay').textContent = gameState.day;
+            document.getElementById('hpDisplay').textContent = Math.max(0, gameState.playerHP);
+            document.getElementById('armorDisplay').textContent = gameState.armor;
+            document.getElementById('woodDisplay').textContent = gameState.resources.wood;
+            document.getElementById('stoneDisplay').textContent = gameState.resources.stone;
+            document.getElementById('foodDisplay').textContent = gameState.resources.food;
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(139, 115, 85, 0.6)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw UI info
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Day ${gameState.day}/7 - ボスHP: ${Math.max(0, gameState.enemies.filter(e => e.type === 'boss')[0]?.hp || '未出現')}`, canvas.width / 2, 25);
+            
+            // Draw resource spots
+            for (let spot of gameState.resourceSpots) {
+                if (spot.collected) continue;
+                
+                ctx.fillStyle = spot.type === 'wood' ? '#8B4513' : (spot.type === 'stone' ? '#808080' : '#D4AF37');
+                ctx.beginPath();
+                ctx.arc(spot.x, spot.y, 18, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(spot.type === 'wood' ? '🌳' : (spot.type === 'stone' ? '🪨' : '🍗'), spot.x, spot.y);
+            }
+            
+            // Draw player
+            ctx.fillStyle = '#4CAF50';
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height - 100, 22, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('👤', canvas.width / 2, canvas.height - 100);
+            
+            // Draw enemies
+            for (let enemy of gameState.enemies) {
+                ctx.fillStyle = enemy.color;
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // HP bar
+                ctx.fillStyle = '#FFD700';
+                const hpBarWidth = 35 * (enemy.hp / enemy.maxHP);
+                ctx.fillRect(enemy.x - 17.5, enemy.y - 32, hpBarWidth, 4);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(enemy.x - 17.5, enemy.y - 32, 35, 4);
+                
+                // Enemy label
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(enemy.name, enemy.x, enemy.y - 42);
+            }
+            
+            requestAnimationFrame(draw);
+        }
+
+        // Event listeners
+        document.getElementById('craftBtn').onclick = () => {
+            if (!gameState.gameOver) {
+                openCraftModal();
+            }
+        };
+
+        document.getElementById('nextDayBtn').onclick = () => {
+            if (!gameState.gameOver && gameState.enemies.length === 0) {
+                advanceDay();
+                updateUI();
+            }
+        };
+
+        document.getElementById('restartBtn').onclick = () => {
+            gameState = {
+                day: 1,
+                playerHP: 100,
+                maxHP: 100,
+                armor: 0,
+                resources: { wood: 0, stone: 0, food: 0 },
+                resourceSpots: [],
+                enemies: [],
+                phase: 'playing',
+                resourcesCollected: 0,
+                totalDamageDealt: 0,
+                gameOver: false,
+                gameOverType: null
+            };
+            document.getElementById('modal').classList.remove('show');
+            spawnResources();
+            spawnEnemies();
+            updateUI();
+        };
+
+        document.getElementById('debugBtn').onclick = () => {
+            if (confirm('デバッグ: 敵を全滅させますか？')) {
+                gameState.enemies = [];
+                if (gameState.day === 7) {
+                    endGame('win');
+                }
+            }
+        };
+
+        // Canvas click handler
+        canvas.onclick = (e) => {
+            if (gameState.gameOver) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (!handleResourceTap(x, y)) {
+                handleEnemyTap(x, y);
+            }
+        };
+
+        // Debug API
+        window.__gameDebug = {
+            metrics: {},
+            advanceTime: function(seconds) {
+                const daysToAdvance = Math.max(1, Math.floor(seconds / 10));
+                for (let i = 0; i < daysToAdvance; i++) {
+                    if (!gameState.gameOver) {
+                        advanceDay();
+                    }
+                }
+                updateDebug();
+            }
+        };
+
+        function updateDebug() {
+            window.__gameDebug.metrics = {
+                resources: gameState.resources.wood + gameState.resources.stone + gameState.resources.food,
+                score: (gameState.day * 10) + (gameState.resourcesCollected * 2) + (gameState.totalDamageDealt * 3),
+                population: gameState.enemies.length,
+                turn: gameState.day,
+                phase: gameState.phase
+            };
+        }
+
+        // Initialize
+        spawnResources();
+        spawnEnemies();
+        updateUI();
+        updateDebug();
+        draw();
+    </script>
+</body>
+</html>

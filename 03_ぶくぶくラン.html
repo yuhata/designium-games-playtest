@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ぶくぶくラン</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
+canvas { display: block; border: 3px solid #444; cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+c.width = 480; c.height = 640;
+
+const LANES = [90, 240, 390];
+const GOAL = 800;
+const STATES = { TITLE:0, PLAY:1, WIN:2, FAIL:3 };
+
+let gs = STATES.TITLE;
+let wt, dist, tm, spd, lane, score, failReason;
+let foods = [], efx = [], bubbles = [];
+let pX, pTargetX, wobT = 0, eatT = 0;
+let spawnT = 0, swipeCool = 0;
+let mStartX = 0, mDown = false;
+let lastT = 0;
+let shownMilestones = {};
+
+const FOODS = [
+  { name:'ラーメン', kg:5, e:'🍜' },
+  { name:'ハンバーガー', kg:8, e:'🍔' },
+  { name:'ケーキ', kg:10, e:'🎂' },
+  { name:'ピザ', kg:12, e:'🍕' },
+  { name:'たこやき', kg:4, e:'🐙' },
+  { name:'おにぎり', kg:3, e:'🍙' },
+  { name:'アイス', kg:3, e:'🍦' },
+  { name:'どら焼き', kg:6, e:'🥮' },
+];
+const DIET = [
+  { name:'サラダ', kg:-4, e:'🥗', diet:true },
+  { name:'リンゴ', kg:-2, e:'🍎', diet:true },
+];
+
+const MILESTONES = {
+  60:'ちょっとぷくぷく…？',
+  80:'ぼよんぼよん🎵',
+  100:'もはや球体か…？',
+  120:'地面が揺れてる気がする',
+  150:'WIN条件達成！走り続けろ！！',
+  180:'ロールケーキみたいになってきた',
+  200:'本格的にやばい！！',
+  250:'もう止まれない…止まれるわけがない',
+};
+
+const EATWORDS = ['もぐもぐ！','うまい！！','ごくごく！','もっとくれ！','ぱくっ！','うまたい！'];
+
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function initGame(){
+  wt=50; dist=0; tm=60; spd=5; lane=1;
+  pX=LANES[1]; pTargetX=LANES[1];
+  score=0; wobT=0; eatT=0; spawnT=0; swipeCool=0;
+  foods=[]; efx=[]; bubbles=[];
+  shownMilestones={};
+  failReason='';
+}
+
+function spawnFood(){
+  const isD = Math.random()<0.15;
+  const pool = isD ? DIET : FOODS;
+  const t = pool[Math.floor(Math.random()*pool.length)];
+  const l = Math.floor(Math.random()*3);
+  foods.push({x:LANES[l], y:-50, l, e:t.e, kg:t.kg, diet:!!t.diet, w:44, bob:Math.random()*Math.PI*2});
+}
+
+function addFx(x,y,txt,col){
+  efx.push({x,y,txt,col,life:1,vy:-1.5,sz:20});
+}
+
+function addBubble(txt){
+  bubbles = bubbles.filter(b=>b.txt!==txt);
+  bubbles.push({txt,life:2});
+}
+
+function fatFactor(){ return Math.min(1,(wt-50)/250); }
+
+function drawBg(){
+  const f = fatFactor();
+  // Sky
+  const sg = ctx.createLinearGradient(0,0,0,430);
+  sg.addColorStop(0,'#87ceeb');
+  sg.addColorStop(1,'#ffe8a0');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,c.width,430);
+  // Ground
+  ctx.fillStyle='#8b7355'; ctx.fillRect(0,430,c.width,210);
+  // Road
+  ctx.fillStyle='#555'; ctx.fillRect(30,420,c.width-60,220);
+  // Lane dashes
+  ctx.save();
+  ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=3;
+  ctx.setLineDash([30,20]);
+  ctx.lineDashOffset = (dist*4)%50;
+  [170,320].forEach(lx=>{
+    ctx.beginPath(); ctx.moveTo(lx,420); ctx.lineTo(lx,c.height); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  ctx.restore();
+  // Road edges
+  ctx.strokeStyle='#ffcc00'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(30,420); ctx.lineTo(30,c.height); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(c.width-30,420); ctx.lineTo(c.width-30,c.height); ctx.stroke();
+  // Progress bar
+  ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(10,25,c.width-20,12);
+  const pg = Math.min(1,dist/GOAL);
+  const pgCol = pg>0.8?'#44ff44':pg>0.4?'#ffaa00':'#44aaff';
+  ctx.fillStyle=pgCol; ctx.fillRect(10,25,(c.width-20)*pg,12);
+  // Goal flag
+  ctx.font='28px serif'; ctx.textAlign='center';
+  ctx.fillText('🏁',c.width-30,22);
+  // Shake if very fat
+  if(f>0.6 && gs===STATES.PLAY){
+    const shk = (f-0.6)*8*Math.sin(Date.now()/50);
+    ctx.save();
+    ctx.translate(shk,0);
+  }
+}
+
+function drawPlayer(dt){
+  const f = fatFactor();
+  wobT += dt*(6+f*8);
+  const bx = Math.sin(wobT)*(3+f*10);
+  const by = Math.abs(Math.sin(wobT*0.7))*(2+f*6);
+  const px = pX + bx;
+  const py = 500 + by;
+  const rW = (35+f*55)*(1+f*0.3);
+  const rH = 35+f*50;
+
+  // Body color changes with weight
+  const r = Math.floor(200+f*55);
+  const g = Math.floor(160-f*80);
+  const b2 = Math.floor(100-f*60);
+  ctx.fillStyle=`rgb(${r},${g},${b2})`;
+  ctx.strokeStyle='#333'; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.ellipse(px,py,rW,rH,0,0,Math.PI*2);
+  ctx.fill(); ctx.stroke();
+
+  // Cheeks
+  ctx.fillStyle='rgba(255,100,100,0.4)';
+  ctx.beginPath(); ctx.arc(px-rW*0.55,py+rH*0.1,rW*0.22,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(px+rW*0.55,py+rH*0.1,rW*0.22,0,Math.PI*2); ctx.fill();
+
+  // Eyes - squish with fat
+  const eyY = py-rH*0.15;
+  const eyXo = rW*0.32;
+  const eyR = Math.max(3,6-f*3);
+  const eyRy = eyR*(1-f*0.6);
+  [[px-eyXo,eyY],[px+eyXo,eyY]].forEach(([ex,ey])=>{
+    ctx.fillStyle='white'; ctx.beginPath(); ctx.ellipse(ex,ey,eyR,Math.max(1,eyRy),0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#222'; ctx.beginPath(); ctx.ellipse(ex+1,ey+1,eyR*0.5,Math.max(0.5,eyRy*0.5),0,0,Math.PI*2); ctx.fill();
+  });
+
+  // Mouth
+  ctx.strokeStyle='#333'; ctx.lineWidth=2;
+  if(eatT>0){
+    ctx.fillStyle='#cc3344';
+    ctx.beginPath(); ctx.arc(px,py+rH*0.2,rW*0.22,0,Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='pink'; ctx.beginPath(); ctx.arc(px,py+rH*0.25,rW*0.1,0,Math.PI*2); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(px,py+rH*0.15,rW*0.18,0.1,Math.PI-0.1); ctx.stroke();
+  }
+
+  // Legs (disappear when too fat)
+  if(f<0.85){
+    const legA = Math.sin(wobT*2.5)*18*(1-f);
+    ctx.strokeStyle=`rgb(${r},${g},${b2})`; ctx.lineWidth=Math.max(4,f*12+4);
+    ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(px-rW*0.35,py+rH*0.85); ctx.lineTo(px-rW*0.3+legA,py+rH+18); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px+rW*0.35,py+rH*0.85); ctx.lineTo(px+rW*0.3-legA,py+rH+18); ctx.stroke();
+  } else {
+    ctx.strokeStyle='#333'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(px,py+rH+8,12,0,Math.PI*2); ctx.stroke();
+    ctx.font='12px sans-serif'; ctx.textAlign='center';
+    ctx.fillStyle='#333'; ctx.fillText('コロコロ',px,py+rH+30);
+  }
+
+  // Sweat drops
+  if(f>0.4){
+    const drops = Math.floor(f*6);
+    ctx.fillStyle='#88ccff';
+    for(let i=0;i<drops;i++){
+      const sx = px+(i%2===0?-1:1)*(rW*0.7+i*3);
+      const sy = py-rH*0.3+Math.sin(Date.now()/180+i)*5;
+      ctx.beginPath(); ctx.arc(sx,sy,3+i*0.3,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  if(eatT>0) eatT-=dt;
+}
+
+function drawFoods(dt){
+  foods.forEach(fd=>{
+    fd.bob+=dt*2.5;
+    ctx.font=`${fd.w}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(fd.e, fd.x, fd.y+Math.sin(fd.bob)*5);
+    if(fd.diet){
+      ctx.fillStyle='rgba(100,255,100,0.3)';
+      ctx.beginPath(); ctx.arc(fd.x,fd.y,fd.w*0.55,0,Math.PI*2); ctx.fill();
+    }
+  });
+}
+
+function drawBubbles(dt){
+  for(let i=bubbles.length-1;i>=0;i--){
+    const b=bubbles[i];
+    b.life-=dt;
+    if(b.life<=0){bubbles.splice(i,1);continue;}
+    const a=Math.min(1,b.life);
+    const bx=pX, by=440;
+    const bw=Math.min(230,b.txt.length*13+24);
+    ctx.save(); ctx.globalAlpha=a;
+    ctx.fillStyle='#fff'; ctx.strokeStyle='#444'; ctx.lineWidth=2;
+    rr(bx-bw/2,by-20,bw,36,8); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx-10,by+16); ctx.lineTo(bx,by+30); ctx.lineTo(bx+10,by+16); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#222'; ctx.font='bold 13px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(b.txt,bx,by-2);
+    ctx.restore();
+  }
+}
+
+function drawEffects(dt){
+  for(let i=efx.length-1;i>=0;i--){
+    const e=efx[i];
+    e.y+=e.vy; e.life-=dt;
+    if(e.life<=0){efx.splice(i,1);continue;}
+    ctx.save(); ctx.globalAlpha=e.life;
+    ctx.fillStyle=e.col; ctx.font=`bold ${e.sz}px sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(e.txt,e.x,e.y);
+    ctx.restore();
+  }
+}
+
+function drawHUD(){
+  ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(0,40,c.width,58);
+  // Weight
+  const f=fatFactor();
+  const wCol = wt<100?'#88ddff':wt<150?'#44aaff':wt<250?'#ffaa00':'#ff4422';
+  ctx.fillStyle=wCol; ctx.font='bold 15px sans-serif'; ctx.textAlign='left';
+  ctx.fillText(`体重: ${wt.toFixed(1)}kg`,8,60);
+  ctx.fillStyle='#333'; ctx.fillRect(8,65,144,10);
+  ctx.fillStyle=wCol; ctx.fillRect(8,65,144*Math.min(1,wt/300),10);
+  // Target marker at 150kg
+  ctx.strokeStyle='#44ff44'; ctx.lineWidth=2;
+  const mx=8+144*(150/300);
+  ctx.beginPath(); ctx.moveTo(mx,63); ctx.lineTo(mx,77); ctx.stroke();
+  ctx.fillStyle='#44ff44'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('150',mx,88);
+  // Time
+  const tc = tm<10?'#ff4444':tm<20?'#ffaa00':'#fff';
+  ctx.fillStyle=tc; ctx.font='bold 22px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(`⏱ ${Math.ceil(tm)}s`,c.width/2,63);
+  // Distance
+  ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='right';
+  ctx.fillText(`${Math.floor(dist)}m / ${GOAL}m`,c.width-8,60);
+  ctx.fillStyle='#ffaa44'; ctx.font='13px sans-serif';
+  ctx.fillText(`スコア: ${score}`,c.width-8,75);
+  // Instructions bottom
+  ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('← → キー または左右ドラッグで移動 | 食べ物を集めて太れ！',c.width/2,c.height-6);
+}
+
+function drawTitle(){
+  const sg=ctx.createLinearGradient(0,0,0,c.height);
+  sg.addColorStop(0,'#1a1a3e'); sg.addColorStop(1,'#3a1a2e');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,c.width,c.height);
+  // Stars
+  ctx.fillStyle='white';
+  for(let i=0;i<40;i++){
+    const sx=(Math.sin(i*137)*0.5+0.5)*c.width;
+    const sy=(Math.cos(i*97)*0.5+0.5)*c.height*0.5;
+    ctx.beginPath(); ctx.arc(sx,sy,1+Math.sin(Date.now()/500+i),0,Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle='#ffcc00'; ctx.font='bold 54px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('ぶくぶくラン',c.width/2,130);
+  ctx.fillStyle='#fff'; ctx.font='18px sans-serif';
+  ctx.fillText('食べて太って走り続けろ！',c.width/2,175);
+  ctx.font='90px serif'; ctx.fillText('🏃',c.width/2,290);
+  ctx.fillStyle='#aaa'; ctx.font='14px sans-serif';
+  ctx.fillText('← → キー または マウスドラッグで操作',c.width/2,360);
+  ctx.fillStyle='#44ff88'; ctx.font='bold 15px sans-serif';
+  ctx.fillText('体重150kgを超えてゴール到達でクリア！',c.width/2,395);
+  ctx.fillStyle='#ff6644'; ctx.font='13px sans-serif';
+  ctx.fillText('体重300kg超またはタイム切れで失敗',c.width/2,420);
+  ctx.fillStyle='#ffcc00';
+  rr(c.width/2-90,460,180,52,12); ctx.fill();
+  ctx.fillStyle='#333'; ctx.font='bold 26px sans-serif';
+  ctx.fillText('スタート！',c.width/2,493);
+}
+
+function drawWin(){
+  ctx.fillStyle='rgba(0,40,0,0.88)'; ctx.fillRect(0,0,c.width,c.height);
+  const t=Date.now()/1000;
+  for(let i=0;i<24;i++){
+    const fx=(Math.sin(t*1.7+i*0.9)*0.45+0.5)*c.width;
+    const fy=(Math.cos(t*1.3+i*0.5)*0.35+0.25)*c.height;
+    ctx.fillStyle=`hsl(${(i*25+t*80)%360},100%,65%)`;
+    ctx.beginPath(); ctx.arc(fx,fy,6,0,Math.PI*2); ctx.fill();
+    const fx2=(Math.sin(t*2.1+i*1.3)*0.4+0.5)*c.width;
+    const fy2=(Math.cos(t*1.8+i*0.8)*0.2+0.5)*c.height;
+    ctx.fillStyle=`hsl(${(i*35+t*120)%360},100%,70%)`;
+    ctx.beginPath(); ctx.arc(fx2,fy2,4,0,Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle='#ffcc00'; ctx.font='bold 46px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('🎉 ゴール達成！ 🎉',c.width/2,170);
+  ctx.fillStyle='#fff'; ctx.font='bold 26px sans-serif';
+  ctx.fillText(`最終体重: ${wt.toFixed(1)}kg`,c.width/2,230);
+  ctx.fillText(`走行距離: ${Math.floor(dist)}m`,c.width/2,268);
+  ctx.fillStyle='#ffaa44'; ctx.font='bold 22px sans-serif';
+  ctx.fillText(`スコア: ${score}`,c.width/2,310);
+  const rank = score>5000?'S':score>3000?'A':score>2000?'B':score>1000?'C':'D';
+  const rCol = rank==='S'?'#ffcc00':rank==='A'?'#ff8800':rank==='B'?'#aaffaa':'#fff';
+  ctx.fillStyle=rCol; ctx.font='bold 70px sans-serif';
+  ctx.fillText(`ランク ${rank}`,c.width/2,395);
+  ctx.fillStyle='rgba(80,200,80,0.9)';
+  rr(c.width/2-100,430,200,52,12); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif';
+  ctx.fillText('もう一度！',c.width/2,463);
+}
+
+function drawFail(){
+  ctx.fillStyle='rgba(60,0,0,0.88)'; ctx.fillRect(0,0,c.width,c.height);
+  // Shake effect on fail
+  const t=Date.now()/1000;
+  const shk=Math.sin(t*20)*6*(1/(1+t));
+  ctx.save(); ctx.translate(shk,0);
+  const title = failReason==='time'?'⏱️ 時間切れ！':'💥 太りすぎ！！';
+  const sub = failReason==='time'?'もっと食べ物を集めよう！':`体重${wt.toFixed(0)}kgで限界突破…`;
+  ctx.fillStyle='#ff3333'; ctx.font='bold 40px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('ゲームオーバー',c.width/2,160);
+  ctx.fillStyle='#ff8844'; ctx.font='bold 34px sans-serif';
+  ctx.fillText(title,c.width/2,215);
+  ctx.fillStyle='#fff'; ctx.font='18px sans-serif';
+  ctx.fillText(sub,c.width/2,255);
+  ctx.font='bold 22px sans-serif';
+  ctx.fillText(`最終体重: ${wt.toFixed(1)}kg`,c.width/2,305);
+  ctx.fillText(`走行距離: ${Math.floor(dist)}m`,c.width/2,338);
+  ctx.fillStyle='#ffaa44'; ctx.font='22px sans-serif';
+  ctx.fillText(`スコア: ${score}`,c.width/2,378);
+  const rank = score>2000?'C':score>1000?'D':score>500?'E':'F';
+  ctx.fillStyle='#ff6666'; ctx.font='bold 64px sans-serif';
+  ctx.fillText(`ランク ${rank}`,c.width/2,455);
+  ctx.restore();
+  ctx.fillStyle='rgba(180,50,50,0.9)';
+  rr(c.width/2-100,480,200,52,12); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('リトライ',c.width/2,513);
+}
+
+function checkCols(){
+  const f=fatFactor();
+  const r=(35+f*55)*(1+f*0.3);
+  for(let i=foods.length-1;i>=0;i--){
+    const fd=foods[i];
+    if(fd.l===lane && fd.y>490-r && fd.y<510+r){
+      if(fd.diet){
+        wt=Math.max(30,wt+fd.kg);
+        addFx(fd.x,fd.y,fd.kg+'kg','#44ff44');
+        addBubble('うっ、ヘルシー…');
+      } else {
+        wt+=fd.kg; score+=fd.kg*10; eatT=0.5;
+        addFx(fd.x,fd.y-25,'+'+fd.kg+'kg','#ff6644');
+        addBubble(EATWORDS[Math.floor(Math.random()*EATWORDS.length)]);
+        spd=Math.max(1.5,5-(wt-50)/50);
+        for(const [th,msg] of Object.entries(MILESTONES)){
+          if(wt>=parseInt(th)&&!shownMilestones[th]){
+            shownMilestones[th]=true;
+            setTimeout(()=>addBubble(msg),200);
+          }
+        }
+      }
+      foods.splice(i,1);
+    }
+  }
+}
+
+function changeLane(dir){
+  if(swipeCool>0) return;
+  if(dir<0&&lane>0){lane--;pTargetX=LANES[lane];swipeCool=0.28;addFx(pX,500,'←','#88ccff');}
+  else if(dir>0&&lane<2){lane++;pTargetX=LANES[lane];swipeCool=0.28;addFx(pX,500,'→','#88ccff');}
+}
+
+c.addEventListener('mousedown',e=>{
+  const r=c.getBoundingClientRect();
+  const mx=(e.clientX-r.left)*(c.width/r.width);
+  const my=(e.clientY-r.top)*(c.height/r.height);
+  mStartX=mx; mDown=true;
+  if(gs===STATES.TITLE&&mx>c.width/2-90&&mx<c.width/2+90&&my>460&&my<512){
+    initGame(); gs=STATES.PLAY;
+  } else if((gs===STATES.WIN||gs===STATES.FAIL)&&mx>c.width/2-100&&mx<c.width/2+100&&my>480&&my<535){
+    gs=STATES.TITLE;
+  }
+});
+c.addEventListener('mousemove',e=>{
+  if(!mDown||gs!==STATES.PLAY) return;
+  const r=c.getBoundingClientRect();
+  const mx=(e.clientX-r.left)*(c.width/r.width);
+  const dx=mx-mStartX;
+  if(Math.abs(dx)>28){changeLane(dx>0?1:-1);mStartX=mx;}
+});
+c.addEventListener('mouseup',()=>mDown=false);
+c.addEventListener('click',e=>{
+  if(gs===STATES.PLAY) return;
+  const r=c.getBoundingClientRect();
+  const mx=(e.clientX-r.left)*(c.width/r.width);
+  const my=(e.clientY-r.top)*(c.height/r.height);
+  if(gs===STATES.TITLE&&mx>c.width/2-90&&mx<c.width/2+90&&my>460&&my<512){
+    initGame(); gs=STATES.PLAY;
+  }
+  if((gs===STATES.WIN||gs===STATES.FAIL)&&mx>c.width/2-100&&mx<c.width/2+100&&my>480&&my<535){
+    gs=STATES.TITLE;
+  }
+});
+c.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  const t=e.touches[0],r=c.getBoundingClientRect();
+  const mx=(t.clientX-r.left)*(c.width/r.width);
+  const my=(t.clientY-r.top)*(c.height/r.height);
+  mStartX=mx; mDown=true;
+  if(gs===STATES.TITLE&&mx>c.width/2-90&&mx<c.width/2+90&&my>460&&my<512){
+    initGame(); gs=STATES.PLAY;
+  } else if((gs===STATES.WIN||gs===STATES.FAIL)&&mx>c.width/2-100&&mx<c.width/2+100&&my>480&&my<535){
+    gs=STATES.TITLE;
+  }
+},{passive:false});
+c.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(!mDown||gs!==STATES.PLAY) return;
+  const t=e.touches[0],r=c.getBoundingClientRect();
+  const mx=(t.clientX-r.left)*(c.width/r.width);
+  const dx=mx-mStartX;
+  if(Math.abs(dx)>28){changeLane(dx>0?1:-1);mStartX=mx;}
+},{passive:false});
+c.addEventListener('touchend',()=>mDown=false,{passive:false});
+
+document.addEventListener('keydown',e=>{
+  if(gs===STATES.PLAY){
+    if(e.key==='ArrowLeft'||e.key==='a') changeLane(-1);
+    if(e.key==='ArrowRight'||e.key==='d') changeLane(1);
+  } else if(gs===STATES.TITLE&&(e.key==='Enter'||e.key===' ')){
+    initGame(); gs=STATES.PLAY;
+  }
+});
+
+function loop(ts){
+  const dt=Math.min((ts-lastT)/1000,0.05);
+  lastT=ts;
+  ctx.clearRect(0,0,c.width,c.height);
+
+  if(gs===STATES.TITLE){
+    drawTitle();
+  } else if(gs===STATES.PLAY){
+    tm-=dt; swipeCool-=dt;
+    pX+=(pTargetX-pX)*Math.min(1,dt*14);
+    dist+=spd*dt*12;
+    spawnT+=dt;
+    const sr=Math.max(0.4,1.4-dist/1200);
+    if(spawnT>sr){spawnFood();spawnT=0;}
+    const fspd=(spd+3)*120;
+    for(let i=foods.length-1;i>=0;i--){
+      foods[i].y+=fspd*dt;
+      if(foods[i].y>c.height+60) foods.splice(i,1);
+    }
+    checkCols();
+    if(dist>=GOAL&&wt>150){
+      gs=STATES.WIN; score+=Math.ceil(tm)*120;
+    } else if(wt>300){
+      gs=STATES.FAIL; failReason='fat';
+    } else if(tm<=0){
+      gs=STATES.FAIL; failReason='time';
+    }
+    drawBg();
+    drawFoods(dt);
+    drawPlayer(dt);
+    drawBubbles(dt);
+    drawEffects(dt);
+    const f=fatFactor();
+    if(f>0.6) ctx.restore();
+    drawHUD();
+  } else if(gs===STATES.WIN){
+    drawWin();
+  } else if(gs===STATES.FAIL){
+    drawFail();
+  }
+  requestAnimationFrame(loop);
+}
+
+lastT=performance.now();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

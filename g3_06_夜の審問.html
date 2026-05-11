@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夜の審問</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'MS ゴシック', sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            width: 375px;
+            height: 812px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, #0f1531 0%, #1a0a2e 100%);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 0 30px rgba(100, 50, 200, 0.3);
+        }
+
+        /* ルール画面 */
+        #rulesScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(5px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        #rulesScreen h1 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            color: #ffd700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        #rulesScreen .rules-text {
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 450px;
+            overflow-y: auto;
+            text-align: left;
+            margin-bottom: 20px;
+            background: rgba(30, 20, 60, 0.6);
+            padding: 15px;
+            border-left: 3px solid #ffd700;
+        }
+
+        #rulesScreen li {
+            margin-left: 20px;
+            margin-bottom: 8px;
+        }
+
+        #startButton {
+            padding: 12px 30px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        #startButton:active {
+            transform: scale(0.95);
+        }
+
+        /* ゲーム画面 */
+        #gameScreen {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 15px;
+            gap: 10px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 12px;
+            color: #a0a0ff;
+            gap: 10px;
+        }
+
+        .gauges {
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .gauge {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            align-items: center;
+        }
+
+        .gauge-label {
+            color: #888;
+            font-size: 10px;
+        }
+
+        .gauge-bar {
+            width: 50px;
+            height: 12px;
+            background: #222;
+            border-radius: 2px;
+            overflow: hidden;
+            border: 1px solid #444;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0f0 0%, #ff0 50%, #f00 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .gauge-fill.flash {
+            animation: flashRed 0.3s ease;
+        }
+
+        @keyframes flashRed {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.5); }
+        }
+
+        .info-text {
+            font-size: 11px;
+            color: #aaa;
+            text-align: right;
+        }
+
+        .game-board {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+        }
+
+        .player-circle {
+            flex: 0.4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .players-ring {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            border: 2px dashed #444;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .player-badge {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: #2a2a5a;
+            border: 2px solid #6a5aff;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 9px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .player-badge:hover:not(.eliminated) {
+            border-color: #ffd700;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .player-badge.self {
+            border-color: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        .player-badge.eliminated {
+            opacity: 0.3;
+            text-decoration: line-through;
+        }
+
+        .player-badge.votable {
+            cursor: pointer;
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 215, 0, 0.2); }
+            50% { box-shadow: 0 0 15px rgba(255, 215, 0, 0.8); }
+        }
+
+        .player-badge.selected {
+            border-color: #ff0000;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+        }
+
+        .player-icon {
+            font-size: 18px;
+        }
+
+        .player-name {
+            font-size: 8px;
+            color: #aaa;
+        }
+
+        .dialog-card {
+            background: rgba(50, 40, 100, 0.8);
+            border: 2px solid #6a5aff;
+            border-radius: 8px;
+            padding: 12px;
+            flex: 0.6;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .speaker {
+            font-size: 13px;
+            font-weight: bold;
+            color: #ffd700;
+        }
+
+        .choices {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .choice-btn {
+            padding: 8px;
+            background: #1a1a4a;
+            border: 1px solid #5a5aaa;
+            color: #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+            text-align: left;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .choice-btn:hover {
+            background: #2a2a6a;
+            border-color: #7a7aff;
+            color: #fff;
+        }
+
+        .choice-btn.active {
+            background: #6a5aff;
+            border-color: #ffd700;
+            color: #fff;
+            animation: highlight 0.2s;
+        }
+
+        @keyframes highlight {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .contradiction-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: rgba(200, 50, 50, 0.9);
+            color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 2000;
+            animation: popupScale 0.5s ease;
+        }
+
+        @keyframes popupScale {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* 結果画面 */
+        #resultScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 14, 39, 0.98);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            padding: 20px;
+            animation: resultOverlay 0.5s ease;
+        }
+
+        @keyframes resultOverlay {
+            0% { background: rgba(10, 14, 39, 0); }
+            100% { background: rgba(10, 14, 39, 0.98); }
+        }
+
+        .result-content {
+            text-align: center;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .result-title {
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            animation: resultScale 0.6s ease;
+        }
+
+        .result-title.win {
+            color: #ffd700;
+        }
+
+        .result-title.lose {
+            color: #ff4444;
+        }
+
+        @keyframes resultScale {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .result-stats {
+            background: rgba(30, 20, 60, 0.6);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.8;
+            text-align: left;
+        }
+
+        .result-stat {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .final-roles {
+            background: rgba(30, 20, 60, 0.6);
+            padding: 12px;
+            border-radius: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 11px;
+        }
+
+        .final-role-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #444;
+        }
+
+        .final-role-item.self {
+            background: rgba(0, 255, 0, 0.1);
+            color: #00ff00;
+            font-weight: bold;
+        }
+
+        #restartButton {
+            padding: 12px 30px;
+            font-size: 14px;
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        #restartButton:active {
+            transform: scale(0.95);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- ルール画面 -->
+        <div id="rulesScreen">
+            <h1>🎭 夜の審問</h1>
+            <div class="rules-text">
+                <h2 style="color: #ffd700; margin-bottom: 10px; font-size: 13px;">📋 ゲームルール</h2>
+                <ul>
+                    <li><strong>目的</strong>: 隠れた人狼を2体放逐して勝利</li>
+                    <li><strong>あなたの役割</strong>: 村人または人狼がランダムに配分</li>
+                    <li><strong>各ラウンド</strong>:
+                        <ul style="margin-top: 5px;">
+                            <li>全プレイヤーが会話を選択</li>
+                            <li>矛盾スコアが加算される</li>
+                            <li>ラウンド終了時に投票開始</li>
+                            <li>プレイヤー1名を選んで放逐</li>
+                            <li>その役割を開示</li>
+                        </ul>
+                    </li>
+                    <li><strong>✅ 勝利</strong>: 人狼2体を放逐</li>
+                    <li><strong>❌ 敗北</strong>: 人狼数 ≥ 村人数、またはラウンド6終了</li>
+                </ul>
+            </div>
+            <button id="startButton">ゲーム開始</button>
+        </div>
+
+        <!-- ゲーム画面 -->
+        <div id="gameScreen" class="hidden">
+            <div class="header">
+                <div class="gauges">
+                    <div class="gauge">
+                        <div class="gauge-label">ラウンド</div>
+                        <div id="roundDisplay" style="color: #ffd700; font-weight: bold; font-size: 12px;">1/6</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-label">疑惑Pt</div>
+                        <div class="gauge-bar">
+                            <div id="suspicionFill" class="gauge-fill"></div>
+                        </div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-label">矛盾スコア</div>
+                        <div class="gauge-bar">
+                            <div id="contradictionFill" class="gauge-fill"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-text">
+                    人狼: <span id="wolfCount" style="color: #ff4444;">0/2</span><br>
+                    村人: <span id="villagerCount" style="color: #4444ff;">4</span>
+                </div>
+            </div>
+
+            <div class="game-board">
+                <div class="player-circle">
+                    <div class="players-ring" id="playersRing"></div>
+                </div>
+
+                <div class="dialog-card">
+                    <div class="speaker">
+                        <span id="speakerName">-</span> が話している...
+                    </div>
+                    <div class="choices" id="choicesContainer"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 結果画面 -->
+        <div id="resultScreen" class="hidden">
+            <div class="result-content">
+                <div class="result-title" id="resultTitle"></div>
+                <div class="result-stats">
+                    <div class="result-stat">
+                        <span>ラウンド進行:</span>
+                        <span id="finalRound">-</span>
+                    </div>
+                    <div class="result-stat">
+                        <span>放逐人狼:</span>
+                        <span id="finalWolves">-</span>
+                    </div>
+                    <div class="result-stat">
+                        <span>放逐村人:</span>
+                        <span id="finalVillagers">-</span>
+                    </div>
+                    <div class="result-stat">
+                        <span>矛盾スコア:</span>
+                        <span id="finalScore">-</span>
+                    </div>
+                </div>
+                <div style="font-size: 11px; color: #aaa;">最終役割開示</div>
+                <div class="final-roles" id="finalRoles"></div>
+                <button id="restartButton">リスタート</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const gameState = {
+            phase: 'rules',
+            round: 1,
+            maxRounds: 6,
+            suspicion: 0,
+            contradiction: 0,
+            players: [],
+            currentSpeaker: 0,
+            eliminated: [],
+            votable: false,
+            selectedForVote: null,
+            wolvesEliminated: 0,
+            villagersEliminated: 0,
+            gameOver: false,
+            turnsDone: 0
+        };
+
+        const nicknames = ['あなた', 'A', 'B', 'C', 'D', 'E'];
+        const icons = ['🧑', '👨', '👩', '🧔', '👴', '👵'];
+
+        function initGame() {
+            const roles = ['wolf', 'wolf', 'villager', 'villager', 'villager', 'villager'].sort(() => Math.random() - 0.5);
+            gameState.players = nicknames.map((name, i) => ({
+                id: i,
+                name,
+                icon: icons[i],
+                role: roles[i],
+                eliminated: false
+            }));
+
+            gameState.phase = 'playing';
+            gameState.round = 1;
+            gameState.suspicion = 0;
+            gameState.contradiction = 0;
+            gameState.currentSpeaker = 0;
+            gameState.eliminated = [];
+            gameState.votable = false;
+            gameState.selectedForVote = null;
+            gameState.wolvesEliminated = 0;
+            gameState.villagersEliminated = 0;
+            gameState.gameOver = false;
+            gameState.turnsDone = 0;
+
+            document.getElementById('rulesScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            document.getElementById('resultScreen').classList.add('hidden');
+
+            renderGame();
+        }
+
+        function renderGame() {
+            if (gameState.phase !== 'playing') return;
+
+            const ring = document.getElementById('playersRing');
+            ring.innerHTML = '';
+
+            const centerX = 75, centerY = 75, radius = 65;
+
+            gameState.players.forEach((player, idx) => {
+                const angle = (idx / 6) * 2 * Math.PI - Math.PI / 2;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+
+                const badge = document.createElement('div');
+                badge.className = 'player-badge';
+                badge.style.left = (x - 22.5) + 'px';
+                badge.style.top = (y - 22.5) + 'px';
+
+                if (player.id === 0) badge.classList.add('self');
+                if (player.eliminated) badge.classList.add('eliminated');
+                if (gameState.votable && !player.eliminated) badge.classList.add('votable');
+                if (gameState.selectedForVote === player.id) badge.classList.add('selected');
+
+                badge.innerHTML = `<div class="player-icon">${player.icon}</div><div class="player-name">${player.name}</div>`;
+
+                if (gameState.votable && !player.eliminated) {
+                    badge.addEventListener('click', () => selectVote(player.id));
+                }
+
+                ring.appendChild(badge);
+            });
+
+            document.getElementById('roundDisplay').textContent = `${gameState.round}/${gameState.maxRounds}`;
+            const aliveWolves = gameState.players.filter(p => p.role === 'wolf' && !p.eliminated).length;
+            const aliveVillagers = gameState.players.filter(p => p.role === 'villager' && !p.eliminated).length;
+            document.getElementById('wolfCount').textContent = `${gameState.wolvesEliminated}/2`;
+            document.getElementById('villagerCount').textContent = aliveVillagers;
+
+            document.getElementById('suspicionFill').style.width = Math.min(gameState.suspicion * 5, 100) + '%';
+            document.getElementById('contradictionFill').style.width = Math.min(gameState.contradiction * 5, 100) + '%';
+
+            if (!gameState.votable) {
+                let activeSpeaker = null;
+                for (let i = 0; i < 6; i++) {
+                    const idx = (gameState.currentSpeaker + i) % 6;
+                    if (!gameState.players[idx].eliminated) {
+                        activeSpeaker = idx;
+                        break;
+                    }
+                }
+
+                if (activeSpeaker !== null) {
+                    document.getElementById('speakerName').textContent = gameState.players[activeSpeaker].name;
+                    renderChoices(activeSpeaker);
+                } else {
+                    gameState.votable = true;
+                    renderGame();
+                }
+            } else {
+                document.getElementById('speakerName').textContent = '投票フェーズ';
+                document.getElementById('choicesContainer').innerHTML = '<div style="text-align: center; color: #aaa; padding: 10px;">放逐するプレイヤーをタップ</div>';
+            }
+        }
+
+        function renderChoices(playerIdx) {
+            const choices = [
+                { text: '怪しい...', score: 1 },
+                { text: '微妙だ', score: 2 },
+                { text: '信頼できる', score: 0 }
+            ];
+
+            const container = document.getElementById('choicesContainer');
+            container.innerHTML = '';
+
+            choices.forEach((choice) => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn';
+                btn.textContent = choice.text;
+                btn.addEventListener('click', () => selectChoice(choice.score));
+                container.appendChild(btn);
+            });
+        }
+
+        function selectChoice(score) {
+            gameState.contradiction += score;
+            gameState.suspicion = Math.min(gameState.suspicion + 1, 20);
+
+            const fill = document.getElementById('contradictionFill');
+            fill.classList.remove('flash');
+            void fill.offsetWidth;
+            fill.classList.add('flash');
+
+            gameState.turnsDone++;
+            const alivePlayers = gameState.players.filter(p => !p.eliminated);
+
+            if (gameState.turnsDone >= alivePlayers.length) {
+                gameState.votable = true;
+                gameState.turnsDone = 0;
+            } else {
+                gameState.currentSpeaker = (gameState.currentSpeaker + 1) % 6;
+            }
+
+            renderGame();
+        }
+
+        function selectVote(playerId) {
+            gameState.selectedForVote = playerId;
+            renderGame();
+
+            setTimeout(() => {
+                if (gameState.selectedForVote === playerId) {
+                    eliminatePlayer(playerId);
+                }
+            }, 300);
+        }
+
+        function eliminatePlayer(playerId) {
+            const player = gameState.players.find(p => p.id === playerId);
+            player.eliminated = true;
+            gameState.eliminated.push(player);
+
+            const popup = document.createElement('div');
+            popup.className = 'contradiction-popup';
+            popup.textContent = `${player.name} は ${player.role === 'wolf' ? '👹 人狼' : '🧑 村人'} でした`;
+            document.getElementById('gameContainer').appendChild(popup);
+            setTimeout(() => popup.remove(), 1500);
+
+            if (player.role === 'wolf') {
+                gameState.wolvesEliminated++;
+            } else {
+                gameState.villagersEliminated++;
+            }
+
+            checkGameEnd();
+
+            if (!gameState.gameOver) {
+                gameState.round++;
+                gameState.votable = false;
+                gameState.selectedForVote = null;
+                gameState.currentSpeaker = 0;
+
+                setTimeout(() => {
+                    renderGame();
+                }, 1000);
+            }
+        }
+
+        function checkGameEnd() {
+            const aliveWolves = gameState.players.filter(p => p.role === 'wolf' && !p.eliminated).length;
+            const aliveVillagers = gameState.players.filter(p => p.role === 'villager' && !p.eliminated).length;
+
+            if (gameState.wolvesEliminated >= 2) {
+                gameState.gameOver = true;
+                showResults(true);
+                return;
+            }
+
+            if (aliveWolves >= aliveVillagers) {
+                gameState.gameOver = true;
+                showResults(false);
+                return;
+            }
+
+            if (gameState.round > gameState.maxRounds) {
+                gameState.gameOver = true;
+                showResults(false);
+                return;
+            }
+        }
+
+        function showResults(isWin) {
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('resultScreen').classList.remove('hidden');
+
+            const title = document.getElementById('resultTitle');
+            title.textContent = isWin ? '🎉 勝利！' : '😢 敗北...';
+            title.className = 'result-title ' + (isWin ? 'win' : 'lose');
+
+            document.getElementById('finalRound').textContent = gameState.round;
+            document.getElementById('finalWolves').textContent = gameState.wolvesEliminated;
+            document.getElementById('finalVillagers').textContent = gameState.villagersEliminated;
+            document.getElementById('finalScore').textContent = gameState.contradiction;
+
+            const rolesHtml = gameState.players.map(p => {
+                const isSelf = p.id === 0;
+                const roleText = p.role === 'wolf' ? '👹 人狼' : '🧑 村人';
+                const statusText = p.eliminated ? ' (放逐)' : ' (生存)';
+                return `<div class="final-role-item${isSelf ? ' self' : ''}">${p.name}: ${roleText}${statusText}</div>`;
+            }).join('');
+            document.getElementById('finalRoles').innerHTML = rolesHtml;
+        }
+
+        document.getElementById('startButton').addEventListener('click', initGame);
+        document.getElementById('restartButton').addEventListener('click', () => location.reload());
+    </script>
+</body>
+</html>

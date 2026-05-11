@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>マグナブレイク</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #0f3460;
+      border: 3px solid #e94560;
+      box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let gameState = 'playing';
+    let blockCount = 0;
+    let lives = 10;
+    let time = 30;
+    let score = 0;
+    let lastScore = parseInt(localStorage.getItem('magnaBreakLastScore')) || 0;
+    
+    const ball = {
+      x: canvas.width / 2,
+      y: canvas.height - 50,
+      vx: 0,
+      vy: 0,
+      radius: 8,
+      speed: 5
+    };
+    
+    let blocks = [];
+    let paddle = {
+      x: canvas.width / 2,
+      y: canvas.height - 20,
+      width: 60,
+      height: 15
+    };
+    
+    let mouseDown = false;
+    let mouseStartX = 0;
+    let mouseStartY = 0;
+    let mouseCurrentX = 0;
+    let mouseCurrentY = 0;
+    let particles = [];
+    let flashAlpha = 0;
+    let shakeAmount = 0;
+    
+    function initBlocks() {
+      blocks = [];
+      const blockWidth = 60;
+      const blockHeight = 20;
+      const padding = 10;
+      const cols = 10;
+      const rows = 4;
+      
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          blocks.push({
+            x: c * (blockWidth + padding) + 15,
+            y: r * (blockHeight + padding) + 30,
+            width: blockWidth,
+            height: blockHeight,
+            color: `hsl(${(r * 90 + c * 36) % 360}, 100%, 50%)`
+          });
+        }
+      }
+      blockCount = blocks.length;
+    }
+    
+    document.addEventListener('mousedown', (e) => {
+      if (gameState !== 'playing') return;
+      const rect = canvas.getBoundingClientRect();
+      mouseStartX = e.clientX - rect.left;
+      mouseStartY = e.clientY - rect.top;
+      mouseCurrentX = mouseStartX;
+      mouseCurrentY = mouseStartY;
+      mouseDown = true;
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseCurrentX = e.clientX - rect.left;
+      mouseCurrentY = e.clientY - rect.top;
+    });
+    
+    document.addEventListener('mouseup', (e) => {
+      if (!mouseDown) return;
+      mouseDown = false;
+      if (gameState !== 'playing') return;
+      
+      const dx = mouseCurrentX - mouseStartX;
+      const dy = mouseCurrentY - mouseStartY;
+      
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        const angle = Math.atan2(dy, dx);
+        ball.vx = ball.speed * Math.cos(angle);
+        ball.vy = ball.speed * Math.sin(angle);
+        score += 10;
+      }
+    });
+    
+    document.addEventListener('click', (e) => {
+      if (gameState === 'win' || gameState === 'fail') {
+        resetGame();
+      }
+    });
+    
+    function resetGame() {
+      gameState = 'playing';
+      blockCount = 0;
+      lives = 10;
+      time = 30;
+      score = 0;
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height - 50;
+      ball.vx = 0;
+      ball.vy = 0;
+      particles = [];
+      initBlocks();
+      mouseDown = false;
+    }
+    
+    function createParticles(x, y) {
+      for (let i = 0; i < 15; i++) {
+        const angle = (Math.PI * 2 * i) / 15;
+        const speed = 3 + Math.random() * 3;
+        particles.push({
+          x: x,
+          y: y,
+          vx: speed * Math.cos(angle),
+          vy: speed * Math.sin(angle),
+          life: 0.5,
+          maxLife: 0.5,
+          color: `hsl(${Math.random() * 60 + 0}, 100%, 50%)`
+        });
+      }
+    }
+    
+    function update(deltaTime) {
+      if (gameState !== 'playing') return;
+      
+      time -= deltaTime;
+      if (time < 0) time = 0;
+      
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+      
+      if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+        ball.vx *= -1;
+        ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x));
+      }
+      
+      if (ball.y - ball.radius < 0) {
+        ball.vy *= -1;
+        ball.y = ball.radius;
+      }
+      
+      if (ball.y > canvas.height) {
+        lives--;
+        if (lives <= 0) {
+          gameState = 'fail';
+          lastScore = score;
+          localStorage.setItem('magnaBreakLastScore', score);
+        }
+        ball.x = canvas.width / 2;
+        ball.y = canvas.height - 50;
+        ball.vx = 0;
+        ball.vy = 0;
+      }
+      
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        const block = blocks[i];
+        const closestX = Math.max(block.x, Math.min(ball.x, block.x + block.width));
+        const closestY = Math.max(block.y, Math.min(ball.y, block.y + block.height));
+        const distX = ball.x - closestX;
+        const distY = ball.y - closestY;
+        const distance = Math.sqrt(distX * distX + distY * distY);
+        
+        if (distance < ball.radius) {
+          blocks.splice(i, 1);
+          blockCount--;
+          score += 50;
+          
+          if (Math.abs(distX) > Math.abs(distY)) {
+            ball.vx *= -1;
+          } else {
+            ball.vy *= -1;
+          }
+          
+          createParticles(block.x + block.width / 2, block.y + block.height / 2);
+          
+          if (blockCount === 0 && time > 0) {
+            flashAlpha = 1;
+            shakeAmount = 10;
+            createParticles(canvas.width / 2, canvas.height / 2);
+            for (let j = 0; j < 10; j++) {
+              createParticles(
+                canvas.width / 2 + (Math.random() - 0.5) * 200,
+                canvas.height / 2 + (Math.random() - 0.5) * 200
+              );
+            }
+            gameState = 'win';
+            lastScore = score;
+            localStorage.setItem('magnaBreakLastScore', score);
+          }
+        }
+      }
+      
+      if (mouseDown) {
+        paddle.x = mouseCurrentX - paddle.width / 2;
+      } else {
+        paddle.x = ball.x - paddle.width / 2;
+      }
+      paddle.x = Math.max(0, Math.min(canvas.width - paddle.width, paddle.x));
+      
+      if (ball.y + ball.radius > paddle.y &&
+          ball.y - ball.radius < paddle.y + paddle.height &&
+          ball.x > paddle.x &&
+          ball.x < paddle.x + paddle.width) {
+        if (ball.vy > 0) {
+          ball.vy *= -1;
+          ball.y = paddle.y - ball.radius;
+        }
+      }
+      
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.1;
+        p.life -= 1 / 60;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      
+      if (flashAlpha > 0) flashAlpha -= 1 / 60 / 0.3;
+      
+      if (time <= 0 && gameState === 'playing') {
+        gameState = 'fail';
+        lastScore = score;
+        localStorage.setItem('magnaBreakLastScore', score);
+      }
+    }
+    
+    function draw() {
+      const shakeX = shakeAmount > 0 ? (Math.random() - 0.5) * shakeAmount : 0;
+      const shakeY = shakeAmount > 0 ? (Math.random() - 0.5) * shakeAmount : 0;
+      
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+      
+      ctx.fillStyle = '#0f3460';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      if (gameState === 'playing') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('ドラッグしてボール を射出！ ブロック を破壊しろ！', 10, 20);
+      }
+      
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`スコア: ${score}`, 10, canvas.height - 10);
+      ctx.fillText(`残機: ${lives}`, 250, canvas.height - 10);
+      ctx.fillText(`時間: ${Math.max(0, time.toFixed(1))}秒`, 450, canvas.height - 10);
+      ctx.fillText(`ブロック: ${blockCount}`, 680, canvas.height - 10);
+      
+      for (const block of blocks) {
+        ctx.fillStyle = block.color;
+        ctx.fillRect(block.x, block.y, block.width, block.height);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(block.x, block.y, block.width, block.height);
+      }
+      
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      ctx.fillStyle = '#00ff00';
+      ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+      ctx.strokeStyle = '#00aa00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(paddle.x, paddle.y, paddle.width, paddle.height);
+      
+      if (mouseDown) {
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(mouseStartX, mouseStartY);
+        ctx.lineTo(mouseCurrentX, mouseCurrentY);
+        ctx.stroke();
+      }
+      
+      for (const p of particles) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+        ctx.globalAlpha = 1;
+      }
+      
+      if (flashAlpha > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha * 0.7})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      if (gameState === 'win') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('🎉 WIN 🎉', canvas.width / 2, canvas.height / 2 - 50);
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Arial';
+        ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
+        ctx.font = '18px Arial';
+        ctx.fillText('クリック して続ける', canvas.width / 2, canvas.height / 2 + 80);
+      }
+      
+      if (gameState === 'fail') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ff0000';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('💥 FAIL 💥', canvas.width / 2, canvas.height / 2 - 50);
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Arial';
+        ctx.fillText(`スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
+        ctx.fillText(`前回: ${lastScore}`, canvas.width / 2, canvas.height / 2 + 60);
+        ctx.font = '18px Arial';
+        ctx.fillText('クリック してリトライ', canvas.width / 2, canvas.height / 2 + 110);
+      }
+      
+      ctx.restore();
+      
+      if (shakeAmount > 0) shakeAmount -= 0.5;
+    }
+    
+    let lastTime = Date.now();
+    function gameLoop() {
+      const currentTime = Date.now();
+      const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.016);
+      lastTime = currentTime;
+      
+      update(deltaTime);
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    initBlocks();
+    gameLoop();
+  </script>
+</body>
+</html>

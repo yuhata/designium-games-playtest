@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>たねコレ！</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #87CEEB, #E0F6FF);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const GAME_STATE = { PLAYING: 'playing', WIN: 'win', LOSE: 'lose' };
+
+const GRID_COLS = 5;
+const GRID_ROWS = 4;
+const CELL_SIZE = 100;
+const GRID_START_X = 50;
+const GRID_START_Y = 100;
+
+const GROWTH_STAGES = [
+  { emoji: '🌱', scale: 0.5 },
+  { emoji: '🌿', scale: 0.7 },
+  { emoji: '🌾', scale: 0.85 },
+  { emoji: '🌻', scale: 1.0 }
+];
+
+let gameState = GAME_STATE.PLAYING;
+let crops = [];
+let vCount = 0;
+let startTime = Date.now();
+let gameStarted = false;
+let harvestAnimations = [];
+let particles = [];
+let winAnimTime = 0;
+let collectedSeeds = [];
+
+function init() {
+  gameStarted = true;
+  startTime = Date.now();
+  crops = [];
+  vCount = 0;
+  gameState = GAME_STATE.PLAYING;
+  harvestAnimations = [];
+  particles = [];
+  winAnimTime = 0;
+  collectedSeeds = [];
+}
+
+function getCellFromCoords(x, y) {
+  const relX = x - GRID_START_X;
+  const relY = y - GRID_START_Y;
+  
+  if (relX < 0 || relY < 0) return null;
+  
+  const col = Math.floor(relX / CELL_SIZE);
+  const row = Math.floor(relY / CELL_SIZE);
+  
+  if (col >= GRID_COLS || row >= GRID_ROWS) return null;
+  
+  return { col, row };
+}
+
+function getCropAtCell(col, row) {
+  return crops.find(c => c.col === col && c.row === row);
+}
+
+function handleCanvasClick(e) {
+  if (!gameStarted || gameState !== GAME_STATE.PLAYING) return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  const cell = getCellFromCoords(x, y);
+  if (!cell) return;
+  
+  const existingCrop = getCropAtCell(cell.col, cell.row);
+  
+  if (!existingCrop) {
+    crops.push({
+      col: cell.col,
+      row: cell.row,
+      stage: 0,
+      watered: false,
+      plantTime: Date.now()
+    });
+  } else if (!existingCrop.watered && existingCrop.stage < 3) {
+    existingCrop.watered = true;
+  } else if (existingCrop.stage >= 3) {
+    crops = crops.filter(c => c !== existingCrop);
+    vCount++;
+    
+    const cellX = GRID_START_X + cell.col * CELL_SIZE + CELL_SIZE / 2;
+    const cellY = GRID_START_Y + cell.row * CELL_SIZE + CELL_SIZE / 2;
+    harvestAnimations.push({
+      startX: cellX,
+      startY: cellY,
+      endX: 750,
+      endY: 50,
+      progress: 0,
+      duration: 0.3
+    });
+    
+    collectedSeeds.push({
+      id: vCount,
+      emoji: '🌻'
+    });
+    
+    if (vCount >= 20) {
+      gameState = GAME_STATE.WIN;
+      createWinParticles();
+    }
+  }
+}
+
+function handleMouseDown(e) {
+  // Mouse tracking
+}
+
+function handleMouseUp(e) {
+  // Mouse tracking
+}
+
+function handleMouseMove(e) {
+  // Mouse tracking
+}
+
+function createWinParticles() {
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  
+  for (let i = 0; i < 200; i++) {
+    const angle = (Math.PI * 2 * i) / 200;
+    const speed = 3 + Math.random() * 4;
+    
+    particles.push({
+      x: centerX,
+      y: centerY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 2000,
+      maxLife: 2000,
+      color: `hsl(${45 + Math.random() * 30}, 100%, 50%)`
+    });
+  }
+}
+
+function update(deltaTime) {
+  if (!gameStarted || gameState === GAME_STATE.WIN || gameState === GAME_STATE.LOSE) return;
+  
+  const elapsed = (Date.now() - startTime) / 1000;
+  const dayCount = 1 + Math.floor(elapsed);
+  
+  if (elapsed > 30 && dayCount > 30 && vCount < 20) {
+    gameState = GAME_STATE.LOSE;
+  }
+  
+  crops.forEach(crop => {
+    const cropAge = (Date.now() - crop.plantTime) / 1000;
+    const growthRate = crop.watered ? 2.0 : 1.0;
+    const timePer = 2.0;
+    crop.stage = Math.min(3, Math.floor((cropAge * growthRate) / timePer));
+  });
+  
+  harvestAnimations.forEach((anim, idx) => {
+    anim.progress += deltaTime / anim.duration;
+    if (anim.progress >= 1) {
+      harvestAnimations.splice(idx, 1);
+    }
+  });
+  
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    p.life -= deltaTime * 1000;
+  });
+  particles = particles.filter(p => p.life > 0);
+}
+
+function draw() {
+  ctx.fillStyle = '#E8F5E9';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.fillStyle = '#2E7D32';
+  ctx.font = 'bold 32px Arial';
+  ctx.fillText('たねコレ！', 30, 50);
+  
+  const elapsed = (Date.now() - startTime) / 1000;
+  const dayCount = 1 + Math.floor(elapsed);
+  
+  ctx.fillStyle = '#D4AF37';
+  ctx.fillRect(650, 20, 130, 60);
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 14px Arial';
+  ctx.fillText('収穫済み', 660, 37);
+  ctx.font = 'bold 28px Arial';
+  ctx.fillText(vCount + '/20', 660, 62);
+  
+  ctx.fillStyle = '#87CEEB';
+  ctx.fillRect(520, 20, 120, 60);
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 14px Arial';
+  ctx.fillText('日数', 530, 37);
+  ctx.font = 'bold 28px Arial';
+  ctx.fillText('Day ' + dayCount, 530, 62);
+  
+  ctx.strokeStyle = '#BDBDBD';
+  ctx.lineWidth = 2;
+  for (let r = 0; r <= GRID_ROWS; r++) {
+    ctx.beginPath();
+    ctx.moveTo(GRID_START_X, GRID_START_Y + r * CELL_SIZE);
+    ctx.lineTo(GRID_START_X + GRID_COLS * CELL_SIZE, GRID_START_Y + r * CELL_SIZE);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= GRID_COLS; c++) {
+    ctx.beginPath();
+    ctx.moveTo(GRID_START_X + c * CELL_SIZE, GRID_START_Y);
+    ctx.lineTo(GRID_START_X + c * CELL_SIZE, GRID_START_Y + GRID_ROWS * CELL_SIZE);
+    ctx.stroke();
+  }
+  
+  crops.forEach(crop => {
+    const x = GRID_START_X + crop.col * CELL_SIZE + CELL_SIZE / 2;
+    const y = GRID_START_Y + crop.row * CELL_SIZE + CELL_SIZE / 2;
+    
+    ctx.fillStyle = '#D2B48C';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 25, 35, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    const stageData = GROWTH_STAGES[crop.stage];
+    ctx.font = `${Math.round(60 * stageData.scale)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(stageData.emoji, x, y - 8);
+    
+    if (crop.watered && crop.stage < 3) {
+      ctx.fillStyle = 'rgba(100, 150, 255, 0.2)';
+      ctx.fillRect(
+        GRID_START_X + crop.col * CELL_SIZE,
+        GRID_START_Y + crop.row * CELL_SIZE,
+        CELL_SIZE,
+        CELL_SIZE
+      );
+    }
+  });
+  
+  harvestAnimations.forEach(anim => {
+    const p = anim.progress;
+    const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    
+    const cx = anim.startX + (anim.endX - anim.startX) * ease;
+    const cy = anim.startY + (anim.endY - anim.startY) * ease;
+    
+    const s = 0.5 + 1.0 * Math.sin(p * Math.PI);
+    
+    ctx.font = `${Math.round(48 * s)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 1 - p;
+    ctx.fillText('🌻', cx, cy);
+    ctx.globalAlpha = 1;
+  });
+  
+  particles.forEach(p => {
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+  
+  ctx.fillStyle = '#555';
+  ctx.font = '13px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('タップで：植える → 水やる → 収穫', 30, 575);
+  ctx.fillText('20種を集めたらクリア！', 30, 595);
+  
+  if (gameState === GAME_STATE.WIN) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const sc = Math.sin(winAnimTime * 2) * 0.15 + 1.0;
+    ctx.fillStyle = '#FFD700';
+    ctx.font = `bold ${Math.round(96 * sc)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎉', canvas.width / 2, canvas.height / 2 - 60);
+    
+    ctx.fillStyle = '#2E7D32';
+    ctx.font = `bold ${Math.round(52 * sc)}px Arial`;
+    ctx.fillText('20種を集めた！', canvas.width / 2, canvas.height / 2 + 20);
+    
+    ctx.fillStyle = '#666';
+    ctx.font = '18px Arial';
+    ctx.fillText('クリア！', canvas.width / 2, canvas.height / 2 + 80);
+    
+    winAnimTime += 0.016;
+  }
+  
+  if (gameState === GAME_STATE.LOSE) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#D32F2F';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - 40);
+    
+    ctx.fillStyle = '#666';
+    ctx.font = '20px Arial';
+    ctx.fillText(`収穫: ${vCount}/20`, canvas.width / 2, canvas.height / 2 + 30);
+    ctx.font = '16px Arial';
+    ctx.fillText('ページを再読み込みして再挑戦', canvas.width / 2, canvas.height / 2 + 80);
+  }
+}
+
+let lastTime = Date.now();
+function gameLoop() {
+  const now = Date.now();
+  const deltaTime = (now - lastTime) / 1000;
+  lastTime = now;
+  
+  update(deltaTime);
+  draw();
+  
+  requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener('click', handleCanvasClick);
+canvas.addEventListener('mousedown', handleMouseDown);
+canvas.addEventListener('mouseup', handleMouseUp);
+canvas.addEventListener('mousemove', handleMouseMove);
+
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 0) {
+    const rect = canvas.getBoundingClientRect();
+    const clickEvent = new MouseEvent('click', {
+      clientX: e.touches[0].clientX,
+      clientY: e.touches[0].clientY
+    });
+    canvas.dispatchEvent(clickEvent);
+  }
+});
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+});
+
+init();
+gameLoop();
+</script>
+</body>
+</html>

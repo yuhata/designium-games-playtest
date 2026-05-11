@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>フルーツタワー</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Arial", sans-serif;
+      background: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #container {
+      position: relative;
+      width: 400px;
+      height: 600px;
+      background: #fff;
+      border: 2px solid #333;
+      overflow: hidden;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(to bottom, #e8f4f8 0%, #f0f8f0 100%);
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      font-size: 14px;
+      z-index: 10;
+      color: #333;
+    }
+    .info-row {
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+    .goal {
+      color: #d9534f;
+      font-size: 16px;
+      margin-top: 8px;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.7);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 20px;
+    }
+    .overlay-content {
+      text-align: center;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 30px;
+      border-radius: 10px;
+    }
+    .overlay-title {
+      font-size: 40px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+    .overlay-score {
+      font-size: 24px;
+      margin: 10px 0;
+    }
+    .overlay-rank {
+      font-size: 18px;
+      margin-top: 15px;
+      color: #ffd700;
+    }
+    .new-best {
+      font-size: 28px;
+      color: #ff6b6b;
+      font-weight: bold;
+      margin-top: 10px;
+      animation: pulse 0.6s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .restart-btn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #5cb85c;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .restart-btn:hover {
+      background: #4cae4c;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="ui">
+      <div class="info-row">Score: <span id="scoreDisplay">0</span></div>
+      <div class="info-row">Max Tier: <span id="tierDisplay">1</span></div>
+      <div class="info-row">Drops: <span id="dropsDisplay">0</span></div>
+      <div class="goal">🎯 Goal: Tier 10を作ろう！</div>
+      <div style="font-size: 12px; color: #666; margin-top: 8px;">
+        5列から選んでタップ ↓
+      </div>
+    </div>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div id="overlay">
+      <div class="overlay-content">
+        <div class="overlay-title" id="overlayTitle">GAME OVER</div>
+        <div class="overlay-score">Final Score: <span id="overlayScore">0</span></div>
+        <div class="overlay-score">Max Tier: <span id="overlayTier">1</span></div>
+        <div id="newBestMsg" class="new-best"></div>
+        <div class="overlay-rank">
+          Rank: <span id="overlayRank">E</span>
+        </div>
+        <button class="restart-btn" onclick="location.reload()">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== グローバルデバッグコントラクト =====
+    window.__gameDebug = {
+      dropZones: [],
+      metrics: { score: 0, drops: 0, maxTier: 1, phase: 'playing', remaining: 0 },
+      dropObject: function(id) {
+        const colIdx = parseInt(id.replace('col_', ''), 10);
+        if (colIdx >= 0 && colIdx < 5) {
+          dropFruitAt(colIdx);
+          game.drops++;
+          window.__gameDebug.metrics.drops = game.drops;
+          updateDebugMetrics();
+        }
+      }
+    };
+
+    // ===== キャンバス初期化 =====
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const COLS = 5;
+    const GRAVITY = 0.4;
+    const FRICTION = 0.98;
+    const RADIUS_MAP = [0, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+    const COLOR_MAP = [
+      '#999', '#ff4444', '#ff9944', '#ffdd44', '#99dd44',
+      '#44dd44', '#44dddd', '#4499ff', '#9944ff', '#ff44dd', '#ffd700'
+    ];
+
+    // ===== ゲーム状態 =====
+    const game = {
+      state: 'PLAYING',
+      fruits: [],
+      score: 0,
+      drops: 0,
+      maxTier: 1,
+      nextFruit: null,
+      nextTier: 1,
+      remaining: 0,
+      bestScore: parseInt(localStorage.getItem('fruitTowerBest') || '0', 10),
+      particles: []
+    };
+
+    // ===== フルーツクラス =====
+    class Fruit {
+      constructor(tier, x, y, vx = 0, vy = 0) {
+        this.tier = tier;
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = RADIUS_MAP[tier];
+        this.mergeTime = 0;
+        this.falling = true;
+      }
+
+      update() {
+        if (this.falling) {
+          this.vy += GRAVITY;
+          this.vy *= FRICTION;
+          this.x += this.vx;
+          this.y += this.vy;
+          this.vx *= FRICTION;
+        }
+
+        // 床衝突
+        if (this.y + this.radius >= canvas.height) {
+          this.y = canvas.height - this.radius;
+          this.vy = 0;
+          this.falling = false;
+        }
+
+        // 壁衝突
+        if (this.x - this.radius < 0) {
+          this.x = this.radius;
+          this.vx = Math.abs(this.vx) * 0.5;
+        }
+        if (this.x + this.radius > canvas.width) {
+          this.x = canvas.width - this.radius;
+          this.vx = -Math.abs(this.vx) * 0.5;
+        }
+
+        // マージ状態の色変化演出
+        if (this.mergeTime > 0) {
+          this.mergeTime--;
+        }
+      }
+
+      draw() {
+        const glow = this.mergeTime > 0 ? 8 : 0;
+        if (glow > 0) {
+          ctx.shadowColor = COLOR_MAP[this.tier];
+          ctx.shadowBlur = glow;
+        }
+        ctx.fillStyle = COLOR_MAP[this.tier];
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // ティア表示（3以上）
+        if (this.tier >= 3) {
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 12px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(this.tier, this.x, this.y);
+        }
+      }
+    }
+
+    // ===== パーティクルクラス =====
+    class Particle {
+      constructor(x, y, vx, vy, color, life) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.color = color;
+        this.life = life;
+        this.maxLife = life;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.2;
+        this.life--;
+      }
+
+      draw() {
+        const alpha = this.life / this.maxLife;
+        ctx.fillStyle = this.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // ===== ドロップゾーン定義 =====
+    function updateDropZones() {
+      window.__gameDebug.dropZones = [];
+      for (let col = 0; col < COLS; col++) {
+        window.__gameDebug.dropZones.push({
+          id: `col_${col}`,
+          col: col,
+          x: (canvas.width / COLS) * col,
+          y: 0,
+          w: canvas.width / COLS,
+          h: 60
+        });
+      }
+    }
+
+    // ===== 指定列にフルーツをドロップ =====
+    function dropFruitAt(colIdx) {
+      if (game.state !== 'PLAYING') return;
+      
+      const colWidth = canvas.width / COLS;
+      const x = colWidth * colIdx + colWidth / 2;
+      const fruit = new Fruit(game.nextTier, x, -20, 0, 0);
+      game.fruits.push(fruit);
+      
+      // 次フルーツを抽選
+      game.nextTier = Math.floor(Math.random() * 3) + 1;
+      updateDebugMetrics();
+    }
+
+    // ===== デバッグメトリクス更新 =====
+    function updateDebugMetrics() {
+      window.__gameDebug.metrics.score = game.score;
+      window.__gameDebug.metrics.drops = game.drops;
+      window.__gameDebug.metrics.maxTier = game.maxTier;
+      window.__gameDebug.metrics.phase = game.state;
+      window.__gameDebug.metrics.remaining = game.fruits.length;
+      updateUIDisplay();
+    }
+
+    // ===== UI更新 =====
+    function updateUIDisplay() {
+      document.getElementById('scoreDisplay').textContent = game.score;
+      document.getElementById('tierDisplay').textContent = game.maxTier;
+      document.getElementById('dropsDisplay').textContent = game.drops;
+    }
+
+    // ===== 衝突判定 & 合体 =====
+    function checkCollisions() {
+      for (let i = 0; i < game.fruits.length; i++) {
+        for (let j = i + 1; j < game.fruits.length; j++) {
+          const f1 = game.fruits[i];
+          const f2 = game.fruits[j];
+          const dx = f1.x - f2.x;
+          const dy = f1.y - f2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const minDist = f1.radius + f2.radius;
+
+          if (dist < minDist) {
+            // 同ティア合体
+            if (f1.tier === f2.tier && f1.tier < 10) {
+              const mergedTier = f1.tier + 1;
+              const mergedX = (f1.x + f2.x) / 2;
+              const mergedY = (f1.y + f2.y) / 2;
+              
+              // 合体演出
+              createMergeParticles(mergedX, mergedY, f1.tier);
+              
+              game.fruits.splice(j, 1);
+              game.fruits.splice(i, 1);
+              
+              const newFruit = new Fruit(mergedTier, mergedX, mergedY, 0, -2);
+              newFruit.mergeTime = 15;
+              game.fruits.push(newFruit);
+              
+              // スコア & Tier更新
+              game.score += mergedTier * 100;
+              if (mergedTier > game.maxTier) {
+                game.maxTier = mergedTier;
+              }
+              updateDebugMetrics();
+              return;
+            }
+            // 異なるティア: 弾性衝突
+            else if (f1.tier !== f2.tier) {
+              const vx1 = f1.vx, vy1 = f1.vy;
+              const vx2 = f2.vx, vy2 = f2.vy;
+              
+              const angle = Math.atan2(dy, dx);
+              const sin = Math.sin(angle);
+              const cos = Math.cos(angle);
+              
+              const vx1r = vx1 * cos + vy1 * sin;
+              const vy1r = vy1 * cos - vx1 * sin;
+              const vx2r = vx2 * cos + vy2 * sin;
+              const vy2r = vy2 * cos - vx2 * sin;
+              
+              f1.vx = vx2r * cos - vy1r * sin;
+              f1.vy = vy1r * cos + vx2r * sin;
+              f2.vx = vx1r * cos - vy2r * sin;
+              f2.vy = vy2r * cos + vx1r * sin;
+              
+              f1.x += f1.vx;
+              f1.y += f1.vy;
+              f2.x += f2.vx;
+              f2.y += f2.vy;
+              
+              f1.falling = true;
+              f2.falling = true;
+            }
+          }
+        }
+      }
+    }
+
+    // ===== 合体パーティクル生成 =====
+    function createMergeParticles(x, y, tier) {
+      const color = COLOR_MAP[tier];
+      const rgb = hexToRgb(color);
+      for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI * 2 * i) / 12;
+        const vx = Math.cos(angle) * 3;
+        const vy = Math.sin(angle) * 3;
+        game.particles.push(new Particle(x, y, vx, vy, rgb, 20));
+      }
+    }
+
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    // ===== 高さ判定 =====
+    function checkGameOver() {
+      const threshold = canvas.height * 0.9;
+      for (let f of game.fruits) {
+        if (f.y - f.radius < threshold - 50) {
+          game.state = 'FAIL';
+          endGame();
+          return;
+        }
+      }
+    }
+
+    // ===== ゲーム終了 =====
+    function endGame() {
+      const isWin = game.maxTier >= 10;
+      if (isWin) {
+        game.state = 'WIN';
+      } else {
+        game.state = 'FAIL';
+      }
+
+      // ベストスコア更新
+      const isBest = game.score > game.bestScore;
+      if (isBest) {
+        game.bestScore = game.score;
+        localStorage.setItem('fruitTowerBest', game.bestScore.toString());
+      }
+
+      // ランク計算
+      const rank = calculateRank(game.maxTier);
+
+      // オーバーレイ表示
+      const overlay = document.getElementById('overlay');
+      const title = document.getElementById('overlayTitle');
+      const score = document.getElementById('overlayScore');
+      const tier = document.getElementById('overlayTier');
+      const rankSpan = document.getElementById('overlayRank');
+      const newBestMsg = document.getElementById('newBestMsg');
+
+      title.textContent = isWin ? '🎉 YOU WIN! 🎉' : '💥 GAME OVER';
+      title.style.color = isWin ? '#4cae4c' : '#d9534f';
+      score.textContent = game.score;
+      tier.textContent = game.maxTier;
+      rankSpan.textContent = rank;
+
+      if (isBest && game.score > 0) {
+        newBestMsg.textContent = '🌟 NEW BEST! 🌟';
+        newBestMsg.style.display = 'block';
+      } else {
+        newBestMsg.style.display = 'none';
+      }
+
+      overlay.style.display = 'flex';
+    }
+
+    function calculateRank(maxTier) {
+      if (maxTier >= 10) return 'S';
+      if (maxTier >= 8) return 'A';
+      if (maxTier >= 6) return 'B';
+      if (maxTier >= 4) return 'C';
+      if (maxTier >= 2) return 'D';
+      return 'E';
+    }
+
+    // ===== ゲームループ =====
+    function gameLoop() {
+      // 背景
+      ctx.fillStyle = 'rgba(230, 240, 245, 0.8)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 90%警告ライン
+      const threshold = canvas.height * 0.9;
+      ctx.strokeStyle = '#ff4444';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, threshold);
+      ctx.lineTo(canvas.width, threshold);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // ドロップゾーン表示
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < COLS; i++) {
+        const x = (canvas.width / COLS) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, 60);
+        ctx.stroke();
+      }
+
+      if (game.state === 'PLAYING') {
+        // フルーツ更新
+        for (let f of game.fruits) {
+          f.update();
+        }
+
+        // 衝突 & 合体
+        checkCollisions();
+        checkGameOver();
+
+        // 次フルーツプレビュー（上部中央）
+        if (game.nextTier) {
+          const prevRadius = RADIUS_MAP[game.nextTier];
+          ctx.fillStyle = COLOR_MAP[game.nextTier];
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          ctx.arc(canvas.width / 2, -prevRadius - 5, prevRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // パーティクル更新
+      for (let i = game.particles.length - 1; i >= 0; i--) {
+        game.particles[i].update();
+        if (game.particles[i].life <= 0) {
+          game.particles.splice(i, 1);
+        } else {
+          game.particles[i].draw();
+        }
+      }
+
+      // フルーツ描画
+      for (let f of game.fruits) {
+        f.draw();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ===== マウスイベント =====
+    canvas.addEventListener('mousedown', (e) => {
+      if (game.state !== 'PLAYING') return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const colIdx = Math.floor(x / (canvas.width / COLS));
+      if (colIdx >= 0 && colIdx < COLS) {
+        window.__gameDebug.dropObject(`col_${colIdx}`);
+      }
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (game.state !== 'PLAYING') return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const colIdx = Math.floor(x / (canvas.width / COLS));
+      if (colIdx >= 0 && colIdx < COLS) {
+        window.__gameDebug.dropObject(`col_${colIdx}`);
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      // マウス追跡の必要に応じて追加
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      // マウスアップの処理
+    });
+
+    // ===== 初期化 =====
+    function init() {
+      updateDropZones();
+      game.nextTier = Math.floor(Math.random() * 3) + 1;
+      updateDebugMetrics();
+      gameLoop();
+    }
+
+    init();
+  </script>
+</body>
+</html>

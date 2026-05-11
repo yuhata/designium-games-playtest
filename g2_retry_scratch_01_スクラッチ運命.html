@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スクラッチ運命</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    
+    #game-container {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      border-radius: 20px;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    
+    #instruction {
+      font-size: 1.1em;
+      margin-bottom: 20px;
+      color: #ffeb3b;
+      min-height: 30px;
+    }
+    
+    #stats {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+      font-size: 1.1em;
+    }
+    
+    .stat {
+      flex: 1;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      margin: 0 5px;
+    }
+    
+    #canvas-container {
+      margin: 20px 0;
+    }
+    
+    canvas {
+      border-radius: 15px;
+      background: white;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+      cursor: crosshair;
+    }
+    
+    #message {
+      font-size: 1.3em;
+      margin-top: 20px;
+      min-height: 40px;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    
+    button {
+      margin-top: 20px;
+      padding: 12px 30px;
+      font-size: 1.1em;
+      background: #ffeb3b;
+      color: #333;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.1s;
+    }
+    
+    button:hover {
+      transform: scale(1.05);
+    }
+    
+    button:active {
+      transform: scale(0.95);
+    }
+    
+    .hide {
+      display: none !important;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <h1>✨ スクラッチ運命 ✨</h1>
+    <div id="instruction">ドラッグして削り、3つの運命を集めよう！</div>
+    
+    <div id="stats">
+      <div class="stat">削り率: <span id="rate">0</span>%</div>
+      <div class="stat">当選数: <span id="matched">0</span>/3</div>
+      <div class="stat">ストローク: <span id="strokes">0</span></div>
+    </div>
+    
+    <div id="canvas-container">
+      <canvas id="scratch-canvas"></canvas>
+    </div>
+    
+    <div id="message"></div>
+    
+    <button id="reset-btn" class="hide">もう一度</button>
+  </div>
+
+  <script>
+    // デバッグコントラクト初期化
+    window.__gameDebug = {
+      dragTargets: [],
+      metrics: { rate: 0.0, strokes: 0, phase: "playing" },
+      dragFill: function(id) {},
+      tapObject: function(id) {}
+    };
+
+    const canvas = document.getElementById('scratch-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = 500;
+    canvas.height = 200;
+    
+    const ZONE_WIDTH = 140;
+    const ZONE_HEIGHT = 160;
+    const BRUSH_SIZE = 30;
+    const FILL_THRESHOLD = 0.3;
+    
+    const zones = [
+      {
+        id: 'zone_0',
+        x: 20, y: 20,
+        width: ZONE_WIDTH, height: ZONE_HEIGHT,
+        fillPercentage: 0,
+        completed: false,
+        matched: false,
+        revealed: false,
+        isWinner: Math.random() > 0.33,
+        scratchMask: null,
+        imageCanvas: null
+      },
+      {
+        id: 'zone_1',
+        x: 180, y: 20,
+        width: ZONE_WIDTH, height: ZONE_HEIGHT,
+        fillPercentage: 0,
+        completed: false,
+        matched: false,
+        revealed: false,
+        isWinner: Math.random() > 0.33,
+        scratchMask: null,
+        imageCanvas: null
+      },
+      {
+        id: 'zone_2',
+        x: 340, y: 20,
+        width: ZONE_WIDTH, height: ZONE_HEIGHT,
+        fillPercentage: 0,
+        completed: false,
+        matched: false,
+        revealed: false,
+        isWinner: Math.random() > 0.33,
+        scratchMask: null,
+        imageCanvas: null
+      }
+    ];
+    
+    let metrics = {
+      rate: 0,
+      strokes: 0,
+      remaining: 3,
+      matchedCount: 0
+    };
+    
+    let gameState = {
+      isPlaying: true,
+      isWon: false,
+      isFailed: false,
+      activeDrag: null,
+      dragDistance: 0,
+      lastX: null,
+      lastY: null
+    };
+    
+    function initGame() {
+      zones.forEach(zone => {
+        zone.scratchMask = document.createElement('canvas');
+        zone.scratchMask.width = zone.width;
+        zone.scratchMask.height = zone.height;
+        const maskCtx = zone.scratchMask.getContext('2d');
+        maskCtx.fillStyle = 'black';
+        maskCtx.fillRect(0, 0, zone.width, zone.height);
+        
+        zone.imageCanvas = document.createElement('canvas');
+        zone.imageCanvas.width = zone.width;
+        zone.imageCanvas.height = zone.height;
+        const imgCtx = zone.imageCanvas.getContext('2d');
+        
+        const grad = imgCtx.createLinearGradient(0, 0, zone.width, zone.height);
+        grad.addColorStop(0, '#FFD700');
+        grad.addColorStop(1, '#FFA500');
+        imgCtx.fillStyle = grad;
+        imgCtx.fillRect(0, 0, zone.width, zone.height);
+        
+        imgCtx.font = 'bold 40px Arial';
+        imgCtx.textAlign = 'center';
+        imgCtx.textBaseline = 'middle';
+        imgCtx.fillStyle = 'white';
+        imgCtx.shadowColor = 'rgba(0,0,0,0.5)';
+        imgCtx.shadowBlur = 3;
+        
+        const emoji = zone.isWinner ? '⭐' : '💔';
+        imgCtx.fillText(emoji, zone.width / 2, zone.height / 2 - 20);
+        
+        imgCtx.font = '14px Arial';
+        imgCtx.fillStyle = 'rgba(255,255,255,0.8)';
+        imgCtx.fillText(zone.isWinner ? '当選！' : 'はずれ', zone.width / 2, zone.height / 2 + 30);
+        
+        zone.fillPercentage = 0;
+        zone.completed = false;
+        zone.matched = false;
+        zone.revealed = false;
+      });
+      
+      gameState = {
+        isPlaying: true,
+        isWon: false,
+        isFailed: false,
+        activeDrag: null,
+        dragDistance: 0,
+        lastX: null,
+        lastY: null
+      };
+      
+      metrics = {
+        rate: 0,
+        strokes: 0,
+        remaining: 3,
+        matchedCount: 0
+      };
+      
+      document.getElementById('reset-btn').classList.add('hide');
+      document.getElementById('message').textContent = '';
+      document.getElementById('instruction').textContent = 'ドラッグして削り、3つの運命を集めよう！';
+      
+      updateDebug();
+      draw();
+    }
+    
+    function draw() {
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      zones.forEach(zone => {
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+        
+        if (zone.completed && zone.revealed) {
+          ctx.drawImage(zone.imageCanvas, zone.x, zone.y);
+        } else {
+          ctx.save();
+          ctx.drawImage(zone.imageCanvas, zone.x, zone.y);
+          
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = '#333';
+          ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+          
+          if (zone.scratchMask) {
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.drawImage(zone.scratchMask, zone.x, zone.y);
+            ctx.globalCompositeOperation = 'source-over';
+          }
+          
+          ctx.restore();
+        }
+        
+        if (zone.completed) {
+          ctx.fillStyle = zone.matched ? '#4CAF50' : '#f44336';
+          ctx.fillRect(zone.x + zone.width - 15, zone.y - 15, 10, 10);
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(zone.x + zone.width - 15, zone.y - 15, 10, 10);
+        }
+      });
+    }
+    
+    canvas.addEventListener('mousedown', (e) => {
+      if (!gameState.isPlaying) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const zone = zones.find(z =>
+        x >= z.x && x <= z.x + z.width &&
+        y >= z.y && y <= z.y + z.height &&
+        !z.completed
+      );
+      
+      if (zone) {
+        gameState.activeDrag = zone;
+        gameState.dragDistance = 0;
+        gameState.lastX = x;
+        gameState.lastY = y;
+        canvas.style.cursor = 'grabbing';
+      }
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+      if (!gameState.activeDrag) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const zone = gameState.activeDrag;
+      
+      const maskCtx = zone.scratchMask.getContext('2d');
+      maskCtx.globalCompositeOperation = 'destination-out';
+      maskCtx.beginPath();
+      maskCtx.arc(x - zone.x, y - zone.y, BRUSH_SIZE, 0, Math.PI * 2);
+      maskCtx.fill();
+      
+      if (gameState.lastX !== null && gameState.lastY !== null) {
+        const dx = x - gameState.lastX;
+        const dy = y - gameState.lastY;
+        gameState.dragDistance += Math.hypot(dx, dy);
+      }
+      
+      gameState.lastX = x;
+      gameState.lastY = y;
+      
+      updateFillPercentage(zone);
+      draw();
+      updateUI();
+    });
+    
+    canvas.addEventListener('mouseup', (e) => {
+      if (!gameState.activeDrag) return;
+      
+      const zone = gameState.activeDrag;
+      const threshold = zone.width * zone.height * FILL_THRESHOLD;
+      
+      if (gameState.dragDistance > threshold && !zone.completed) {
+        dragFill(zone.id);
+      }
+      
+      gameState.activeDrag = null;
+      gameState.dragDistance = 0;
+      gameState.lastX = null;
+      gameState.lastY = null;
+      canvas.style.cursor = 'crosshair';
+    });
+    
+    function updateFillPercentage(zone) {
+      const maskCanvas = zone.scratchMask;
+      const maskCtx = maskCanvas.getContext('2d');
+      const imageData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      const data = imageData.data;
+      
+      let clearedPixels = 0;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] === 0) clearedPixels++;
+      }
+      
+      zone.fillPercentage = (clearedPixels / (maskCanvas.width * maskCanvas.height)) * 100;
+    }
+    
+    function dragFill(id) {
+      const zone = zones.find(z => z.id === id);
+      if (!zone || zone.completed) return;
+      
+      zone.completed = true;
+      zone.revealed = true;
+      zone.fillPercentage = 100;
+      
+      if (zone.isWinner) {
+        zone.matched = true;
+        metrics.matchedCount++;
+      }
+      
+      metrics.strokes++;
+      
+      const totalFill = zones.reduce((sum, z) => sum + Math.min(z.fillPercentage, 100), 0);
+      metrics.rate = totalFill / (zones.length * 100);
+      metrics.remaining = 3 - metrics.matchedCount;
+      
+      updateDebug();
+      checkWinCondition();
+      
+      draw();
+      updateUI();
+    }
+    
+    window.__gameDebug.dragFill = dragFill;
+    window.__gameDebug.tapObject = dragFill;
+    
+    function checkWinCondition() {
+      const allCompleted = zones.every(z => z.completed);
+      
+      if (!allCompleted) return;
+      
+      gameState.isPlaying = false;
+      
+      if (metrics.matchedCount === 3) {
+        gameState.isWon = true;
+        window.__gameDebug.metrics.phase = "win";
+        showWinMessage();
+      } else {
+        gameState.isFailed = true;
+        window.__gameDebug.metrics.phase = "fail";
+        showFailMessage();
+      }
+    }
+    
+    function updateUI() {
+      document.getElementById('rate').textContent = Math.floor(metrics.rate * 100);
+      document.getElementById('matched').textContent = metrics.matchedCount;
+      document.getElementById('strokes').textContent = metrics.strokes;
+    }
+    
+    function showWinMessage() {
+      const msg = document.getElementById('message');
+      msg.innerHTML = '<span style="font-size: 1.5em;">💫 3つの運命を手に入れた！ 💫</span><br>あなたは幸運の星に選ばれました！';
+      msg.style.color = '#ffeb3b';
+      msg.style.animation = 'pulse 0.5s ease-in-out';
+      
+      document.getElementById('reset-btn').classList.remove('hide');
+    }
+    
+    function showFailMessage() {
+      const msg = document.getElementById('message');
+      msg.innerHTML = '<span style="font-size: 1.5em;">😔 運命は巡らず... 😔</span><br>' + 
+                      (metrics.matchedCount > 0 ? `${metrics.matchedCount}つの運命は掴んだ...` : 'もう一度挑戦してみよう!');
+      msg.style.color = '#ff6b6b';
+      
+      document.getElementById('reset-btn').classList.remove('hide');
+    }
+    
+    function updateDebug() {
+      window.__gameDebug.dragTargets = zones
+        .filter(z => !z.completed)
+        .map(z => ({
+          id: z.id,
+          filled: Math.min(z.fillPercentage, 100),
+          matched: z.matched,
+          bounds: {
+            x: z.x,
+            y: z.y,
+            width: z.width,
+            height: z.height
+          }
+        }));
+      
+      window.__gameDebug.metrics = {
+        rate: parseFloat(metrics.rate.toFixed(2)),
+        strokes: metrics.strokes,
+        phase: gameState.isWon ? "win" : (gameState.isFailed ? "fail" : "playing")
+      };
+    }
+    
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      initGame();
+    });
+    
+    function gameLoop() {
+      updateDebug();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    initGame();
+    gameLoop();
+  </script>
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ビル帝国</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Arial", sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #111;
+      color: #fff;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #000;
+      border: 3px solid #333;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    #ui {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      z-index: 10;
+      background: rgba(0,0,0,0.85);
+      padding: 12px 16px;
+      border-radius: 6px;
+      line-height: 1.6;
+      border: 1px solid #444;
+    }
+    #population { color: #4CAF50; font-weight: bold; }
+    #timer { color: #FF9800; font-weight: bold; }
+    .goal { font-size: 14px; color: #aaa; margin-top: 8px; }
+    #instruction {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      font-size: 13px;
+      background: rgba(0,0,0,0.85);
+      padding: 10px 14px;
+      border-radius: 6px;
+      max-width: 350px;
+      border: 1px solid #444;
+      line-height: 1.5;
+    }
+    #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 100;
+      text-align: center;
+    }
+    #gameOverScreen.win {
+      background: linear-gradient(135deg, rgba(0,255,0,0.15), rgba(0,0,0,0.95));
+    }
+    #gameOverScreen.fail {
+      background: linear-gradient(135deg, rgba(255,68,68,0.15), rgba(0,0,0,0.95));
+    }
+    #gameOverTitle {
+      font-size: 56px;
+      margin-bottom: 20px;
+      animation: popIn 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    }
+    #gameOverScreen.win #gameOverTitle { color: #00ff00; text-shadow: 0 0 20px #00ff00; }
+    #gameOverScreen.fail #gameOverTitle { color: #ff4444; text-shadow: 0 0 20px #ff4444; }
+    #gameOverScore {
+      font-size: 24px;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    #gameOverMessage {
+      font-size: 18px;
+      margin: 15px 0 30px 0;
+      opacity: 0.9;
+    }
+    #gameOverScreen button {
+      padding: 14px 40px;
+      font-size: 16px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #0066cc, #0052a3);
+      color: #fff;
+      border: 2px solid #00aaff;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    #gameOverScreen button:hover {
+      background: linear-gradient(135deg, #0052a3, #003d7a);
+      box-shadow: 0 0 15px #00aaff;
+      transform: scale(1.05);
+    }
+    @keyframes popIn {
+      0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1) rotate(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+      <div>人口: <span id="population">0</span> / 500,000</div>
+      <div>残り時間: <span id="timer">02:00</span></div>
+      <div class="goal">▸ 目標: 人口50万人達成</div>
+    </div>
+    <div id="instruction">
+      【操作】マウスでグリッドをクリックして建物を建設。民住・商業・工業が完成するまで待つ→人口が増加。50万人達成で勝利！
+    </div>
+    <div id="gameOverScreen">
+      <h1 id="gameOverTitle">VICTORY!</h1>
+      <p id="gameOverScore">最終人口: 0</p>
+      <p id="gameOverMessage">帝国を完成させました！</p>
+      <button onclick="location.reload()">もう一度プレイ</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const populationSpan = document.getElementById('population');
+    const timerSpan = document.getElementById('timer');
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const state = {
+      population: 0,
+      time: 120,
+      gameOver: false,
+      won: false,
+      buildings: [],
+      viewportScale: 1.0,
+      targetViewportScale: 1.0,
+      centerX: 0,
+      centerY: 0
+    };
+
+    const cellSize = 40;
+    const gridWidth = 100;
+    const gridHeight = 75;
+    const occupied = new Set();
+
+    const buildingTypes = {
+      residential: { name: '民住', population: 1000, color: '#4CAF50', time: 2.5 },
+      commercial: { name: '商業', population: 500, color: '#2196F3', time: 3.5 },
+      industrial: { name: '工業', population: 2000, color: '#FF9800', time: 4.0 }
+    };
+
+    function selectBuildingType() {
+      const rand = Math.random();
+      if (rand < 0.55) return 'residential';
+      if (rand < 0.80) return 'commercial';
+      return 'industrial';
+    }
+
+    function createBuilding(gridX, gridY) {
+      const type = selectBuildingType();
+      const typeData = buildingTypes[type];
+      return {
+        gridX,
+        gridY,
+        type,
+        buildTime: typeData.time,
+        maxBuildTime: typeData.time,
+        completed: false,
+        population: typeData.population,
+        color: typeData.color,
+        createdAt: Date.now()
+      };
+    }
+
+    canvas.addEventListener('click', (e) => {
+      if (state.gameOver) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      
+      const x = (screenX - centerX) / state.viewportScale + centerX;
+      const y = (screenY - centerY) / state.viewportScale + centerY;
+      
+      const gridX = Math.floor(x / cellSize);
+      const gridY = Math.floor(y / cellSize);
+      
+      const key = `${gridX},${gridY}`;
+      if (occupied.has(key)) return;
+      
+      if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
+        const building = createBuilding(gridX, gridY);
+        state.buildings.push(building);
+        occupied.add(key);
+      }
+    });
+
+    let lastTime = Date.now();
+    function update() {
+      const now = Date.now();
+      const deltaTime = Math.min((now - lastTime) / 1000, 0.016 * 2);
+      lastTime = now;
+
+      if (state.gameOver) return;
+
+      state.time -= deltaTime;
+
+      for (let building of state.buildings) {
+        if (!building.completed) {
+          building.buildTime -= deltaTime;
+          if (building.buildTime <= 0) {
+            building.completed = true;
+            state.population += building.population;
+          }
+        }
+      }
+
+      if (state.population >= 500000) {
+        state.won = true;
+        state.gameOver = true;
+        state.targetViewportScale = 0.12;
+        showGameOver(true);
+        return;
+      }
+
+      if (state.time <= 0 && state.population < 500000) {
+        state.won = false;
+        state.gameOver = true;
+        showGameOver(false);
+        return;
+      }
+
+      const diff = state.targetViewportScale - state.viewportScale;
+      if (Math.abs(diff) > 0.001) {
+        state.viewportScale += diff * 0.015;
+      }
+
+      populationSpan.textContent = Math.floor(state.population).toLocaleString();
+      const minutes = Math.max(0, Math.floor(state.time / 60));
+      const seconds = Math.max(0, Math.floor(state.time % 60));
+      timerSpan.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+      if (state.time <= 10 && state.time > 0) {
+        timerSpan.style.color = state.time % 1 > 0.5 ? '#ff4444' : '#FF9800';
+      } else {
+        timerSpan.style.color = '#FF9800';
+      }
+    }
+
+    function showGameOver(won) {
+      gameOverScreen.classList.toggle('win', won);
+      gameOverScreen.classList.toggle('fail', !won);
+      
+      const finalPop = Math.floor(state.population).toLocaleString();
+      
+      if (won) {
+        document.getElementById('gameOverTitle').textContent = '🎉 帝国完成 🎉';
+        document.getElementById('gameOverScore').textContent = `最終人口: ${finalPop}`;
+        document.getElementById('gameOverMessage').textContent = `見事に50万人の帝国を築き上げました！`;
+      } else {
+        document.getElementById('gameOverTitle').textContent = '⏰ ゲームオーバー ⏰';
+        document.getElementById('gameOverScore').textContent = `最終人口: ${finalPop}`;
+        document.getElementById('gameOverMessage').textContent = `時間切れ。もう少しで帝国完成でした。`;
+      }
+      
+      gameOverScreen.style.display = 'flex';
+    }
+
+    function draw() {
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.scale(state.viewportScale, state.viewportScale);
+      ctx.translate(-centerX, -centerY);
+
+      // グリッド
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= gridWidth * cellSize; x += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, gridHeight * cellSize);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= gridHeight * cellSize; y += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(gridWidth * cellSize, y);
+        ctx.stroke();
+      }
+
+      // 背景グラデーション効果（支配感演出）
+      if (state.population >= 250000) {
+        const alpha = Math.min(0.4, (state.population - 250000) / 250000 * 0.4);
+        ctx.fillStyle = `rgba(76, 175, 80, ${alpha * 0.3})`;
+        ctx.fillRect(0, 0, gridWidth * cellSize, gridHeight * cellSize);
+      }
+
+      // 建物描画
+      for (let building of state.buildings) {
+        const x = building.gridX * cellSize;
+        const y = building.gridY * cellSize;
+        
+        ctx.fillStyle = building.color;
+        const margin = 3;
+        ctx.fillRect(x + margin, y + margin, cellSize - margin * 2, cellSize - margin * 2);
+
+        if (!building.completed) {
+          const progress = 1 - (building.buildTime / building.maxBuildTime);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.fillRect(x + margin, y + cellSize - 8, (cellSize - margin * 2) * progress, 5);
+          
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.font = 'bold 9px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(Math.ceil(building.buildTime) + 's', x + cellSize / 2, y + cellSize / 2 + 4);
+        } else {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + margin, y + margin, cellSize - margin * 2, cellSize - margin * 2);
+        }
+      }
+
+      ctx.restore();
+
+      // ズームインジケーター
+      if (state.viewportScale < 0.5) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`帝国が拡大中... スケール: ${(state.viewportScale * 100).toFixed(0)}%`, canvas.width / 2, 40);
+      }
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

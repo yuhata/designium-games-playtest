@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>モンスター大合体</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 800px;
+      background: #1a1a1a;
+      border: 4px solid #333;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #gameOverPanel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      padding: 40px;
+      border-radius: 15px;
+      text-align: center;
+      color: white;
+      font-size: 36px;
+      z-index: 100;
+      display: none;
+      cursor: pointer;
+      border: 3px solid white;
+    }
+    #gameOverPanel.show {
+      display: block;
+      animation: popIn 0.4s ease-out;
+    }
+    #gameOverPanel.win {
+      background: rgba(0, 150, 0, 0.95);
+      border-color: #00ff00;
+    }
+    #gameOverPanel.fail {
+      background: rgba(150, 0, 0, 0.95);
+      border-color: #ff0000;
+    }
+    @keyframes popIn {
+      0% { transform: translate(-50%, -50%) scale(0); }
+      70% { transform: translate(-50%, -50%) scale(1.1); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="gameOverPanel"></div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameOverPanel = document.getElementById('gameOverPanel');
+
+    canvas.width = 800;
+    canvas.height = 800;
+
+    const GRID_SIZE = 5;
+    const CELL_SIZE = canvas.width / GRID_SIZE;
+
+    let grid = [];
+    let maxLv = 1;
+    let timer = 45;
+    let gameOver = false;
+    let gameWon = false;
+    let draggedCell = null;
+    let dragMouse = { x: 0, y: 0 };
+    let score = 0;
+    let mergeAnimations = [];
+
+    function init() {
+      grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+      maxLv = 1;
+      timer = 45;
+      gameOver = false;
+      gameWon = false;
+      draggedCell = null;
+      score = 0;
+      mergeAnimations = [];
+
+      const initialCount = 12;
+      for (let i = 0; i < initialCount; i++) {
+        let r, c;
+        do {
+          r = Math.floor(Math.random() * GRID_SIZE);
+          c = Math.floor(Math.random() * GRID_SIZE);
+        } while (grid[r][c] !== null);
+        grid[r][c] = { lv: 1 };
+      }
+
+      gameOverPanel.classList.remove('show', 'win', 'fail');
+    }
+
+    function getCellColor(lv) {
+      if (lv <= 3) return '#5c7cfa';
+      if (lv <= 6) return '#ffd700';
+      if (lv === 7) return '#ff6b6b';
+      return '#ff00ff';
+    }
+
+    function getMonsterSize(lv) {
+      return 18 + lv * 4;
+    }
+
+    function drawGrid() {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * CELL_SIZE, 0);
+        ctx.lineTo(i * CELL_SIZE, canvas.height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, i * CELL_SIZE);
+        ctx.lineTo(canvas.width, i * CELL_SIZE);
+        ctx.stroke();
+      }
+
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? '#0d0d0d' : '#1a1a1a';
+          ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+      }
+    }
+
+    function drawMonster(cx, cy, lv, alpha, scale = 1) {
+      const x = cx * CELL_SIZE + CELL_SIZE / 2;
+      const y = cy * CELL_SIZE + CELL_SIZE / 2;
+      let size = getMonsterSize(lv) * scale;
+
+      if (lv === 7) {
+        size *= 1 + Math.sin(Date.now() * 0.015) * 0.15;
+      }
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = getCellColor(lv);
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${Math.max(12, lv * 2)}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(lv, x, y);
+    }
+
+    function drawMonsters() {
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const cell = grid[r][c];
+          if (cell !== null && !(draggedCell && draggedCell.r === r && draggedCell.c === c)) {
+            drawMonster(c, r, cell.lv, 1);
+          }
+        }
+      }
+    }
+
+    function drawDraggedMonster() {
+      if (draggedCell !== null) {
+        const cell = grid[draggedCell.r][draggedCell.c];
+        if (cell !== null) {
+          const x = dragMouse.x;
+          const y = dragMouse.y;
+          const cx = x / CELL_SIZE;
+          const cy = y / CELL_SIZE;
+
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = getCellColor(cell.lv);
+          const size = getMonsterSize(cell.lv);
+          ctx.beginPath();
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = 'white';
+          ctx.font = `bold ${Math.max(12, cell.lv * 2)}px Arial`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(cell.lv, x, y);
+        }
+      }
+    }
+
+    function drawUI() {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'white';
+      ctx.font = '13px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('ドラッグで隣接セルに移動', 10, 22);
+
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(`Score: ${score}`, canvas.width - 10, 22);
+      ctx.fillText(`Timer: ${Math.max(0, timer).toFixed(1)}s`, canvas.width - 10, 45);
+      ctx.fillText(`Level: ${maxLv}`, canvas.width - 10, 68);
+
+      if (maxLv >= 2) {
+        const barW = 160;
+        const barH = 18;
+        const bx = 10;
+        const by = canvas.height - 32;
+
+        ctx.fillStyle = '#333';
+        ctx.fillRect(bx, by, barW, barH);
+
+        const prog = Math.min(maxLv / 8, 1);
+        ctx.fillStyle = getCellColor(maxLv);
+        ctx.fillRect(bx, by, barW * prog, barH);
+
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, barW, barH);
+
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`進化: ${maxLv}/8`, bx + barW / 2, by + barH / 2);
+      }
+
+      if (timer < 0.5) {
+        ctx.globalAlpha = (Math.sin(Date.now() * 0.012) + 1) / 2 * 0.4;
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+
+        ctx.strokeStyle = `rgba(255, 0, 0, ${(Math.sin(Date.now() * 0.012) + 1) / 2})`;
+        ctx.lineWidth = 6;
+        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+      }
+    }
+
+    function findMergePair() {
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const cell = grid[r][c];
+          if (!cell) continue;
+
+          const dirs = [
+            { dr: 0, dc: 1 },
+            { dr: 1, dc: 0 },
+            { dr: 0, dc: -1 },
+            { dr: -1, dc: 0 }
+          ];
+
+          for (const d of dirs) {
+            const nr = r + d.dr;
+            const nc = c + d.dc;
+            if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+              const n = grid[nr][nc];
+              if (n && n.lv === cell.lv) {
+                return { src: { r, c }, dst: { r: nr, c: nc } };
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    function merge(pair) {
+      const { src, dst } = pair;
+      const lv = grid[src.r][src.c].lv;
+      const newLv = lv + 1;
+
+      grid[dst.r][dst.c].lv = newLv;
+      grid[src.r][src.c] = null;
+
+      score += newLv * 10;
+      maxLv = Math.max(maxLv, newLv);
+
+      mergeAnimations.push({
+        r: dst.r,
+        c: dst.c,
+        lv: newLv,
+        time: 0,
+        duration: 200
+      });
+
+      if (newLv >= 8 && !gameWon) {
+        gameWon = true;
+        setTimeout(() => showGameOver(true), 300);
+      }
+    }
+
+    function updateMergeAnimations(dt) {
+      mergeAnimations = mergeAnimations.filter(anim => {
+        anim.time += dt;
+        return anim.time < anim.duration;
+      });
+    }
+
+    function drawMergeAnimations() {
+      for (const anim of mergeAnimations) {
+        const prog = anim.time / anim.duration;
+        const scale = 1 + prog * 0.3;
+        const alpha = 1 - prog * 0.3;
+        drawMonster(anim.c, anim.r, anim.lv, alpha, scale);
+      }
+    }
+
+    function showGameOver(won) {
+      gameOver = true;
+      gameOverPanel.classList.add('show');
+      if (won) {
+        gameOverPanel.classList.add('win');
+        gameOverPanel.classList.remove('fail');
+        gameOverPanel.innerHTML = `
+          <div>🎉 勝利！</div>
+          <div style="font-size: 24px; margin-top: 15px;">Lv${maxLv} / Score: ${score}</div>
+          <div style="font-size: 16px; margin-top: 15px; opacity: 0.8;">クリックでリスタート</div>
+        `;
+      } else {
+        gameOverPanel.classList.add('fail');
+        gameOverPanel.classList.remove('win');
+        gameOverPanel.innerHTML = `
+          <div>❌ ゲームオーバー</div>
+          <div style="font-size: 24px; margin-top: 15px;">Lv${maxLv} / Score: ${score}</div>
+          <div style="font-size: 16px; margin-top: 15px; opacity: 0.8;">クリックでリスタート</div>
+        `;
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameOver) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const c = Math.floor(x / CELL_SIZE);
+      const r = Math.floor(y / CELL_SIZE);
+
+      if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE && grid[r][c]) {
+        draggedCell = { r, c };
+        dragMouse = { x, y };
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!draggedCell) return;
+      const rect = canvas.getBoundingClientRect();
+      dragMouse.x = e.clientX - rect.left;
+      dragMouse.y = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (!draggedCell) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const tc = Math.floor(x / CELL_SIZE);
+      const tr = Math.floor(y / CELL_SIZE);
+
+      const { r, c } = draggedCell;
+      draggedCell = null;
+
+      const dr = Math.abs(tr - r);
+      const dc = Math.abs(tc - c);
+      if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+        if (tr >= 0 && tr < GRID_SIZE && tc >= 0 && tc < GRID_SIZE) {
+          const temp = grid[tr][tc];
+          grid[tr][tc] = grid[r][c];
+          grid[r][c] = temp;
+
+          setTimeout(() => {
+            let pair;
+            while ((pair = findMergePair())) {
+              merge(pair);
+            }
+          }, 50);
+        }
+      }
+    });
+
+    gameOverPanel.addEventListener('click', () => {
+      if (gameOver) init();
+    });
+
+    let lastTime = Date.now();
+    function gameLoop() {
+      const now = Date.now();
+      const dt = now - lastTime;
+      lastTime = now;
+
+      if (!gameOver) {
+        timer -= dt / 1000;
+        if (timer <= 0) {
+          timer = 0;
+          if (maxLv < 8) {
+            showGameOver(false);
+          }
+        }
+      }
+
+      updateMergeAnimations(dt);
+
+      drawGrid();
+      drawMonsters();
+      drawMergeAnimations();
+      drawDraggedMonster();
+      drawUI();
+
+      if (gameWon && !gameOver) {
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#ffff00';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    init();
+    gameLoop();
+  </script>
+</body>
+</html>

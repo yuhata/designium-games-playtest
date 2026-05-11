@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ぬり絵師</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+      overflow: hidden;
+    }
+    
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #f5f5f5;
+      border-radius: 10px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    
+    canvas {
+      display: block;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    
+    #ui {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      color: #333;
+      font-weight: bold;
+      z-index: 10;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 5px;
+    }
+    
+    .ui-row {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    
+    #instruction {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      color: #666;
+      font-size: 13px;
+      text-align: right;
+      max-width: 280px;
+      z-index: 10;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 5px;
+      line-height: 1.5;
+    }
+    
+    #gameOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      background: rgba(0,0,0,0.75);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      animation: fadeIn 0.3s;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    #gameOverlay.show {
+      display: flex;
+    }
+    
+    #gameOverContent {
+      text-align: center;
+      animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    @keyframes scaleIn {
+      from { transform: scale(0.8); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    
+    #gameOverText {
+      color: white;
+      font-size: 56px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+    
+    #gameOverScore {
+      color: #ffd700;
+      font-size: 20px;
+      margin-bottom: 30px;
+      white-space: pre-line;
+      line-height: 1.6;
+    }
+    
+    #restartBtn {
+      padding: 12px 40px;
+      font-size: 18px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      font-weight: bold;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    
+    #restartBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+    
+    #restartBtn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="ui">
+      <div class="ui-row">📊 塗り進捗: <span id="rateDisplay">0%</span></div>
+      <div class="ui-row">✏️ ストローク: <span id="strokesDisplay">0</span></div>
+      <div class="ui-row">⏱️ 残り時間: <span id="timerDisplay">60.0s</span></div>
+    </div>
+    <div id="instruction">
+      🎨 ドラッグしてエリアを塗ってみてください<br><br>
+      すべてのエリアを塗りきる前に<br>
+      時間が終わらないようにしましょう！
+    </div>
+    <div id="gameOverlay">
+      <div id="gameOverContent">
+        <div id="gameOverText">GAME OVER</div>
+        <div id="gameOverScore"></div>
+        <button id="restartBtn">もう一度プレイ</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== DEBUG CONTRACT ==========
+    window.__gameDebug = {
+      dragTargets: [],
+      metrics: { rate: 0.0, strokes: 0, phase: "playing" },
+      tapObject: function(id) {
+        // Implemented below as dragFill
+      },
+      dragFill: function(id) {
+        // This will be overridden below with actual implementation
+      }
+    };
+
+    // ========== GAME CONFIG ==========
+    const gameConfig = {
+      totalTime: 60,
+      canvasWidth: 800,
+      canvasHeight: 600,
+      fillThreshold: 0.7
+    };
+
+    // ========== GAME STATE ==========
+    let gameState = {
+      phase: 'playing',
+      remainingTime: gameConfig.totalTime,
+      rate: 0.0,
+      strokes: 0,
+      zones: [],
+      strokePath: [],
+      isDrawing: false,
+      sampledPoints: new Set(),
+      failAnimationStart: 0
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ========== ZONE CREATION ==========
+    function createZones() {
+      return [
+        {
+          id: 'zone_0',
+          type: 'ellipse',
+          centerX: 150,
+          centerY: 150,
+          radiusX: 60,
+          radiusY: 50,
+          color: '#FF6B6B',
+          filled: 0,
+          covered: new Set()
+        },
+        {
+          id: 'zone_1',
+          type: 'star',
+          centerX: 650,
+          centerY: 140,
+          outerRadius: 50,
+          innerRadius: 25,
+          points: 5,
+          color: '#4ECDC4',
+          filled: 0,
+          covered: new Set()
+        },
+        {
+          id: 'zone_2',
+          type: 'rect',
+          x: 50,
+          y: 380,
+          width: 140,
+          height: 140,
+          color: '#FFE66D',
+          filled: 0,
+          covered: new Set()
+        },
+        {
+          id: 'zone_3',
+          type: 'polygon',
+          centerX: 400,
+          centerY: 470,
+          vertices: 3,
+          radius: 75,
+          rotation: 0,
+          color: '#95E1D3',
+          filled: 0,
+          covered: new Set(),
+          points: []
+        },
+        {
+          id: 'zone_4',
+          type: 'heart',
+          centerX: 700,
+          centerY: 470,
+          size: 70,
+          color: '#F38181',
+          filled: 0,
+          covered: new Set()
+        }
+      ];
+    }
+
+    // ========== GEOMETRY HELPERS ==========
+    function getPolygonPoints(zone) {
+      if (zone.type === 'star') {
+        const points = [];
+        const totalPoints = zone.points * 2;
+        for (let i = 0; i < totalPoints; i++) {
+          const radius = i % 2 === 0 ? zone.outerRadius : zone.innerRadius;
+          const angle = (i * Math.PI) / zone.points - Math.PI / 2;
+          points.push({
+            x: zone.centerX + radius * Math.cos(angle),
+            y: zone.centerY + radius * Math.sin(angle)
+          });
+        }
+        return points;
+      } else if (zone.type === 'polygon') {
+        const points = [];
+        for (let i = 0; i < zone.vertices; i++) {
+          const angle = (i * Math.PI * 2) / zone.vertices + zone.rotation;
+          points.push({
+            x: zone.centerX + zone.radius * Math.cos(angle),
+            y: zone.centerY + zone.radius * Math.sin(angle)
+          });
+        }
+        return points;
+      }
+      return [];
+    }
+
+    function isPointInPolygon(x, y, points) {
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const xi = points[i].x, yi = points[i].y;
+        const xj = points[j].x, yj = points[j].y;
+        const intersect = ((yi > y) !== (yj > y)) &&
+                          (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function isPointInZone(x, y, zone) {
+      if (zone.type === 'ellipse') {
+        const dx = (x - zone.centerX) / zone.radiusX;
+        const dy = (y - zone.centerY) / zone.radiusY;
+        return dx * dx + dy * dy <= 1;
+      } else if (zone.type === 'rect') {
+        return x >= zone.x && x <= zone.x + zone.width &&
+               y >= zone.y && y <= zone.y + zone.height;
+      } else if (zone.type === 'heart') {
+        return isPointInHeart(x, y, zone);
+      } else if (zone.type === 'star' || zone.type === 'polygon') {
+        const points = zone.points || getPolygonPoints(zone);
+        return isPointInPolygon(x, y, points);
+      }
+      return false;
+    }
+
+    function isPointInHeart(x, y, zone) {
+      const s = zone.size / 100;
+      const dx = (x - zone.centerX) * s;
+      const dy = (y - zone.centerY) * s;
+      
+      if (dy < 0) {
+        const heartTop = Math.sqrt(Math.pow(25 - Math.abs(dx), 2) - dy * dy);
+        return heartTop >= 0 && heartTop <= 25;
+      }
+      return false;
+    }
+
+    function getZoneArea(zone) {
+      if (zone.type === 'ellipse') {
+        return Math.PI * zone.radiusX * zone.radiusY;
+      } else if (zone.type === 'rect') {
+        return zone.width * zone.height;
+      } else {
+        return 12000; // Approximate for other shapes
+      }
+    }
+
+    // ========== DRAWING ==========
+    function drawZone(zone) {
+      ctx.fillStyle = zone.color;
+      
+      if (zone.type === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(zone.centerX, zone.centerY, zone.radiusX, zone.radiusY, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (zone.type === 'rect') {
+        ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+      } else if (zone.type === 'star' || zone.type === 'polygon') {
+        const points = zone.points || getPolygonPoints(zone);
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      } else if (zone.type === 'heart') {
+        drawHeart(zone);
+      }
+    }
+
+    function drawHeart(zone) {
+      const s = zone.size / 100;
+      ctx.save();
+      ctx.translate(zone.centerX, zone.centerY);
+      ctx.scale(s, s);
+      
+      ctx.beginPath();
+      ctx.moveTo(0, -35);
+      ctx.bezierCurveTo(-40, -70, -70, -50, -70, -20);
+      ctx.bezierCurveTo(-70, 10, -40, 40, 0, 75);
+      ctx.bezierCurveTo(40, 40, 70, 10, 70, -20);
+      ctx.bezierCurveTo(70, -50, 40, -70, 0, -35);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.restore();
+    }
+
+    function drawZones() {
+      gameState.zones.forEach(zone => {
+        ctx.globalAlpha = 0.2;
+        drawZone(zone);
+        ctx.globalAlpha = 1.0;
+      });
+    }
+
+    function drawFilledZones() {
+      gameState.zones.forEach(zone => {
+        const coverage = Math.min(zone.filled / gameConfig.fillThreshold, 1.0);
+        ctx.globalAlpha = 0.3 + coverage * 0.7;
+        drawZone(zone);
+        ctx.globalAlpha = 1.0;
+      });
+    }
+
+    // ========== STROKE PROCESSING ==========
+    function processStroke() {
+      if (gameState.strokePath.length < 2) return;
+
+      const sampledPoints = [];
+      for (let i = 0; i < gameState.strokePath.length; i += 5) {
+        sampledPoints.push(gameState.strokePath[i]);
+      }
+      if (sampledPoints[sampledPoints.length - 1] !== gameState.strokePath[gameState.strokePath.length - 1]) {
+        sampledPoints.push(gameState.strokePath[gameState.strokePath.length - 1]);
+      }
+
+      gameState.zones.forEach(zone => {
+        if (zone.filled >= gameConfig.fillThreshold) return;
+
+        let hitCount = 0;
+        sampledPoints.forEach(point => {
+          const key = `${Math.floor(point.x)},${Math.floor(point.y)}`;
+          if (!gameState.sampledPoints.has(key) && isPointInZone(point.x, point.y, zone)) {
+            gameState.sampledPoints.add(key);
+            zone.covered.add(key);
+            hitCount++;
+          }
+        });
+
+        if (hitCount > 0) {
+          zone.filled = Math.min(zone.filled + (hitCount * 0.03), 1.0);
+        }
+      });
+
+      updateRate();
+    }
+
+    function updateRate() {
+      let completedZones = 0;
+      gameState.zones.forEach(zone => {
+        if (zone.filled >= gameConfig.fillThreshold) {
+          completedZones++;
+        }
+      });
+
+      gameState.rate = completedZones / gameState.zones.length;
+
+      if (gameState.rate >= 1.0 && gameState.phase === 'playing') {
+        gameState.phase = 'won';
+      }
+    }
+
+    // ========== DEBUG CONTRACT ==========
+    function updateDebug() {
+      window.__gameDebug.dragTargets = gameState.zones
+        .filter(z => z.filled < gameConfig.fillThreshold)
+        .map(z => ({
+          id: z.id,
+          x: z.centerX || z.x,
+          y: z.centerY || z.y,
+          progress: parseFloat(z.filled.toFixed(2))
+        }));
+
+      window.__gameDebug.metrics = {
+        rate: parseFloat(gameState.rate.toFixed(2)),
+        strokes: gameState.strokes,
+        phase: gameState.phase
+      };
+    }
+
+    window.__gameDebug.dragFill = function(id) {
+      const zone = gameState.zones.find(z => z.id === id);
+      if (zone && zone.filled < gameConfig.fillThreshold) {
+        zone.filled = gameConfig.fillThreshold;
+        gameState.strokes++;
+        updateRate();
+        updateDebug();
+      }
+    };
+
+    // ========== EVENT HANDLERS ==========
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameState.phase !== 'playing') return;
+
+      gameState.isDrawing = true;
+      gameState.strokePath = [];
+      gameState.sampledPoints.clear();
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      gameState.strokePath.push({ x, y });
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!gameState.isDrawing) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      gameState.strokePath.push({ x, y });
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (!gameState.isDrawing) return;
+
+      gameState.isDrawing = false;
+      processStroke();
+      gameState.strokes++;
+      updateDebug();
+    });
+
+    // ========== GAME LOOP ==========
+    function gameLoop() {
+      // Clear canvas
+      ctx.fillStyle = '#f5f5f5';
+      ctx.globalAlpha = 1.0;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw zones
+      drawZones();
+      drawFilledZones();
+
+      // Update timer
+      if (gameState.phase === 'playing') {
+        gameState.remainingTime -= 1 / 60;
+        if (gameState.remainingTime <= 0) {
+          gameState.remainingTime = 0;
+          gameState.phase = 'lost';
+          gameState.failAnimationStart = Date.now();
+        }
+      }
+
+      // Apply fail animation (color dissolution)
+      if (gameState.phase === 'lost') {
+        const elapsed = Date.now() - gameState.failAnimationStart;
+        const duration = 800;
+        const progress = Math.min(elapsed / duration, 1);
+        ctx.globalAlpha = 1 - progress;
+      }
+
+      // Update UI
+      document.getElementById('rateDisplay').textContent = Math.round(gameState.rate * 100) + '%';
+      document.getElementById('strokesDisplay').textContent = gameState.strokes;
+      document.getElementById('timerDisplay').textContent = gameState.remainingTime.toFixed(1) + 's';
+
+      // Game over states
+      if (gameState.phase === 'won') {
+        showGameOver('🎉 CLEAR!', 'すばらしい！完成しました！\n\nスコア: ' + Math.round(gameState.rate * 100) + '%\nストローク: ' + gameState.strokes);
+      } else if (gameState.phase === 'lost') {
+        showGameOver('⏰ TIME UP!', '時間切れです...\n\n達成率: ' + Math.round(gameState.rate * 100) + '%');
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function showGameOver(title, score) {
+      const overlay = document.getElementById('gameOverlay');
+      if (!overlay.classList.contains('show')) {
+        overlay.classList.add('show');
+        document.getElementById('gameOverText').textContent = title;
+        document.getElementById('gameOverScore').textContent = score;
+      }
+    }
+
+    // ========== INITIALIZATION ==========
+    function init() {
+      gameState.zones = createZones();
+      gameState.phase = 'playing';
+      gameState.remainingTime = gameConfig.totalTime;
+      gameState.rate = 0.0;
+      gameState.strokes = 0;
+      gameState.strokePath = [];
+      gameState.sampledPoints.clear();
+      gameState.failAnimationStart = 0;
+
+      // Pre-compute polygon points
+      gameState.zones.forEach(zone => {
+        if (zone.type === 'star' || zone.type === 'polygon') {
+          zone.points = getPolygonPoints(zone);
+        }
+      });
+
+      document.getElementById('gameOverlay').classList.remove('show');
+
+      updateDebug();
+      gameLoop();
+    }
+
+    document.getElementById('restartBtn').addEventListener('click', init);
+
+    init();
+  </script>
+</body>
+</html>

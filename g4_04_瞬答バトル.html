@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>瞬答バトル - デモモード</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .viewport {
+            width: 375px;
+            height: 812px;
+            margin: 0 auto;
+            background: #0a0e27;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 30px rgba(0,0,0,0.9);
+        }
+
+        .demo-banner {
+            background: linear-gradient(90deg, #ff6b6b, #ff8c42);
+            color: #fff;
+            padding: 8px 16px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        .screen {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        /* Title Screen */
+        .title-screen {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .title-screen h1 {
+            font-size: 48px;
+            font-weight: 900;
+            margin-bottom: 12px;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            letter-spacing: -1px;
+        }
+
+        .title-screen p {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        .btn-large {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            padding: 16px 48px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 8px;
+            box-shadow: 0 8px 20px rgba(245, 87, 108, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-large:active {
+            transform: scale(0.98);
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.6);
+        }
+
+        /* Game Screen */
+        .game-screen {
+            background: linear-gradient(180deg, #1a1f3a 0%, #2d2d5f 100%);
+            padding: 16px;
+            padding-top: 12px;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+
+        .score-box, .rank-box, .time-box {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .score-box label, .rank-box label, .time-box label {
+            display: block;
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 2px;
+        }
+
+        .score-box .value, .rank-box .value, .time-box .value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .rank-box .value {
+            font-size: 16px;
+        }
+
+        .time-bar {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            height: 6px;
+            margin: 16px 0;
+            overflow: hidden;
+        }
+
+        .time-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80 0%, #facc15 50%, #f87171 100%);
+            transition: width 0.1s linear;
+        }
+
+        .question-container {
+            background: rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        .question-number {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-bottom: 8px;
+        }
+
+        .question-text {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.4;
+            margin-bottom: 4px;
+        }
+
+        .question-meta {
+            font-size: 12px;
+            opacity: 0.5;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .option-btn {
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        .option-btn:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(255,255,255,0.4);
+        }
+
+        .option-btn.selected {
+            background: #4ade80;
+            border-color: #22c55e;
+            color: #000;
+            font-weight: 600;
+        }
+
+        .option-btn.correct {
+            background: #4ade80;
+            border-color: #22c55e;
+        }
+
+        .option-btn.incorrect {
+            background: #f87171;
+            border-color: #ef4444;
+        }
+
+        .ranking-preview {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 11px;
+        }
+
+        .rank-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            align-items: center;
+        }
+
+        .rank-item:last-child {
+            border-bottom: none;
+        }
+
+        .rank-item .pos {
+            font-weight: bold;
+            width: 20px;
+        }
+
+        .rank-item .name {
+            flex: 1;
+            margin-left: 8px;
+        }
+
+        .rank-item .score {
+            font-weight: bold;
+        }
+
+        .rank-item.self {
+            background: rgba(79, 172, 254, 0.2);
+            border-radius: 6px;
+            padding: 6px;
+            margin: 0 -4px;
+        }
+
+        /* Result Screen */
+        .result-screen {
+            background: linear-gradient(180deg, #1a1f3a 0%, #2d2d5f 100%);
+            padding: 24px 20px;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .result-badge {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .result-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .result-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: 24px;
+        }
+
+        .result-stats {
+            background: rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .stat-label {
+            opacity: 0.7;
+        }
+
+        .stat-value {
+            font-weight: bold;
+        }
+
+        .btn-restart {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            border-radius: 50px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 12px;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            transition: transform 0.2s;
+        }
+
+        .btn-restart:active {
+            transform: scale(0.98);
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .pulse {
+            animation: pulse 0.6s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="viewport">
+        <div class="demo-banner">[デモモード] GPS/ネットワーク シミュレーション</div>
+
+        <!-- Title Screen -->
+        <div class="screen active" id="titleScreen">
+            <div class="title-screen">
+                <h1>⚡瞬答</h1>
+                <p>全国のプレイヤーと同時にライブ競争</p>
+                <button class="btn-large" onclick="startGame()">ゲーム開始</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div class="screen" id="gameScreen">
+            <div class="game-screen">
+                <div class="game-header">
+                    <div class="score-box">
+                        <label>正解数</label>
+                        <div class="value" id="scoreValue">0</div>
+                    </div>
+                    <div class="rank-box">
+                        <label>順位</label>
+                        <div class="value" id="rankValue">---</div>
+                    </div>
+                    <div class="time-box">
+                        <label>残り</label>
+                        <div class="value" id="timeValue">45秒</div>
+                    </div>
+                </div>
+
+                <div class="time-bar">
+                    <div class="time-bar-fill" id="timeBarFill" style="width: 100%;"></div>
+                </div>
+
+                <div class="question-container animate-in">
+                    <div class="question-number" id="questionNumber">問題1/10</div>
+                    <div class="question-text" id="questionText">日本の首都はどこ？</div>
+                    <div class="question-meta">科学 • 世界地理</div>
+                </div>
+
+                <div class="options-grid" id="optionsGrid">
+                    <button class="option-btn" onclick="selectAnswer(0)">東京</button>
+                    <button class="option-btn" onclick="selectAnswer(1)">大阪</button>
+                    <button class="option-btn" onclick="selectAnswer(2)">京都</button>
+                    <button class="option-btn" onclick="selectAnswer(3)">札幌</button>
+                </div>
+
+                <div class="ranking-preview">
+                    <div style="font-weight: bold; margin-bottom: 6px;">🏆 ランキング速報</div>
+                    <div id="rankingList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Screen -->
+        <div class="screen" id="resultScreen">
+            <div class="result-screen">
+                <div class="result-badge" id="resultBadge">🎉</div>
+                <div class="result-title" id="resultTitle">あと少し!</div>
+                <div class="result-subtitle" id="resultSubtitle">順位を上げて次はいけるぞ!</div>
+                
+                <div class="result-stats">
+                    <div class="stat-row">
+                        <span class="stat-label">正解数</span>
+                        <span class="stat-value" id="resultScore">0/10</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">最終順位</span>
+                        <span class="stat-value" id="resultRank">---位</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">参加者数</span>
+                        <span class="stat-value" id="resultPlayers">---人</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">成績評価</span>
+                        <span class="stat-value" id="resultEval">チャレンジ</span>
+                    </div>
+                </div>
+
+                <button class="btn-restart" onclick="restart()">もう一度プレイ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        let gameState = {
+            currentQuestion: 0,
+            score: 0,
+            rank: null,
+            timeRemaining: 45,
+            maxTime: 45,
+            totalQuestions: 10,
+            selectedAnswer: null,
+            answered: false,
+            totalPlayers: 147,
+            playerRankHistory: []
+        };
+
+        // Quiz Data
+        const quizzes = [
+            {
+                question: "日本の首都はどこ？",
+                category: "科学 • 世界地理",
+                options: ["東京", "大阪", "京都", "札幌"],
+                correct: 0
+            },
+            {
+                question: "2024年のパリオリンピックは何月に開催？",
+                category: "スポーツ • イベント",
+                options: ["6月", "7月", "8月", "9月"],
+                correct: 2
+            },
+            {
+                question: "世界で最も深い海はどこ？",
+                category: "科学 • 地理",
+                options: ["太平洋", "大西洋", "インド洋", "北極海"],
+                correct: 0
+            },
+            {
+                question: "莎翁（シェイクスピア）の国籍は？",
+                category: "文学 • 歴史",
+                options: ["フランス", "イタリア", "イングランド", "ドイツ"],
+                correct: 2
+            },
+            {
+                question: "光の速度はおよそ秒速何km？",
+                category: "物理 • 科学",
+                options: ["30万km", "3万km", "300万km", "30km"],
+                correct: 0
+            },
+            {
+                question: "銀河系の別名は？",
+                category: "天文 • 宇宙",
+                options: ["アンドロメダ", "天の川", "大マゼラン雲", "小マゼラン雲"],
+                correct: 1
+            },
+            {
+                question: "ピラミッドが最も多い国は？",
+                category: "歴史 • 考古学",
+                options: ["メキシコ", "エジプト", "イラク", "ペルー"],
+                correct: 0
+            },
+            {
+                question: "水の沸点は摂氏何度？",
+                category: "化学 • 科学",
+                options: ["50度", "75度", "100度", "125度"],
+                correct: 2
+            },
+            {
+                question: "DNAの形状は？",
+                category: "生物 • 医学",
+                options: ["円形", "二重らせん", "球状", "三角形"],
+                correct: 1
+            },
+            {
+                question: "地球の自転周期は何時間？",
+                category: "地理 • 天文",
+                options: ["12時間", "18時間", "24時間", "36時間"],
+                correct: 2
+            }
+        ];
+
+        // Simulate other players' progress
+        const otherPlayerNames = ["サトウ", "田中", "ハマダ", "スズキ", "カワサキ", "ナカムラ", "ヨシダ", "イトウ"];
+        let otherPlayersData = [];
+
+        function initOtherPlayers() {
+            otherPlayersData = otherPlayerNames.map((name, i) => ({
+                name: name,
+                score: Math.floor(Math.random() * 9) + 1,
+                rank: i + 1
+            }));
+            otherPlayersData.sort((a, b) => b.score - a.score);
+        }
+
+        function updateRanking() {
+            const currentScore = gameState.score;
+            let rank = 1;
+            for (let player of otherPlayersData) {
+                if (player.score > currentScore) rank++;
+            }
+            gameState.rank = rank;
+
+            let topPlayers = otherPlayersData.slice(0, 3);
+            if (currentScore >= otherPlayersData[2]?.score) {
+                topPlayers = [
+                    ...otherPlayersData.filter(p => p.score > currentScore).slice(0, 2),
+                    { name: "あなた", score: currentScore, rank: rank, self: true }
+                ];
+            }
+
+            let html = "";
+            topPlayers.forEach((p, i) => {
+                const medal = ["🥇", "🥈", "🥉"][i] || "";
+                const isMe = p.self ? " self" : "";
+                html += `<div class="rank-item${isMe}">
+                    <span class="pos">${medal} ${p.rank}</span>
+                    <span class="name">${p.name}</span>
+                    <span class="score">${p.score}</span>
+                </div>`;
+            });
+            document.getElementById("rankingList").innerHTML = html;
+        }
+
+        function switchScreen(screenName) {
+            document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+            document.getElementById(screenName).classList.add("active");
+        }
+
+        function startGame() {
+            gameState = {
+                currentQuestion: 0,
+                score: 0,
+                rank: null,
+                timeRemaining: 45,
+                maxTime: 45,
+                totalQuestions: 10,
+                selectedAnswer: null,
+                answered: false,
+                totalPlayers: 147,
+                playerRankHistory: []
+            };
+            initOtherPlayers();
+            switchScreen("gameScreen");
+            loadQuestion();
+            startTimer();
+        }
+
+        function loadQuestion() {
+            gameState.selectedAnswer = null;
+            gameState.answered = false;
+
+            const q = quizzes[gameState.currentQuestion];
+            document.getElementById("questionNumber").textContent = `問題${gameState.currentQuestion + 1}/10`;
+            document.getElementById("questionText").textContent = q.question;
+            document.querySelector(".question-meta").textContent = q.category;
+
+            const grid = document.getElementById("optionsGrid");
+            grid.innerHTML = "";
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement("button");
+                btn.className = "option-btn";
+                btn.textContent = opt;
+                btn.onclick = () => selectAnswer(idx);
+                grid.appendChild(btn);
+            });
+
+            updateRanking();
+            updateDisplay();
+        }
+
+        function selectAnswer(idx) {
+            if (gameState.answered) return;
+
+            gameState.answered = true;
+            gameState.selectedAnswer = idx;
+            const q = quizzes[gameState.currentQuestion];
+            const buttons = document.querySelectorAll(".option-btn");
+
+            buttons.forEach((btn, i) => {
+                if (i === q.correct) {
+                    btn.classList.add("correct");
+                } else if (i === idx) {
+                    btn.classList.add("incorrect");
+                }
+                btn.disabled = true;
+            });
+
+            if (idx === q.correct) {
+                gameState.score++;
+            }
+
+            setTimeout(() => {
+                gameState.currentQuestion++;
+                if (gameState.currentQuestion < gameState.totalQuestions) {
+                    loadQuestion();
+                } else {
+                    endGame();
+                }
+            }, 1500);
+        }
+
+        function startTimer() {
+            const timer = setInterval(() => {
+                gameState.timeRemaining--;
+                updateDisplay();
+
+                const percent = (gameState.timeRemaining / gameState.maxTime) * 100;
+                document.getElementById("timeBarFill").style.width = percent + "%";
+
+                if (gameState.timeRemaining <= 0) {
+                    clearInterval(timer);
+                    if (gameState.currentQuestion < gameState.totalQuestions) {
+                        endGame();
+                    }
+                }
+            }, 1000);
+        }
+
+        function updateDisplay() {
+            document.getElementById("scoreValue").textContent = gameState.score;
+            if (gameState.rank) {
+                document.getElementById("rankValue").textContent = gameState.rank + "位";
+            }
+            document.getElementById("timeValue").textContent = gameState.timeRemaining + "秒";
+        }
+
+        function endGame() {
+            const finalScore = gameState.score;
+            const finalRank = gameState.rank || calculateFinalRank(finalScore);
+            const winCondition = finalScore >= 7 && finalRank <= Math.ceil(gameState.totalPlayers * 0.2);
+            const failCondition = finalScore <= 4 || finalRank > Math.ceil(gameState.totalPlayers * 0.5);
+
+            let badge = "🎉";
+            let title = "あと少し!";
+            let subtitle = "順位を上げて次はいけるぞ!";
+            let eval_text = "チャレンジ";
+
+            if (winCondition) {
+                badge = "🏆";
+                title = "優秀!";
+                subtitle = "入賞おめでとうございます!";
+                eval_text = "入賞 🎖️";
+            } else if (failCondition) {
+                badge = "💪";
+                title = "惜しい!";
+                subtitle = "もう一度挑戦してみよう!";
+                eval_text = "挑戦中";
+            }
+
+            document.getElementById("resultBadge").textContent = badge;
+            document.getElementById("resultTitle").textContent = title;
+            document.getElementById("resultSubtitle").textContent = subtitle;
+            document.getElementById("resultScore").textContent = finalScore + "/10";
+            document.getElementById("resultRank").textContent = finalRank + "位";
+            document.getElementById("resultPlayers").textContent = gameState.totalPlayers + "人";
+            document.getElementById("resultEval").textContent = eval_text;
+
+            switchScreen("resultScreen");
+        }
+
+        function calculateFinalRank(score) {
+            let rank = 1;
+            for (let player of otherPlayersData) {
+                if (player.score > score) rank++;
+            }
+            return Math.min(rank, gameState.totalPlayers);
+        }
+
+        function restart() {
+            startGame();
+        }
+
+        // Initialize
+        initOtherPlayers();
+    </script>
+</body>
+</html>

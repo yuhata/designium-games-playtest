@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>グレイズン</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: linear-gradient(180deg, #16213e 0%, #0f3460 100%);
+            border: 3px solid #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 14px;
+            z-index: 10;
+            line-height: 1.6;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            border-radius: 4px;
+        }
+        #gameOverPanel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            z-index: 20;
+            display: none;
+            border: 3px solid #00ff88;
+        }
+        #gameOverPanel h1 {
+            margin: 0 0 20px 0;
+            font-size: 36px;
+        }
+        #gameOverPanel button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #00ff88;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #gameOverPanel button:hover {
+            background: #00ffaa;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div style="color: #00ffff; margin-bottom: 4px;">▶ マウス移動で移動 | クリック長押しで発射</div>
+            <div>スコア: <span id="score">0</span></div>
+            <div>残機: <span id="lives">3</span></div>
+            <div>ボスHP: <span id="bossHP">20</span>/20</div>
+            <div style="color: #ffff00;">ハイスコア: <span id="highScore">0</span></div>
+        </div>
+        <div id="gameOverPanel">
+            <h1 id="overTitle">ゲームオーバー</h1>
+            <div style="font-size: 20px; margin: 15px 0;">スコア: <span id="finalScore">0</span></div>
+            <div id="scoreComparison" style="margin: 15px 0; font-size: 16px;"></div>
+            <button onclick="location.reload()">もう一度プレイ</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let gameState = {
+            running: true,
+            score: 0,
+            lives: 3,
+            bossHP: 20,
+            maxBossHP: 20,
+            mouseX: canvas.width / 2,
+            mouseY: canvas.height - 50,
+            isShooting: false,
+            chargeLevel: 0,
+            maxCharge: 30
+        };
+
+        let highScore = parseInt(localStorage.getItem('grazenHighScore') || '0');
+        document.getElementById('highScore').textContent = highScore;
+
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 50,
+            radius: 8,
+            speed: 4
+        };
+
+        const boss = {
+            x: canvas.width / 2,
+            y: 60,
+            radius: 28,
+            moveDir: 1,
+            moveSpeed: 1.2,
+            shootCounter: 0,
+            shootInterval: 50
+        };
+
+        let playerBullets = [];
+        let bossBullets = [];
+        let particles = [];
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            gameState.mouseX = Math.max(player.radius, Math.min(canvas.width - player.radius, e.clientX - rect.left));
+            gameState.mouseY = Math.max(player.radius, Math.min(canvas.height - player.radius, e.clientY - rect.top));
+        });
+
+        canvas.addEventListener('mousedown', () => {
+            if (gameState.running) {
+                gameState.isShooting = true;
+                gameState.chargeLevel = 0;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (gameState.isShooting && gameState.running) {
+                const power = 1 + (gameState.chargeLevel / gameState.maxCharge) * 4;
+                playerBullets.push({
+                    x: player.x,
+                    y: player.y - 10,
+                    vx: 0,
+                    vy: -power * 7,
+                    r: 4
+                });
+                gameState.isShooting = false;
+                gameState.chargeLevel = 0;
+            }
+        });
+
+        function distance(x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function spawnParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+                const speed = 1.5 + Math.random() * 2;
+                particles.push({
+                    x: x + Math.random() * 4 - 2,
+                    y: y + Math.random() * 4 - 2,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 35,
+                    color: color
+                });
+            }
+        }
+
+        function endGame(isWin) {
+            gameState.running = false;
+            const panel = document.getElementById('gameOverPanel');
+            const title = document.getElementById('overTitle');
+            const finalScoreEl = document.getElementById('finalScore');
+            const comparison = document.getElementById('scoreComparison');
+
+            finalScoreEl.textContent = gameState.score;
+
+            if (isWin) {
+                title.textContent = '🎉 クリア！ 🎉';
+                title.style.color = '#00ff88';
+                panel.style.borderColor = '#00ff88';
+            } else {
+                title.textContent = '💀 ゲームオーバー 💀';
+                title.style.color = '#ff3366';
+                panel.style.borderColor = '#ff3366';
+            }
+
+            if (gameState.score > highScore) {
+                highScore = gameState.score;
+                localStorage.setItem('grazenHighScore', highScore);
+                comparison.innerHTML = '<div style="color: #ffff00; font-size: 18px;">🏆 新記録！ハイスコア: ' + highScore + '</div>';
+            } else {
+                comparison.innerHTML = '<div>前回のハイスコア: ' + highScore + '</div><div style="color: #ff9999;">差: -' + (highScore - gameState.score) + '</div>';
+            }
+
+            panel.style.display = 'block';
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('lives').textContent = gameState.lives;
+            document.getElementById('bossHP').textContent = Math.max(0, gameState.bossHP);
+        }
+
+        function update() {
+            if (!gameState.running) return;
+
+            // プレイヤー移動
+            const dx = gameState.mouseX - player.x;
+            const dy = gameState.mouseY - player.y;
+            const dist = distance(player.x, player.y, gameState.mouseX, gameState.mouseY);
+            if (dist > player.speed) {
+                player.x += (dx / dist) * player.speed;
+                player.y += (dy / dist) * player.speed;
+            } else {
+                player.x = gameState.mouseX;
+                player.y = gameState.mouseY;
+            }
+
+            // チャージ
+            if (gameState.isShooting) {
+                gameState.chargeLevel = Math.min(gameState.maxCharge, gameState.chargeLevel + 1.2);
+            }
+
+            // ボス移動
+            boss.x += boss.moveDir * boss.moveSpeed;
+            if (boss.x - boss.radius < 20 || boss.x + boss.radius > canvas.width - 20) {
+                boss.moveDir *= -1;
+                boss.x = Math.max(boss.radius + 20, Math.min(canvas.width - boss.radius - 20, boss.x));
+            }
+
+            // ボス射撃
+            boss.shootCounter++;
+            if (boss.shootCounter >= boss.shootInterval) {
+                const angle = Math.random() * Math.PI * 2;
+                bossBullets.push({
+                    x: boss.x,
+                    y: boss.y,
+                    vx: Math.cos(angle) * 2.5,
+                    vy: Math.sin(angle) * 2.5,
+                    r: 6
+                });
+                boss.shootCounter = 0;
+            }
+
+            // プレイヤー弾更新
+            for (let i = playerBullets.length - 1; i >= 0; i--) {
+                const b = playerBullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                if (b.y < -10) {
+                    playerBullets.splice(i, 1);
+                } else if (distance(b.x, b.y, boss.x, boss.y) < boss.radius + b.r) {
+                    playerBullets.splice(i, 1);
+                    gameState.bossHP--;
+                    gameState.score += 10;
+                    spawnParticles(b.x, b.y, '#ffff00', 10);
+                    updateUI();
+                    if (gameState.bossHP <= 0) {
+                        gameState.score += 200;
+                        updateUI();
+                        endGame(true);
+                    }
+                }
+            }
+
+            // ボス弾更新
+            for (let i = bossBullets.length - 1; i >= 0; i--) {
+                const b = bossBullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10) {
+                    bossBullets.splice(i, 1);
+                } else if (distance(b.x, b.y, player.x, player.y) < player.radius + b.r) {
+                    bossBullets.splice(i, 1);
+                    gameState.lives--;
+                    gameState.score = Math.max(0, gameState.score - 30);
+                    spawnParticles(player.x, player.y, '#ff3366', 15);
+                    updateUI();
+                    if (gameState.lives <= 0) {
+                        endGame(false);
+                    }
+                }
+            }
+
+            // パーティクル更新
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.15;
+                p.vx *= 0.96;
+                p.life--;
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(16, 52, 96, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // ボス
+            ctx.fillStyle = '#ff6b00';
+            ctx.beginPath();
+            ctx.arc(boss.x, boss.y, boss.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffaa00';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('BOSS', boss.x, boss.y);
+
+            // プレイヤー
+            ctx.fillStyle = '#00ff88';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#00ffaa';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // チャージ表示
+            if (gameState.isShooting && gameState.chargeLevel > 0) {
+                ctx.fillStyle = `rgba(0, 255, 255, ${0.3 + gameState.chargeLevel / gameState.maxCharge * 0.7})`;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius + gameState.chargeLevel / 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // プレイヤー弾
+            ctx.fillStyle = '#ffff00';
+            for (let b of playerBullets) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ボス弾
+            ctx.fillStyle = '#ff3366';
+            for (let b of bossBullets) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 51, 102, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            // パーティクル
+            for (let p of particles) {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 35;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

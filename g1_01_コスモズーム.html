@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>コスモズーム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: #000;
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            transform-origin: center;
+            transition: transform 0.3s ease-in-out;
+        }
+        .ui-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 10;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+        .ui-left {
+            display: flex;
+            gap: 20px;
+        }
+        .ui-item {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .ui-item label {
+            font-size: 12px;
+            color: #88ff00;
+            opacity: 0.8;
+        }
+        .ui-item span {
+            font-size: 24px;
+            color: #00ffff;
+        }
+        .instruction {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #88ff00;
+            text-align: center;
+            opacity: 0.9;
+            z-index: 10;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+        }
+        .overlay.active {
+            display: flex;
+        }
+        .overlay-text {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            animation: pulse 0.6s ease-in-out;
+        }
+        .overlay.win .overlay-text {
+            color: #00ff88;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.8);
+        }
+        .overlay.fail .overlay-text {
+            color: #ff0055;
+            text-shadow: 0 0 20px rgba(255, 0, 85, 0.8);
+        }
+        .overlay-detail {
+            font-size: 24px;
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+        .overlay-button {
+            padding: 12px 30px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #00ff88, #00ffff);
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .overlay-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+        .overlay.fail .overlay-button {
+            background: linear-gradient(135deg, #ff0055, #ff6600);
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="ui-overlay">
+            <div class="ui-left">
+                <div class="ui-item">
+                    <label>LEVEL</label>
+                    <span id="levelDisplay">0</span>
+                </div>
+                <div class="ui-item">
+                    <label>REMAINING</label>
+                    <span id="remainingDisplay">3</span>
+                </div>
+                <div class="ui-item">
+                    <label>TIME</label>
+                    <span id="timeDisplay">120</span>
+                </div>
+            </div>
+            <div class="ui-item">
+                <label>MISSES</label>
+                <span id="missesDisplay">0</span>
+            </div>
+        </div>
+        <div class="instruction" id="instruction">
+            TAP the hidden points • Discover all levels before time runs out
+        </div>
+        <div class="overlay" id="overlay">
+            <div class="overlay-text" id="overlayText">VICTORY</div>
+            <div class="overlay-detail" id="overlayDetail">All cosmic patterns revealed!</div>
+            <button class="overlay-button" id="overlayButton">RESTART</button>
+        </div>
+    </div>
+
+    <script>
+        // ============= Debug Contract =============
+        window.__gameDebug = {
+            objects: [],
+            metrics: { score: 0, progress: 0.0, remaining: 3, phase: "playing", level: 0 },
+            tapObject: function(id) {}
+        };
+
+        // ============= Game State =============
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        let gameState = {
+            level: 0,
+            remaining: 3,
+            misses: 0,
+            score: 0,
+            phase: 'playing',
+            currentPoints: [],
+            particles: [],
+            isScanning: false,
+            scanProgress: 0,
+            timeRemaining: 120,
+            gameStartTime: Date.now()
+        };
+
+        const maxLevel = 12;
+        const pointRadius = 8;
+        const hitRadius = 12;
+        const maxMisses = 5;
+        const totalGameTime = 120000; // 120 seconds in ms
+
+        // ============= Zoom Level =============
+        function getZoomLevel(level) {
+            return 0.5 + (level / maxLevel) * 1.5;
+        }
+
+        // ============= Seeded Random =============
+        function seededRandom(seed) {
+            const x = Math.sin(seed) * 10000;
+            return x - Math.floor(x);
+        }
+
+        // ============= Generate Points =============
+        function generatePointsForLevel(level) {
+            const points = [];
+            const seedBase = level * 99991;
+            for (let i = 0; i < 3; i++) {
+                const seedX = seedBase + i * 12345;
+                const seedY = seedBase + i * 54321;
+                const x = seededRandom(seedX) * 700 + 50;
+                const y = seededRandom(seedY) * 500 + 50;
+                points.push({
+                    id: `pt_${level}_${i}`,
+                    x, y,
+                    discovered: false,
+                    index: i
+                });
+            }
+            return points;
+        }
+
+        // ============= Update Debug =============
+        function updateDebug() {
+            window.__gameDebug.objects = gameState.currentPoints.map((pt) => ({
+                id: pt.id,
+                enabled: !pt.discovered,
+                matchId: null,
+                x: pt.x,
+                y: pt.y,
+                radius: pointRadius
+            }));
+
+            window.__gameDebug.metrics = {
+                score: gameState.score,
+                progress: gameState.level / maxLevel,
+                remaining: gameState.remaining,
+                phase: gameState.phase,
+                level: gameState.level
+            };
+        }
+
+        // ============= tapObject Implementation =============
+        window.__gameDebug.tapObject = function(id) {
+            if (gameState.phase !== 'playing') return;
+            const point = gameState.currentPoints.find(p => p.id === id);
+            if (point && !point.discovered) {
+                handlePointTap(point);
+            }
+        };
+
+        // ============= Handle Point Tap =============
+        function handlePointTap(point) {
+            if (point.discovered || gameState.phase !== 'playing') return;
+            
+            point.discovered = true;
+            gameState.remaining--;
+            gameState.score += 100;
+
+            playDiscoverySound();
+            createParticles(point.x, point.y);
+
+            if (gameState.remaining === 0) {
+                if (gameState.level === maxLevel) {
+                    endGame('win');
+                } else {
+                    advanceLevel();
+                }
+            }
+
+            updateDebug();
+        }
+
+        // ============= Advance Level =============
+        function advanceLevel() {
+            gameState.level++;
+            gameState.remaining = 3;
+            gameState.currentPoints = generatePointsForLevel(gameState.level);
+            gameState.isScanning = true;
+            gameState.scanProgress = 0;
+            updateDebug();
+        }
+
+        // ============= Particle Class =============
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.scale = 1;
+                this.alpha = 1;
+                this.lifetime = 400;
+                this.age = 0;
+            }
+
+            update(dt) {
+                this.age += dt;
+                const progress = this.age / this.lifetime;
+                this.scale = 1 + progress * 0.5;
+                this.alpha = 1 - progress;
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            isAlive() {
+                return this.age < this.lifetime;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = '#00ff88';
+                ctx.shadowColor = '#00ff88';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, pointRadius * this.scale, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function createParticles(x, y) {
+            for (let i = 0; i < 8; i++) {
+                gameState.particles.push(new Particle(x, y));
+            }
+        }
+
+        // ============= Audio =============
+        function playDiscoverySound() {
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.frequency.value = 800;
+                osc.type = 'sine';
+                
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } catch (e) {
+                // Audio context not available
+            }
+        }
+
+        // ============= End Game =============
+        function endGame(result) {
+            gameState.phase = result;
+            updateDebug();
+            showOverlay(result);
+        }
+
+        function showOverlay(result) {
+            const overlay = document.getElementById('overlay');
+            const overlayText = document.getElementById('overlayText');
+            const overlayDetail = document.getElementById('overlayDetail');
+            const overlayButton = document.getElementById('overlayButton');
+
+            if (result === 'win') {
+                overlay.classList.add('win');
+                overlay.classList.remove('fail');
+                overlayText.textContent = '✦ COSMIC DISCOVERY ✦';
+                overlayDetail.textContent = `Level ${gameState.level} Complete • Score: ${gameState.score}`;
+            } else {
+                overlay.classList.add('fail');
+                overlay.classList.remove('win');
+                overlayText.textContent = '⚠ SIGNAL LOST ⚠';
+                overlayDetail.textContent = `Reached Level ${gameState.level} • Score: ${gameState.score}`;
+            }
+
+            overlay.classList.add('active');
+            overlayButton.onclick = resetGame;
+        }
+
+        // ============= Reset Game =============
+        function resetGame() {
+            document.getElementById('overlay').classList.remove('active');
+            gameState.level = 0;
+            gameState.remaining = 3;
+            gameState.misses = 0;
+            gameState.score = 0;
+            gameState.phase = 'playing';
+            gameState.currentPoints = generatePointsForLevel(0);
+            gameState.particles = [];
+            gameState.isScanning = true;
+            gameState.scanProgress = 0;
+            gameState.gameStartTime = Date.now();
+            gameState.timeRemaining = 120;
+            updateDebug();
+            updateUI();
+        }
+
+        // ============= Handle Input =============
+        function handleCanvasClick(event) {
+            if (gameState.phase !== 'playing') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            let hit = false;
+            for (let point of gameState.currentPoints) {
+                if (!point.discovered) {
+                    const dx = point.x - x;
+                    const dy = point.y - y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance <= hitRadius) {
+                        handlePointTap(point);
+                        hit = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hit) {
+                gameState.misses++;
+                updateUI();
+                if (gameState.misses >= maxMisses) {
+                    endGame('fail');
+                }
+            }
+        }
+
+        // ============= Update UI =============
+        function updateUI() {
+            document.getElementById('levelDisplay').textContent = gameState.level;
+            document.getElementById('remainingDisplay').textContent = gameState.remaining;
+            document.getElementById('missesDisplay').textContent = gameState.misses;
+            document.getElementById('timeDisplay').textContent = Math.max(0, gameState.timeRemaining);
+        }
+
+        // ============= Main Draw Loop =============
+        let lastTime = Date.now();
+        function draw() {
+            const now = Date.now();
+            const dt = Math.min(now - lastTime, 16);
+            lastTime = now;
+
+            // Update time
+            if (gameState.phase === 'playing') {
+                const elapsed = now - gameState.gameStartTime;
+                gameState.timeRemaining = Math.max(0, 120 - Math.floor(elapsed / 1000));
+                
+                if (gameState.timeRemaining === 0) {
+                    endGame('fail');
+                }
+                updateUI();
+            }
+
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grid background
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // Scanning effect
+            if (gameState.isScanning) {
+                gameState.scanProgress += dt / 400;
+                if (gameState.scanProgress >= 1) {
+                    gameState.isScanning = false;
+                }
+                const scanAlpha = (1 - gameState.scanProgress) * 0.3;
+                ctx.fillStyle = `rgba(0, 0, 0, ${scanAlpha})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // Draw points
+            for (let point of gameState.currentPoints) {
+                if (point.discovered) {
+                    ctx.fillStyle = 'rgba(0, 255, 136, 0.2)';
+                } else {
+                    ctx.fillStyle = '#00ff88';
+                    ctx.shadowColor = '#00ff88';
+                    ctx.shadowBlur = 15;
+                }
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw particles
+            gameState.particles = gameState.particles.filter(p => p.isAlive());
+            for (let particle of gameState.particles) {
+                particle.update(dt);
+                particle.draw(ctx);
+            }
+
+            // Update zoom
+            const zoom = getZoomLevel(gameState.level);
+            canvas.style.transform = `scale(${zoom})`;
+
+            requestAnimationFrame(draw);
+        }
+
+        // ============= Event Listeners =============
+        canvas.addEventListener('click', handleCanvasClick);
+
+        // ============= Initialization =============
+        function init() {
+            gameState.currentPoints = generatePointsForLevel(0);
+            gameState.isScanning = true;
+            gameState.gameStartTime = Date.now();
+            updateDebug();
+            updateUI();
+            draw();
+        }
+
+        init();
+    </script>
+</body>
+</html>

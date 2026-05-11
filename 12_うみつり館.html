@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>うみつり館</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #B8E6F0 0%, #E8F8FD 100%);
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+    
+    #gameContainer {
+      position: relative;
+      width: 900px;
+      height: 650px;
+      border: 5px solid #7DBACC;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+      cursor: crosshair;
+    }
+    
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    
+    #ui {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      color: #2c5aa0;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 10;
+    }
+    
+    .ui-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 8px 14px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+    
+    #instructionText {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #3d7ca0;
+      font-size: 18px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.96);
+      padding: 28px 36px;
+      border-radius: 14px;
+      z-index: 20;
+      opacity: 1;
+      transition: opacity 0.5s ease-out;
+      pointer-events: none;
+    }
+    
+    #instructionText.fade {
+      opacity: 0;
+    }
+    
+    #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(30, 50, 80, 0.88);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 30;
+      color: white;
+    }
+    
+    #gameOverScreen.show {
+      display: flex;
+    }
+    
+    #overTitle {
+      font-size: 52px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4);
+      animation: bounce 0.6s ease-out;
+    }
+    
+    #overMessage {
+      font-size: 22px;
+      margin-bottom: 8px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+    }
+    
+    #overAlmanac {
+      font-size: 16px;
+      margin-top: 16px;
+      color: #FFE8B6;
+      max-width: 500px;
+      text-align: center;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+      background: rgba(255, 255, 255, 0.1);
+      padding: 12px 16px;
+      border-radius: 8px;
+    }
+    
+    #restartBtn {
+      margin-top: 28px;
+      padding: 14px 32px;
+      font-size: 18px;
+      background: linear-gradient(135deg, #5DADE2 0%, #3498DB 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    #restartBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+    }
+    
+    @keyframes bounce {
+      0% { transform: scale(0.8); opacity: 0; }
+      70% { transform: scale(1.05); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+      <div class="ui-row">
+        <span>⏱ 時間: <span id="timeDisp">60</span>秒</span>
+        <span>🐠 魚種: <span id="speciesDisp">0</span>/5</span>
+        <span id="timerWarn"></span>
+      </div>
+      <div class="ui-row" style="font-size: 12px; background: rgba(200, 230, 255, 0.94); color: #2c5aa0;">
+        <span>📚 図鑑: <span id="almanacDisp" style="color: #005fa3; font-weight: 700;">なし</span></span>
+      </div>
+    </div>
+    <div id="instructionText">
+      マウスを長押ししながら動かして<br>魚を引き上げましょう 🎣✨
+    </div>
+    <div id="gameOverScreen">
+      <div id="overTitle"></div>
+      <div id="overMessage"></div>
+      <div id="overAlmanac"></div>
+      <button id="restartBtn">もう一度遊ぶ</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const overTitle = document.getElementById('overTitle');
+    const overMessage = document.getElementById('overMessage');
+    const overAlmanac = document.getElementById('overAlmanac');
+    const restartBtn = document.getElementById('restartBtn');
+    const instructionText = document.getElementById('instructionText');
+    
+    canvas.width = 900;
+    canvas.height = 650;
+    
+    const SPECIES = [
+      { name: 'マダイ', color: '#E8587D', emoji: '🔴' },
+      { name: 'ブリ', color: '#4DB8E8', emoji: '💙' },
+      { name: 'スズキ', color: '#7DDBD3', emoji: '🟦' },
+      { name: 'クマノミ', color: '#FFB84D', emoji: '🟠' },
+      { name: 'ニシン', color: '#B0D4E3', emoji: '💎' },
+      { name: 'カツオ', color: '#E8B867', emoji: '🟡' },
+      { name: 'アジ', color: '#9BC4CB', emoji: '✨' }
+    ];
+    
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 4;
+        this.vy = Math.random() * -2 - 1;
+        this.life = 1;
+        this.size = Math.random() * 4 + 2;
+        this.color = '#5DADE2';
+      }
+      
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy -= 0.15;
+        this.life -= 0.02;
+      }
+      
+      draw(ctx) {
+        ctx.globalAlpha = this.life * 0.7;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+    
+    class Fish {
+      constructor(x) {
+        this.x = x;
+        this.y = canvas.height - 120;
+        this.species = SPECIES[Math.floor(Math.random() * SPECIES.length)];
+        this.vx = (Math.random() - 0.5) * 1.5;
+        this.vy = -Math.random() * 1.2 - 0.6;
+        this.wobble = Math.random() * Math.PI * 2;
+        this.size = Math.random() * 6 + 14;
+      }
+      
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.wobble += 0.06;
+        this.x += Math.sin(this.wobble) * 0.3;
+      }
+      
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        ctx.fillStyle = this.species.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.size, this.size * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath();
+        ctx.arc(this.size * 0.35, -this.size * 0.18, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.beginPath();
+        ctx.arc(this.size * 0.35, -this.size * 0.18, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = this.species.color;
+        ctx.beginPath();
+        ctx.moveTo(-this.size, 0);
+        ctx.lineTo(-this.size - 8, this.size * 0.28);
+        ctx.lineTo(-this.size - 8, -this.size * 0.28);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
+      }
+    }
+    
+    class Game {
+      constructor() {
+        this.init();
+      }
+      
+      init() {
+        this.isRunning = true;
+        this.timeLeft = 60;
+        this.speciesCount = 0;
+        this.caughtSpecies = new Set();
+        this.fishes = [];
+        this.particles = [];
+        this.isReeling = false;
+        this.mouseX = canvas.width / 2;
+        this.mouseY = canvas.height / 2;
+        this.lastSpawn = 0;
+        this.spawnInterval = 1.5;
+        this.lastTime = Date.now();
+        this.instructionAlpha = 1;
+        this.instructionStartTime = Date.now();
+        
+        this.setupEvents();
+        this.gameLoop();
+      }
+      
+      setupEvents() {
+        canvas.addEventListener('mousedown', (e) => {
+          if (!this.isRunning) return;
+          const rect = canvas.getBoundingClientRect();
+          this.mouseX = e.clientX - rect.left;
+          this.mouseY = e.clientY - rect.top;
+          this.isReeling = true;
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+          const rect = canvas.getBoundingClientRect();
+          this.mouseX = e.clientX - rect.left;
+          this.mouseY = e.clientY - rect.top;
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+          this.isReeling = false;
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+          this.isReeling = false;
+        });
+        
+        restartBtn.addEventListener('click', () => this.restart());
+      }
+      
+      update() {
+        const now = Date.now();
+        const dt = (now - this.lastTime) / 1000;
+        this.lastTime = now;
+        
+        this.timeLeft -= dt;
+        
+        this.lastSpawn += dt;
+        if (this.lastSpawn > this.spawnInterval && this.fishes.length < 10) {
+          const x = Math.random() * (canvas.width - 100) + 50;
+          this.fishes.push(new Fish(x));
+          this.lastSpawn = 0;
+        }
+        
+        for (let i = this.fishes.length - 1; i >= 0; i--) {
+          this.fishes[i].update();
+          
+          if (this.isReeling) {
+            const dx = this.fishes[i].x - this.mouseX;
+            const dy = this.fishes[i].y - this.mouseY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < 45) {
+              const species = this.fishes[i].species;
+              if (!this.caughtSpecies.has(species.name)) {
+                this.caughtSpecies.add(species.name);
+                this.speciesCount = this.caughtSpecies.size;
+                for (let j = 0; j < 8; j++) {
+                  this.particles.push(new Particle(this.fishes[i].x, this.fishes[i].y));
+                }
+              }
+              this.fishes.splice(i, 1);
+            }
+          }
+          
+          if (this.fishes[i] && this.fishes[i].y < -80) {
+            this.fishes.splice(i, 1);
+          }
+        }
+        
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          this.particles[i].update();
+          if (this.particles[i].life <= 0) {
+            this.particles.splice(i, 1);
+          }
+        }
+        
+        if (now - this.instructionStartTime > 4000) {
+          instructionText.classList.add('fade');
+        }
+        
+        if (this.speciesCount >= 5) {
+          this.endGame(true);
+        } else if (this.timeLeft <= 0) {
+          this.endGame(false);
+        }
+        
+        this.updateUI();
+      }
+      
+      updateUI() {
+        document.getElementById('timeDisp').textContent = Math.max(0, Math.ceil(this.timeLeft));
+        document.getElementById('speciesDisp').textContent = this.speciesCount;
+        
+        if (this.timeLeft < 10) {
+          document.getElementById('timerWarn').textContent = '⚠️ 残り少ない';
+          document.getElementById('timerWarn').style.color = '#D32F2F';
+        } else {
+          document.getElementById('timerWarn').textContent = '';
+        }
+        
+        const almanac = Array.from(this.caughtSpecies).map(s => SPECIES.find(sp => sp.name === s).emoji).join('');
+        document.getElementById('almanacDisp').textContent = almanac || 'なし';
+      }
+      
+      draw() {
+        ctx.fillStyle = 'linear-gradient(180deg, #A8DFF0 0%, #C8E8F4 50%, #DFF5FB 100%)';
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, '#A8DFF0');
+        gradient.addColorStop(0.5, '#C8E8F4');
+        gradient.addColorStop(1, '#DFF5FB');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        this.drawWaterSurface();
+        this.drawRod();
+        
+        for (const fish of this.fishes) {
+          fish.draw(ctx);
+        }
+        
+        for (const particle of this.particles) {
+          particle.draw(ctx);
+        }
+        
+        if (this.isReeling) {
+          this.drawLine();
+          this.drawHook();
+        }
+      }
+      
+      drawWaterSurface() {
+        ctx.strokeStyle = 'rgba(150, 200, 230, 0.3)';
+        ctx.lineWidth = 1.5;
+        const t = Date.now() / 1000;
+        
+        for (let y = canvas.height - 100; y < canvas.height; y += 8) {
+          ctx.beginPath();
+          for (let x = 0; x <= canvas.width; x += 15) {
+            const yOffset = Math.sin(t * 1.2 + x * 0.01 + y * 0.02) * 2.5;
+            ctx.lineTo(x, y + yOffset);
+          }
+          ctx.stroke();
+        }
+      }
+      
+      drawRod() {
+        const baseX = canvas.width / 2;
+        const baseY = canvas.height - 15;
+        
+        ctx.strokeStyle = '#9D8B7E';
+        ctx.lineWidth = 7;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(baseX + 75, baseY - 200);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#B8956A';
+        ctx.beginPath();
+        ctx.arc(baseX, baseY, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      drawLine() {
+        const baseX = canvas.width / 2;
+        const baseY = canvas.height - 15;
+        
+        ctx.strokeStyle = 'rgba(130, 170, 220, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(baseX + 75, baseY - 200);
+        ctx.lineTo(this.mouseX, this.mouseY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      
+      drawHook() {
+        ctx.fillStyle = 'rgba(200, 150, 100, 0.8)';
+        ctx.beginPath();
+        ctx.arc(this.mouseX, this.mouseY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = 'rgba(200, 150, 100, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.mouseX, this.mouseY, 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      
+      endGame(won) {
+        this.isRunning = false;
+        gameOverScreen.classList.add('show');
+        
+        if (won) {
+          overTitle.textContent = '🎉 大漁！';
+          overMessage.textContent = `${this.speciesCount}種類の魚を集めました！`;
+        } else {
+          overTitle.textContent = '⏰ 時間切れ';
+          overMessage.textContent = `${this.speciesCount}種類の魚をゲット`;
+        }
+        
+        const names = Array.from(this.caughtSpecies).join(', ') || 'なし';
+        overAlmanac.textContent = `📚 図鑑: ${names}`;
+      }
+      
+      restart() {
+        gameOverScreen.classList.remove('show');
+        instructionText.classList.remove('fade');
+        this.init();
+      }
+      
+      gameLoop() {
+        if (this.isRunning) {
+          this.update();
+        }
+        this.draw();
+        requestAnimationFrame(() => this.gameLoop());
+      }
+    }
+    
+    new Game();
+  </script>
+</body>
+</html>

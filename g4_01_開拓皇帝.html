@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>開拓皇帝</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a1a;
+      overflow: hidden;
+    }
+    #gameContainer {
+      width: 375px;
+      height: 812px;
+      margin: 0 auto;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .header {
+      padding: 12px;
+      background: rgba(0,0,0,0.3);
+      color: white;
+      text-align: center;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+      background: rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 4px;
+    }
+    .stat-item {
+      background: rgba(255,255,255,0.1);
+      padding: 4px;
+      border-radius: 3px;
+    }
+    .stat-label {
+      color: #aaa;
+      font-size: 10px;
+    }
+    .stat-value {
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+    }
+    .grid-container {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.1);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    .cell {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: bold;
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.3);
+      transition: all 0.2s;
+      color: white;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .cell:hover {
+      transform: scale(1.05);
+      background: rgba(255,255,255,0.25);
+    }
+    .cell.farm { background: rgba(76, 175, 80, 0.7); }
+    .cell.house { background: rgba(255, 152, 0, 0.7); }
+    .cell.commerce { background: rgba(33, 150, 243, 0.7); }
+    .cell.industry { background: rgba(156, 39, 176, 0.7); }
+    .cell.luxury { background: rgba(255, 193, 7, 0.7); }
+    
+    .controls {
+      padding: 12px;
+      display: flex;
+      gap: 8px;
+      background: rgba(0,0,0,0.3);
+    }
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      color: white;
+      transition: all 0.2s;
+    }
+    .btn-next {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border: 2px solid white;
+    }
+    .btn-next:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .btn-next:active {
+      transform: scale(0.95);
+    }
+    
+    .modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      flex-direction: column;
+    }
+    .modal.hidden {
+      display: none;
+    }
+    .modal-content {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      text-align: center;
+      max-width: 300px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    .modal-title {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      color: #333;
+    }
+    .modal.win .modal-title { color: #4caf50; }
+    .modal.lose .modal-title { color: #f44336; }
+    
+    .modal-body {
+      margin-bottom: 16px;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .score-card {
+      background: #f5f5f5;
+      padding: 12px;
+      border-radius: 8px;
+      margin: 12px 0;
+      text-align: left;
+      font-size: 12px;
+    }
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      color: #333;
+    }
+    .badges {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+    .badge {
+      background: gold;
+      color: #333;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .stars {
+      font-size: 20px;
+      margin: 8px 0;
+      letter-spacing: 4px;
+    }
+    .btn-restart {
+      background: #667eea;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-restart:hover {
+      background: #764ba2;
+    }
+    
+    .facility-menu {
+      position: absolute;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 50;
+      min-width: 200px;
+    }
+    .facility-menu.hidden {
+      display: none;
+    }
+    .facility-btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      margin: 4px 0;
+      border: none;
+      background: #f0f0f0;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: left;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .facility-btn:hover {
+      background: #e0e0e0;
+    }
+    .facility-btn.farm { border-left: 4px solid #4caf50; }
+    .facility-btn.house { border-left: 4px solid #ff9800; }
+    .facility-btn.commerce { border-left: 4px solid #2196f3; }
+    .facility-btn.industry { border-left: 4px solid #9c27b0; }
+    .facility-btn.luxury { border-left: 4px solid #ffc107; }
+    .facility-info {
+      font-size: 10px;
+      color: #999;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div class="header">
+      <div class="title">開拓皇帝</div>
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-label">人口</div>
+          <div class="stat-value" id="popStat">100</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">収支/ターン</div>
+          <div class="stat-value" id="balanceStat">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">ターン</div>
+          <div class="stat-value" id="turnStat">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">赤字ターン</div>
+          <div class="stat-value" id="deficitStat">0</div>
+        </div>
+      </div>
+      <div style="margin-top: 8px; font-size: 11px; color: #ddd;">
+        目標: 人口1000以上 & 黒字経営 | ゲームオーバー: 赤字ターン3回
+      </div>
+    </div>
+    
+    <div class="grid-container">
+      <div class="grid" id="grid"></div>
+    </div>
+    
+    <div class="controls">
+      <button class="btn btn-next" id="nextBtn">ターン終了</button>
+    </div>
+  </div>
+  
+  <div class="modal hidden" id="facilityModal">
+    <div class="facility-menu" id="facilityMenu"></div>
+  </div>
+  
+  <div class="modal hidden" id="endModal">
+    <div class="modal-content" id="modalContent"></div>
+  </div>
+
+  <script>
+    const GRID_SIZE = 5;
+    const FACILITIES = {
+      farm: { emoji: '🌾', name: '農地', popGain: 20, income: 0, cost: 5 },
+      house: { emoji: '🏘️', name: '住宅地', popGain: 50, income: 0, cost: 15 },
+      commerce: { emoji: '🏪', name: '商業地', popGain: 0, income: 30, cost: 10 },
+      industry: { emoji: '🏭', name: '工業地', popGain: 0, income: 50, cost: 20 },
+      luxury: { emoji: '🏛️', name: '豪華施設', popGain: 30, income: 40, cost: 30 }
+    };
+
+    let gameState = {
+      population: 100,
+      income: 0,
+      cost: 0,
+      turn: 0,
+      deficitTurns: 0,
+      grid: Array(GRID_SIZE * GRID_SIZE).fill(null),
+      gameOver: false
+    };
+
+    const facilityEmojis = {};
+    Object.entries(FACILITIES).forEach(([key, f]) => {
+      facilityEmojis[key] = f.emoji;
+    });
+
+    function renderGrid() {
+      const gridEl = document.getElementById('grid');
+      gridEl.innerHTML = '';
+      for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const facility = gameState.grid[i];
+        if (facility) {
+          cell.textContent = facilityEmojis[facility];
+          cell.classList.add(facility);
+        }
+        cell.addEventListener('click', () => showFacilityMenu(i, cell));
+        gridEl.appendChild(cell);
+      }
+    }
+
+    function showFacilityMenu(index, cellEl) {
+      if (gameState.gameOver) return;
+      
+      const modal = document.getElementById('facilityModal');
+      const menu = document.getElementById('facilityMenu');
+      menu.innerHTML = '';
+
+      const rect = cellEl.getBoundingClientRect();
+      menu.style.position = 'fixed';
+      menu.style.left = (rect.left + rect.width / 2 - 100) + 'px';
+      menu.style.top = (rect.top - 120) + 'px';
+
+      if (gameState.grid[index]) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'facility-btn';
+        removeBtn.textContent = '解体する';
+        removeBtn.addEventListener('click', () => {
+          gameState.grid[index] = null;
+          modal.classList.add('hidden');
+          renderGrid();
+        });
+        menu.appendChild(removeBtn);
+      } else {
+        Object.entries(FACILITIES).forEach(([key, facility]) => {
+          const btn = document.createElement('button');
+          btn.className = `facility-btn ${key}`;
+          btn.innerHTML = `<div>${facility.emoji} ${facility.name}</div><div class="facility-info">+${facility.popGain > 0 ? '人口' + facility.popGain : ''}${facility.income > 0 ? '収入' + facility.income : ''} (維持費${facility.cost})</div>`;
+          btn.addEventListener('click', () => {
+            gameState.grid[index] = key;
+            modal.classList.add('hidden');
+            renderGrid();
+          });
+          menu.appendChild(btn);
+        });
+      }
+
+      modal.classList.remove('hidden');
+      document.addEventListener('click', (e) => {
+        if (!menu.contains(e.target) && e.target !== cellEl) {
+          modal.classList.add('hidden');
+        }
+      }, { once: true });
+    }
+
+    function updateStats() {
+      document.getElementById('popStat').textContent = gameState.population;
+      const balance = gameState.income - gameState.cost;
+      document.getElementById('balanceStat').textContent = (balance >= 0 ? '+' : '') + balance;
+      document.getElementById('turnStat').textContent = gameState.turn;
+      document.getElementById('deficitStat').textContent = gameState.deficitTurns;
+    }
+
+    function calculateResources() {
+      gameState.income = 0;
+      gameState.cost = 0;
+
+      gameState.grid.forEach(facility => {
+        if (facility) {
+          const f = FACILITIES[facility];
+          gameState.population += f.popGain;
+          gameState.income += f.income;
+          gameState.cost += f.cost;
+        }
+      });
+
+      gameState.income += Math.floor(gameState.population / 10);
+    }
+
+    function advanceTurn() {
+      if (gameState.gameOver) return;
+
+      calculateResources();
+      const balance = gameState.income - gameState.cost;
+
+      if (balance < 0) {
+        gameState.deficitTurns++;
+      }
+
+      gameState.turn++;
+      updateStats();
+
+      if (gameState.population >= 1000 && balance >= 0) {
+        endGame(true);
+      } else if (gameState.deficitTurns >= 3) {
+        endGame(false);
+      }
+    }
+
+    function endGame(won) {
+      gameState.gameOver = true;
+      const balance = gameState.income - gameState.cost;
+      const stars = calculateStars(won, balance);
+      const badges = calculateBadges(won);
+
+      const modal = document.getElementById('endModal');
+      const content = document.getElementById('modalContent');
+
+      let html = `
+        <div class="modal-content ${won ? 'win' : 'lose'}">
+          <div class="modal-title">${won ? '🎉 勝利!' : '💔 ゲームオーバー'}</div>
+          <div class="modal-body">
+            ${won ? '人口1000を達成し、黒字経営に成功しました！' : '赤字が3ターン続いてしまいました...'}
+          </div>
+          <div class="score-card">
+            <div class="score-row"><span>最終人口:</span> <strong>${gameState.population}</strong></div>
+            <div class="score-row"><span>最終収支:</span> <strong>${balance >= 0 ? '+' : ''}${balance}</strong></div>
+            <div class="score-row"><span>経過ターン:</span> <strong>${gameState.turn}</strong></div>
+            <div class="score-row"><span>赤字ターン:</span> <strong>${gameState.deficitTurns}</strong></div>
+          </div>
+          ${badges.length > 0 ? `<div class="badges">${badges.map(b => `<div class="badge">${b}</div>`).join('')}</div>` : ''}
+          <div class="stars">${'★'.repeat(stars)}</div>
+          <button class="btn-restart" onclick="location.reload()">リプレイ</button>
+        </div>
+      `;
+      content.innerHTML = html;
+      modal.classList.remove('hidden');
+    }
+
+    function calculateStars(won, balance) {
+      if (!won) return 1;
+      let stars = 3;
+      if (gameState.turn < 20) stars = 5;
+      else if (gameState.turn < 30) stars = 4;
+      if (gameState.deficitTurns > 0) stars--;
+      return Math.max(1, stars);
+    }
+
+    function calculateBadges(won) {
+      const badges = [];
+      if (won) badges.push('🏆 人口1000達成');
+      if (gameState.income - gameState.cost >= 100) badges.push('💰 大黒字');
+      if (gameState.turn <= 15) badges.push('⚡ 最速勝利');
+      if (gameState.deficitTurns === 0 && won) badges.push('✨ 完全黒字');
+      return badges;
+    }
+
+    document.getElementById('nextBtn').addEventListener('click', advanceTurn);
+
+    // Debug Contract
+    window.__gameDebug = {
+      metrics: { resources: 0, score: 0, population: 100, turn: 0, phase: "playing" },
+      advanceTime: function(seconds) {
+        const turnsToAdvance = Math.ceil(seconds / 2);
+        for (let i = 0; i < turnsToAdvance; i++) {
+          if (!gameState.gameOver) {
+            advanceTurn();
+          }
+        }
+        updateDebug();
+      }
+    };
+
+    function updateDebug() {
+      const balance = gameState.income - gameState.cost;
+      window.__gameDebug.metrics = {
+        resources: gameState.income,
+        score: gameState.turn,
+        population: gameState.population,
+        turn: gameState.turn,
+        phase: gameState.gameOver ? "ended" : "playing",
+        balance: balance,
+        deficitTurns: gameState.deficitTurns
+      };
+    }
+
+    renderGrid();
+    updateStats();
+  </script>
+</body>
+</html>

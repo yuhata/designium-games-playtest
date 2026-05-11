@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>フロウパイプ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 600px;
+            height: 700px;
+            background: #1a1a2e;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        #header {
+            background: linear-gradient(90deg, #16213e 0%, #0f3460 100%);
+            padding: 20px;
+            color: white;
+            text-align: center;
+            border-bottom: 3px solid #e94560;
+        }
+        #title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #stats {
+            display: flex;
+            justify-content: space-around;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .stat {
+            background: rgba(233, 69, 96, 0.3);
+            padding: 8px 15px;
+            border-radius: 10px;
+            min-width: 120px;
+            text-align: center;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #00ff88;
+            font-size: 20px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #aaa;
+        }
+        #instructions {
+            color: #00ff88;
+            font-size: 13px;
+            margin-top: 8px;
+            text-align: center;
+            font-style: italic;
+        }
+        #canvas {
+            flex: 1;
+            background: #0f0f1e;
+            border-bottom: 3px solid #e94560;
+            cursor: pointer;
+            display: block;
+        }
+        #modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #modal.show {
+            display: flex;
+        }
+        .modal-content {
+            text-align: center;
+            color: white;
+            padding: 40px;
+        }
+        .modal-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.8);
+        }
+        .win #modal-title {
+            color: #00ff88;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.9);
+        }
+        .fail #modal-title {
+            color: #ff4444;
+            text-shadow: 0 0 30px rgba(255, 68, 68, 0.9);
+        }
+        .modal-score {
+            font-size: 32px;
+            margin: 20px 0;
+            color: #00ff88;
+        }
+        .modal-btn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 18px;
+            background: linear-gradient(90deg, #e94560 0%, #ff6b6b 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        .modal-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="header">
+            <div id="title">🔗 フロウパイプ</div>
+            <div id="stats">
+                <div class="stat">
+                    <div class="stat-label">接続</div>
+                    <div class="stat-value"><span id="connected">0</span>/<span id="total">0</span></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">残時間</div>
+                    <div class="stat-value" id="timer">60</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">スコア</div>
+                    <div class="stat-value" id="score">0</div>
+                </div>
+            </div>
+            <div id="instructions">パイプをクリックして90度回転 → 水を繋いでゴールを目指そう！</div>
+        </div>
+        <canvas id="canvas"></canvas>
+        <div id="modal">
+            <div class="modal-content">
+                <div id="modal-title" class="modal-title">WIN!</div>
+                <div class="modal-score">スコア: <span id="final-score">0</span></div>
+                <button class="modal-btn" onclick="location.reload()">もう一度プレイ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const modal = document.getElementById('modal');
+
+        canvas.width = 600;
+        canvas.height = 550;
+
+        // ゲーム設定
+        const GRID_SIZE = 80;
+        const GRID_COLS = 6;
+        const GRID_ROWS = 5;
+        const INITIAL_TIME = 60;
+        const PIPE_TYPES = {
+            STRAIGHT: 0,
+            CORNER: 1,
+            T_JUNCTION: 2,
+            CROSS: 3
+        };
+
+        let gameState = {
+            pipes: [],
+            timeLeft: INITIAL_TIME,
+            score: 0,
+            gameOver: false,
+            won: false,
+            startTime: Date.now(),
+            paddingTop: 20,
+            paddingLeft: 30
+        };
+
+        class Pipe {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.rotation = Math.floor(Math.random() * 4);
+                this.connected = false;
+                this.flowing = false;
+            }
+
+            getConnections() {
+                const dirs = {
+                    0: [0, -1], // 上
+                    1: [1, 0],  // 右
+                    2: [0, 1],  // 下
+                    3: [-1, 0]  // 左
+                };
+
+                let connections = [];
+                const rot = this.rotation;
+
+                if (this.type === PIPE_TYPES.STRAIGHT) {
+                    connections = [rot, (rot + 2) % 4];
+                } else if (this.type === PIPE_TYPES.CORNER) {
+                    connections = [rot, (rot + 1) % 4];
+                } else if (this.type === PIPE_TYPES.T_JUNCTION) {
+                    connections = [rot, (rot + 1) % 4, (rot + 3) % 4];
+                } else if (this.type === PIPE_TYPES.CROSS) {
+                    connections = [0, 1, 2, 3];
+                }
+
+                return connections;
+            }
+
+            rotate() {
+                this.rotation = (this.rotation + 1) % 4;
+            }
+
+            draw(x, y) {
+                ctx.save();
+                ctx.translate(x + GRID_SIZE / 2, y + GRID_SIZE / 2);
+                ctx.rotate((this.rotation * Math.PI) / 2);
+
+                ctx.strokeStyle = this.flowing ? '#00ff88' : (this.connected ? '#4facfe' : '#666');
+                ctx.lineWidth = 12;
+                ctx.lineCap = 'round';
+
+                if (this.type === PIPE_TYPES.STRAIGHT) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -25);
+                    ctx.lineTo(0, 25);
+                    ctx.stroke();
+                } else if (this.type === PIPE_TYPES.CORNER) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 25, -Math.PI / 2, 0);
+                    ctx.stroke();
+                } else if (this.type === PIPE_TYPES.T_JUNCTION) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -25);
+                    ctx.lineTo(0, 25);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 25, 0, Math.PI / 2);
+                    ctx.stroke();
+                } else if (this.type === PIPE_TYPES.CROSS) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -25);
+                    ctx.lineTo(0, 25);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(-25, 0);
+                    ctx.lineTo(25, 0);
+                    ctx.stroke();
+                }
+
+                if (this.flowing) {
+                    ctx.fillStyle = 'rgba(0, 255, 136, 0.4)';
+                    ctx.fillRect(-15, -15, 30, 30);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        function initGame() {
+            gameState.pipes = [];
+            gameState.timeLeft = INITIAL_TIME;
+            gameState.score = 0;
+            gameState.gameOver = false;
+            gameState.won = false;
+            gameState.startTime = Date.now();
+
+            for (let row = 0; row < GRID_ROWS; row++) {
+                for (let col = 0; col < GRID_COLS; col++) {
+                    const type = Math.floor(Math.random() * 3);
+                    gameState.pipes.push(new Pipe(col, row, type));
+                }
+            }
+
+            startTimer();
+        }
+
+        function getNeighbors(pipe) {
+            const neighbors = [];
+            const { x, y } = pipe;
+            const dirs = [
+                { dx: 0, dy: -1, dir: 0 },
+                { dx: 1, dy: 0, dir: 1 },
+                { dx: 0, dy: 1, dir: 2 },
+                { dx: -1, dy: 0, dir: 3 }
+            ];
+
+            dirs.forEach(d => {
+                const nx = x + d.dx;
+                const ny = y + d.dy;
+                if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
+                    const neighbor = gameState.pipes[ny * GRID_COLS + nx];
+                    const oppositeDir = (d.dir + 2) % 4;
+                    neighbors.push({ pipe: neighbor, dir: d.dir, oppositeDir });
+                }
+            });
+
+            return neighbors;
+        }
+
+        function checkConnections() {
+            gameState.pipes.forEach(pipe => {
+                pipe.connected = false;
+                pipe.flowing = false;
+            });
+
+            let connectedCount = 0;
+            const visited = new Set();
+
+            function dfs(pipe, prevDir) {
+                const key = `${pipe.x},${pipe.y}`;
+                visited.add(key);
+                pipe.connected = true;
+                pipe.flowing = true;
+                connectedCount++;
+
+                const neighbors = getNeighbors(pipe);
+                neighbors.forEach(({ pipe: neighbor, dir, oppositeDir }) => {
+                    const key2 = `${neighbor.x},${neighbor.y}`;
+                    if (!visited.has(key2)) {
+                        const connections = pipe.getConnections();
+                        const neighborConnections = neighbor.getConnections();
+
+                        if (connections.includes(dir) && neighborConnections.includes(oppositeDir)) {
+                            dfs(neighbor, oppositeDir);
+                        }
+                    }
+                });
+            }
+
+            // スタートパイプから開始
+            if (gameState.pipes.length > 0) {
+                dfs(gameState.pipes[0], -1);
+            }
+
+            document.getElementById('connected').textContent = connectedCount;
+            document.getElementById('total').textContent = gameState.pipes.length;
+
+            return connectedCount === gameState.pipes.length;
+        }
+
+        function startTimer() {
+            const timerInterval = setInterval(() => {
+                gameState.timeLeft--;
+                document.getElementById('timer').textContent = Math.max(0, gameState.timeLeft);
+
+                if (gameState.timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    gameState.gameOver = true;
+                    const allConnected = checkConnections();
+                    if (!allConnected) {
+                        showGameOver(false);
+                    }
+                }
+            }, 1000);
+        }
+
+        function showGameOver(won) {
+            gameState.won = won;
+            const modalTitle = document.getElementById('modal-title');
+            const finalScore = document.getElementById('final-score');
+
+            if (won) {
+                gameState.score = Math.max(100, (gameState.timeLeft * 10) + (gameState.pipes.length * 20));
+                modalTitle.textContent = '✨ WIN! ✨';
+                modalTitle.style.color = '#00ff88';
+                modal.className = 'show win';
+            } else {
+                gameState.score = Math.max(0, gameState.timeLeft * 5);
+                modalTitle.textContent = '⏰ TIME UP!';
+                modalTitle.style.color = '#ff4444';
+                modal.className = 'show fail';
+            }
+
+            finalScore.textContent = gameState.score;
+            document.getElementById('score').textContent = gameState.score;
+        }
+
+        function handleCanvasClick(e) {
+            if (gameState.gameOver) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const offsetX = gameState.paddingLeft;
+            const offsetY = gameState.paddingTop;
+
+            const col = Math.floor((x - offsetX) / GRID_SIZE);
+            const row = Math.floor((y - offsetY) / GRID_SIZE);
+
+            if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS) {
+                const pipe = gameState.pipes[row * GRID_COLS + col];
+                pipe.rotate();
+
+                const allConnected = checkConnections();
+                if (allConnected) {
+                    gameState.gameOver = true;
+                    showGameOver(true);
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const offsetX = gameState.paddingLeft;
+            const offsetY = gameState.paddingTop;
+
+            // グリッド背景
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for (let row = 0; row <= GRID_ROWS; row++) {
+                ctx.beginPath();
+                ctx.moveTo(offsetX, offsetY + row * GRID_SIZE);
+                ctx.lineTo(offsetX + GRID_COLS * GRID_SIZE, offsetY + row * GRID_SIZE);
+                ctx.stroke();
+            }
+            for (let col = 0; col <= GRID_COLS; col++) {
+                ctx.beginPath();
+                ctx.moveTo(offsetX + col * GRID_SIZE, offsetY);
+                ctx.lineTo(offsetX + col * GRID_SIZE, offsetY + GRID_ROWS * GRID_SIZE);
+                ctx.stroke();
+            }
+
+            // パイプ描画
+            gameState.pipes.forEach((pipe, idx) => {
+                const row = Math.floor(idx / GRID_COLS);
+                const col = idx % GRID_COLS;
+                const x = offsetX + col * GRID_SIZE;
+                const y = offsetY + row * GRID_SIZE;
+                pipe.draw(x, y);
+            });
+
+            if (!gameState.gameOver) {
+                requestAnimationFrame(draw);
+            }
+        }
+
+        canvas.addEventListener('mousedown', handleCanvasClick);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initGame();
+            checkConnections();
+            draw();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>完全駐車</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #0a0e27;
+      font-family: 'Arial', sans-serif;
+    }
+    canvas {
+      display: block;
+      cursor: grab;
+    }
+    canvas:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    // ===== グローバルデバッグインターフェース =====
+    window.__gameDebug = {
+      drags: [],
+      objects: [],
+      metrics: {
+        score: 0,
+        progress: 0.0,
+        remaining: 0,
+        phase: "playing"
+      },
+      collisionCount: 0,
+      dragObject: function(id) {
+        const carIdx = parseInt(id.replace('car_', ''));
+        if (isNaN(carIdx) || carIdx >= cars.length) return;
+        
+        const car = cars[carIdx];
+        if (car.parked) return;
+        
+        // 最初の未使用タイルへ自動駐車
+        for (let tile of parkingTiles) {
+          if (!tile.occupied) {
+            car.x = tile.x + 10;
+            car.y = tile.y + 20;
+            car.parked = true;
+            tile.occupied = true;
+            window.__gameDebug.metrics.remaining--;
+            score += 100;
+            
+            if (checkCollisions()) {
+              endGame(false);
+            } else if (cars.every(c => c.parked)) {
+              endGame(true);
+            }
+            updateDebug();
+            break;
+          }
+        }
+      },
+      tapObject: function(id) {
+        this.dragObject(id);
+      }
+    };
+
+    // ===== ゲーム定数と状態 =====
+    const CANVAS_WIDTH = 1280;
+    const CANVAS_HEIGHT = 720;
+    const CAR_WIDTH = 80;
+    const CAR_HEIGHT = 60;
+    const TILE_SIZE = 100;
+    const PARKING_SPOTS = 6;
+    const SNAP_DISTANCE = 50;
+    
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    let cars = [];
+    let parkingTiles = [];
+    let draggedCar = null;
+    let dragOffset = { x: 0, y: 0 };
+    let gameState = 'playing'; // 'playing', 'win', 'lose'
+    let elapsed = 0;
+    let score = 0;
+
+    // ===== 初期化 =====
+    function init() {
+      cars = [];
+      parkingTiles = [];
+      draggedCar = null;
+      gameState = 'playing';
+      elapsed = 0;
+      score = 0;
+      window.__gameDebug.collisionCount = 0;
+
+      // 駐車タイル配置（下部、6スポット）
+      for (let i = 0; i < PARKING_SPOTS; i++) {
+        parkingTiles.push({
+          x: 100 + i * 180,
+          y: 550,
+          occupied: false,
+          arrowRotation: [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2, Math.PI][i]
+        });
+      }
+
+      // 車をランダム配置（上部）
+      const colors = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA'];
+      for (let i = 0; i < PARKING_SPOTS; i++) {
+        cars.push({
+          id: 'car_' + i,
+          x: 100 + Math.random() * (CANVAS_WIDTH - 300),
+          y: 50 + Math.random() * 150,
+          width: CAR_WIDTH,
+          height: CAR_HEIGHT,
+          parked: false,
+          color: colors[i],
+          vx: 0,
+          vy: 0
+        });
+      }
+
+      updateDebug();
+    }
+
+    // ===== デバッグ情報更新 =====
+    function updateDebug() {
+      window.__gameDebug.drags = cars
+        .filter(car => !car.parked)
+        .map((car, idx) => ({
+          id: car.id,
+          x: car.x,
+          y: car.y,
+          width: car.width,
+          height: car.height,
+          status: 'draggable',
+          enabled: true
+        }));
+
+      window.__gameDebug.objects = parkingTiles.map((tile, idx) => ({
+        id: 'tile_' + idx,
+        x: tile.x,
+        y: tile.y,
+        width: TILE_SIZE,
+        height: TILE_SIZE,
+        type: 'arrow',
+        occupied: tile.occupied
+      }));
+
+      const remaining = cars.filter(c => !c.parked).length;
+      window.__gameDebug.metrics = {
+        score: score,
+        progress: (PARKING_SPOTS - remaining) / PARKING_SPOTS,
+        remaining: remaining,
+        phase: gameState
+      };
+    }
+
+    // ===== AABB衝突判定 =====
+    function checkAABB(x1, y1, w1, h1, x2, y2, w2, h2) {
+      return x1 < x2 + w2 && x1 + w1 > x2 &&
+             y1 < y2 + h2 && y1 + h1 > y2;
+    }
+
+    // ===== 毎フレーム衝突判定 =====
+    function checkCollisions() {
+      for (let i = 0; i < cars.length; i++) {
+        const car = cars[i];
+        
+        // 壁衝突（画面端）
+        if (car.x < 0 || car.x + car.width > CANVAS_WIDTH) {
+          window.__gameDebug.collisionCount++;
+          return true;
+        }
+
+        // 車間衝突（AABB: x±40, y±30）
+        for (let j = i + 1; j < cars.length; j++) {
+          const other = cars[j];
+          if (checkAABB(
+            car.x - 40, car.y - 30, car.width + 80, car.height + 60,
+            other.x - 40, other.y - 30, other.width + 80, other.height + 60
+          )) {
+            window.__gameDebug.collisionCount++;
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // ===== 矢印描画 =====
+    function drawArrow(cx, cy, rotation) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.moveTo(0, -20);
+      ctx.lineTo(12, 8);
+      ctx.lineTo(0, 12);
+      ctx.lineTo(-12, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#FFA500';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ===== 描画メイン =====
+    function draw() {
+      // 背景
+      ctx.fillStyle = '#0a0e27';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // グリッド背景（駐車場グリッド）
+      ctx.strokeStyle = '#1a2347';
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= CANVAS_WIDTH; x += 100) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_HEIGHT);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= CANVAS_HEIGHT; y += 100) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_WIDTH, y);
+        ctx.stroke();
+      }
+
+      // 駐車タイル
+      parkingTiles.forEach((tile, idx) => {
+        // タイル背景
+        const isOccupied = tile.occupied;
+        ctx.fillStyle = isOccupied ? 'rgba(46, 204, 113, 0.3)' : 'rgba(100, 100, 120, 0.2)';
+        ctx.fillRect(tile.x, tile.y, TILE_SIZE, TILE_SIZE);
+        
+        ctx.strokeStyle = isOccupied ? '#2ecc71' : '#5a5f8f';
+        ctx.lineWidth = isOccupied ? 3 : 2;
+        ctx.strokeRect(tile.x, tile.y, TILE_SIZE, TILE_SIZE);
+
+        // 矢印
+        drawArrow(tile.x + TILE_SIZE / 2, tile.y + TILE_SIZE / 2, tile.arrowRotation);
+
+        // テキスト
+        ctx.fillStyle = isOccupied ? '#2ecc71' : '#aaa';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('P' + (idx + 1), tile.x + TILE_SIZE / 2, tile.y + TILE_SIZE - 10);
+      });
+
+      // 車
+      cars.forEach(car => {
+        // 車体
+        ctx.fillStyle = car.color;
+        ctx.fillRect(car.x, car.y, car.width, car.height);
+
+        // 車の枠線（駐車済みは太く明るく）
+        if (car.parked) {
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 4;
+          ctx.shadowColor = '#2ecc71';
+          ctx.shadowBlur = 10;
+        } else {
+          ctx.strokeStyle = '#888';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = 'transparent';
+        }
+        ctx.strokeRect(car.x, car.y, car.width, car.height);
+        ctx.shadowColor = 'transparent';
+
+        // ナンバープレート
+        ctx.fillStyle = '#000';
+        ctx.fillRect(car.x + 5, car.y + car.height - 15, car.width - 10, 10);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(parseInt(car.id.replace('car_', '')) + 1).padStart(2, '0'), 
+                     car.x + car.width / 2, car.y + car.height - 7);
+      });
+
+      // UI（上部）
+      drawUI();
+
+      // ゲーム終了画面
+      if (gameState === 'win') {
+        drawWinScreen();
+      } else if (gameState === 'lose') {
+        drawLoseScreen();
+      }
+    }
+
+    // ===== UI描画 =====
+    function drawUI() {
+      // ヘッダーバー
+      ctx.fillStyle = 'rgba(10, 14, 39, 0.95)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, 50);
+      ctx.strokeStyle = '#2ecc71';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, CANVAS_WIDTH, 50);
+
+      // スコア・残数表示
+      const remaining = cars.filter(c => !c.parked).length;
+      ctx.fillStyle = '#2ecc71';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`🚗 残駐車: ${remaining} / ${PARKING_SPOTS}`, 20, 32);
+
+      ctx.fillStyle = '#FFD700';
+      ctx.fillText(`⏱ ${Math.floor(elapsed / 1000)}s | ⭐ ${score}`, CANVAS_WIDTH - 250, 32);
+
+      // 操作説明（3秒間）
+      if (gameState === 'playing' && elapsed < 3000) {
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('← ドラッグして車を駐車位置に移動してください →', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 30);
+      }
+    }
+
+    // ===== Win画面 =====
+    function drawWinScreen() {
+      // 背景オーバーレイ
+      ctx.fillStyle = 'rgba(10, 14, 39, 0.9)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // パーティクル背景（簡易版）
+      ctx.fillStyle = 'rgba(46, 204, 113, 0.2)';
+      for (let i = 0; i < 20; i++) {
+        const x = (elapsed / 10 + i * 64) % CANVAS_WIDTH;
+        const y = 100 + Math.sin(elapsed / 500 + i) * 50;
+        ctx.fillRect(x, y, 8, 8);
+      }
+
+      // タイトル
+      ctx.fillStyle = '#2ecc71';
+      ctx.font = 'bold 64px Arial';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#2ecc71';
+      ctx.shadowBlur = 20;
+      ctx.fillText('✓ 完璧駐車！', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 80);
+      ctx.shadowColor = 'transparent';
+
+      // スコア情報
+      ctx.fillStyle = '#fff';
+      ctx.font = '24px Arial';
+      ctx.fillText(`最終スコア: ${score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 10);
+
+      ctx.fillStyle = '#aaa';
+      ctx.font = '18px Arial';
+      ctx.fillText(`駐車時間: ${Math.floor(elapsed / 1000)}秒`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
+
+      // 再開指示
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 18px Arial';
+      const pulse = Math.sin(elapsed / 300) * 0.3 + 0.7;
+      ctx.globalAlpha = pulse;
+      ctx.fillText('クリックで再スタート', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 110);
+      ctx.globalAlpha = 1.0;
+    }
+
+    // ===== Lose画面 =====
+    function drawLoseScreen() {
+      // 背景オーバーレイ
+      ctx.fillStyle = 'rgba(10, 14, 39, 0.9)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // 衝突エフェクト（赤色フラッシュ）
+      const flash = Math.sin(elapsed / 100) * 0.2 + 0.3;
+      ctx.fillStyle = `rgba(255, 107, 107, ${flash})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // タイトル
+      ctx.fillStyle = '#FF6B6B';
+      ctx.font = 'bold 64px Arial';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#FF6B6B';
+      ctx.shadowBlur = 20;
+      ctx.fillText('✗ 衝突した！', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 80);
+      ctx.shadowColor = 'transparent';
+
+      // スコア情報
+      ctx.fillStyle = '#fff';
+      ctx.font = '24px Arial';
+      ctx.fillText(`獲得スコア: ${score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 10);
+
+      const completed = PARKING_SPOTS - window.__gameDebug.metrics.remaining;
+      ctx.fillStyle = '#aaa';
+      ctx.font = '18px Arial';
+      ctx.fillText(`駐車完了: ${completed} / ${PARKING_SPOTS}台`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
+
+      // 再開指示
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 18px Arial';
+      const pulse = Math.sin(elapsed / 300) * 0.3 + 0.7;
+      ctx.globalAlpha = pulse;
+      ctx.fillText('クリックで再スタート', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 110);
+      ctx.globalAlpha = 1.0;
+    }
+
+    // ===== ゲーム終了処理 =====
+    function endGame(isWin) {
+      gameState = isWin ? 'win' : 'lose';
+      window.__gameDebug.metrics.phase = gameState;
+      
+      if (isWin) {
+        const timeBonus = Math.max(0, 3000 - elapsed);
+        score += 500 + timeBonus;
+      }
+    }
+
+    // ===== 更新 =====
+    function update(deltaTime) {
+      if (gameState !== 'playing') return;
+
+      elapsed += deltaTime;
+
+      // 毎フレーム衝突判定
+      if (checkCollisions()) {
+        endGame(false);
+      }
+
+      updateDebug();
+    }
+
+    // ===== マウスイベントハンドラ =====
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameState !== 'playing') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      // クリックされた車を検出
+      for (let car of cars) {
+        if (!car.parked && checkAABB(mx, my, 1, 1, car.x, car.y, car.width, car.height)) {
+          draggedCar = car;
+          dragOffset.x = mx - car.x;
+          dragOffset.y = my - car.y;
+          break;
+        }
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!draggedCar || gameState !== 'playing') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      draggedCar.x = mx - dragOffset.x;
+      draggedCar.y = my - dragOffset.y;
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (!draggedCar || gameState !== 'playing') return;
+
+      const car = draggedCar;
+      draggedCar = null;
+
+      // スナップ判定
+      let closestTile = null;
+      let closestDist = SNAP_DISTANCE;
+
+      for (let tile of parkingTiles) {
+        if (tile.occupied) continue;
+
+        const tileCx = tile.x + TILE_SIZE / 2;
+        const tileCy = tile.y + TILE_SIZE / 2;
+        const carCx = car.x + car.width / 2;
+        const carCy = car.y + car.height / 2;
+
+        const dist = Math.hypot(tileCx - carCx, tileCy - carCy);
+        if (dist < closestDist) {
+          closestTile = tile;
+          closestDist = dist;
+        }
+      }
+
+      if (closestTile) {
+        // スナップ確定
+        car.x = closestTile.x + 10;
+        car.y = closestTile.y + 20;
+        car.parked = true;
+        closestTile.occupied = true;
+        score += 100;
+
+        // 衝突判定
+        if (checkCollisions()) {
+          endGame(false);
+        } else if (cars.every(c => c.parked)) {
+          endGame(true);
+        }
+      }
+      // スナップ失敗時は位置はそのまま（ドラッグ継続可能）
+
+      updateDebug();
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (gameState === 'win' || gameState === 'lose') {
+        init();
+        gameState = 'playing';
+      }
+    });
+
+    // ===== メインゲームループ =====
+    let lastTime = Date.now();
+    function gameLoop() {
+      const now = Date.now();
+      const deltaTime = now - lastTime;
+      lastTime = now;
+
+      update(deltaTime);
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ===== 開始 =====
+    init();
+    gameLoop();
+  </script>
+</body>
+</html>

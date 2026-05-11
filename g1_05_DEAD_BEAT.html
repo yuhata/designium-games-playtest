@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DEAD BEAT - Rhythm Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #0a0a0a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #fff;
+    }
+    #gameContainer {
+      position: relative;
+      width: 600px;
+      height: 800px;
+      background: #1a1a2e;
+      border: 3px solid #0f3460;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    #titleScreen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0f3460, #16213e);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #titleScreen.hidden { display: none; }
+    .title-text {
+      font-size: 72px;
+      font-weight: bold;
+      margin-bottom: 30px;
+      text-shadow: 0 0 20px #ff006e;
+      color: #ff006e;
+    }
+    .subtitle-text {
+      font-size: 18px;
+      color: #aaa;
+      margin-bottom: 50px;
+      text-align: center;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 24px;
+      background: #ff006e;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    #startBtn:hover { background: #ff3385; transform: scale(1.1); }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="titleScreen">
+      <div class="title-text">DEAD BEAT</div>
+      <div class="subtitle-text">Tap the falling notes<br/>when they reach the line</div>
+      <button id="startBtn" data-id="start">START GAME</button>
+    </div>
+  </div>
+
+  <script>
+    // ==================== DEBUG CONTRACT INIT ====================
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, miss: 0, combo: 0, phase: "title" },
+      tapObject: function(id) { }
+    };
+
+    const CANVAS_WIDTH = 600;
+    const CANVAS_HEIGHT = 800;
+    const BPM = 120;
+    const BEAT_MS = 60000 / BPM;
+    const NOTE_RADIUS = 40;
+    const JUDGE_WINDOW = 100;
+    const FALL_TIME = 2000;
+    const JUDGE_Y = 700;
+
+    let gameState = {
+      phase: "title",
+      gameStartTime: null,
+      notes: [],
+      score: 0,
+      combo: 0,
+      miss: 0,
+      remaining: 0,
+      bestScore: localStorage.getItem("deadbeatBest") ? parseInt(localStorage.getItem("deadbeatBest")) : 0,
+      newBest: false
+    };
+
+    function updateDebug() {
+      window.__gameDebug.metrics = {
+        score: gameState.score,
+        progress: gameState.notes.length > 0 ? 1 - Math.max(0, gameState.remaining / gameState.notes.length) : 0,
+        remaining: gameState.remaining,
+        miss: gameState.miss,
+        combo: gameState.combo,
+        phase: gameState.phase
+      };
+
+      window.__gameDebug.objects = [];
+      
+      if (gameState.phase === "title") {
+        window.__gameDebug.objects.push({
+          id: "start",
+          enabled: true,
+          matchId: null
+        });
+      } else if (gameState.phase === "playing") {
+        for (let note of gameState.notes) {
+          if (!note.hit && !note.missed) {
+            window.__gameDebug.objects.push({
+              id: note.id,
+              enabled: true,
+              matchId: null,
+              x: note.x,
+              y: note.currentY,
+              radius: NOTE_RADIUS
+            });
+          }
+        }
+      }
+    }
+
+    function generateNotes() {
+      gameState.notes = [];
+      const noteCount = 15;
+      for (let i = 0; i < noteCount; i++) {
+        const appearTime = i * BEAT_MS * 1.5;
+        const xPos = 150 + (i % 3) * 150;
+        gameState.notes.push({
+          id: `note_${i}`,
+          appearTime: appearTime,
+          judgeTime: appearTime + FALL_TIME,
+          x: xPos,
+          y: 0,
+          currentY: -200,
+          hit: false,
+          missed: false
+        });
+      }
+      gameState.remaining = noteCount;
+      updateDebug();
+    }
+
+    function handleNoteTap(x, y, gameTime) {
+      let hitAny = false;
+      for (let note of gameState.notes) {
+        if (note.hit || note.missed) continue;
+        if (gameTime < note.appearTime) continue;
+
+        const dist = Math.sqrt((note.x - x) ** 2 + (note.currentY - y) ** 2);
+        if (dist <= NOTE_RADIUS + 30) {
+          const timeDiff = Math.abs(gameTime - note.judgeTime);
+          note.hit = true;
+          gameState.combo++;
+          
+          if (timeDiff <= JUDGE_WINDOW / 2) {
+            gameState.score += 100;
+          } else if (timeDiff <= JUDGE_WINDOW) {
+            gameState.score += 50;
+          } else {
+            gameState.score += 10;
+          }
+          
+          gameState.remaining--;
+          hitAny = true;
+          break;
+        }
+      }
+      
+      if (hitAny) {
+        updateDebug();
+        checkGameEnd();
+      }
+    }
+
+    window.__gameDebug.tapObject = function(id) {
+      if (id === "start") {
+        startGame();
+        return;
+      }
+
+      if (gameState.phase !== "playing" || !gameState.gameStartTime) return;
+
+      const noteIdx = parseInt(id.split("_")[1]);
+      if (isNaN(noteIdx) || noteIdx < 0 || noteIdx >= gameState.notes.length) return;
+
+      const note = gameState.notes[noteIdx];
+      if (note.hit || note.missed) return;
+
+      const gameTime = Date.now() - gameState.gameStartTime;
+      if (gameTime >= note.appearTime) {
+        note.hit = true;
+        gameState.combo++;
+        gameState.score += 100;
+        gameState.remaining--;
+        updateDebug();
+        checkGameEnd();
+      }
+    };
+
+    function checkGameEnd() {
+      if (gameState.remaining === 0 && gameState.miss === 0) {
+        gameState.phase = "win";
+        if (gameState.score > gameState.bestScore) {
+          gameState.bestScore = gameState.score;
+          gameState.newBest = true;
+          localStorage.setItem("deadbeatBest", gameState.bestScore);
+        }
+      } else if (gameState.miss >= 3) {
+        gameState.phase = "fail";
+      }
+      updateDebug();
+    }
+
+    function startGame() {
+      const titleScreen = document.getElementById("titleScreen");
+      titleScreen.classList.add("hidden");
+      gameState.phase = "playing";
+      gameState.gameStartTime = Date.now();
+      gameState.score = 0;
+      gameState.combo = 0;
+      gameState.miss = 0;
+      gameState.newBest = false;
+      generateNotes();
+      updateDebug();
+      gameLoop();
+    }
+
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    function drawGame(gameTime) {
+      ctx.fillStyle = "#1a1a2e";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState.phase === "playing" || gameState.phase === "win" || gameState.phase === "fail") {
+        // Judge line
+        ctx.strokeStyle = "#ff006e";
+        ctx.lineWidth = 4;
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(0, JUDGE_Y);
+        ctx.lineTo(canvas.width, JUDGE_Y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Judge zone highlight
+        ctx.fillStyle = "rgba(255, 0, 110, 0.1)";
+        ctx.fillRect(0, JUDGE_Y - 60, canvas.width, 120);
+
+        // Notes
+        for (let note of gameState.notes) {
+          if (gameTime < note.appearTime) continue;
+
+          const progress = Math.min((gameTime - note.appearTime) / FALL_TIME, 1);
+          note.currentY = -100 + progress * (JUDGE_Y + 100);
+
+          if (note.hit) {
+            ctx.fillStyle = "#00ff88";
+            ctx.globalAlpha = 0.3;
+          } else if (note.missed) {
+            ctx.fillStyle = "#ff0044";
+            ctx.globalAlpha = 0.2;
+          } else {
+            ctx.fillStyle = "#0099ff";
+            ctx.globalAlpha = 1.0;
+          }
+
+          ctx.beginPath();
+          ctx.arc(note.x, note.currentY, NOTE_RADIUS, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = note.hit ? "#00ff88" : (note.missed ? "#ff0044" : "#ffffff");
+          ctx.lineWidth = 3;
+          ctx.globalAlpha = 1.0;
+          ctx.beginPath();
+          ctx.arc(note.x, note.currentY, NOTE_RADIUS + 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // UI
+        ctx.globalAlpha = 1.0;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 28px Arial";
+        ctx.fillText(`Score: ${gameState.score}`, 20, 40);
+        ctx.font = "20px Arial";
+        ctx.fillText(`Combo: ${gameState.combo}`, 20, 75);
+        ctx.fillText(`Miss: ${gameState.miss}/3`, 20, 105);
+        ctx.fillText(`Remaining: ${gameState.remaining}`, 20, 135);
+        ctx.fillText(`Best: ${gameState.bestScore}`, canvas.width - 220, 40);
+
+        ctx.font = "14px Arial";
+        ctx.fillStyle = "#aaaaaa";
+        ctx.fillText("Tap notes when they reach the pink line", 20, canvas.height - 20);
+
+        // Auto-miss
+        for (let note of gameState.notes) {
+          if (!note.hit && !note.missed && gameTime > note.judgeTime + JUDGE_WINDOW) {
+            note.missed = true;
+            gameState.miss++;
+            gameState.combo = 0;
+            updateDebug();
+            checkGameEnd();
+          }
+        }
+      }
+
+      if (gameState.phase === "win") {
+        ctx.fillStyle = "rgba(0, 255, 136, 0.15)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#00ff88";
+        ctx.font = "bold 72px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("PERFECT!", canvas.width / 2, canvas.height / 2 - 60);
+        ctx.font = "36px Arial";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText("LEGEND", canvas.width / 2, canvas.height / 2 + 20);
+        ctx.font = "28px Arial";
+        ctx.fillText(`Score: ${gameState.score}`, canvas.width / 2, canvas.height / 2 + 80);
+        if (gameState.newBest) {
+          ctx.fillStyle = "#ff006e";
+          ctx.font = "bold 40px Arial";
+          ctx.fillText("NEW BEST!", canvas.width / 2, canvas.height / 2 + 150);
+        }
+        ctx.textAlign = "left";
+        ctx.font = "18px Arial";
+        ctx.fillStyle = "#aaaaaa";
+        ctx.textAlign = "center";
+        ctx.fillText("Click to play again", canvas.width / 2, canvas.height - 40);
+        ctx.textAlign = "left";
+      } else if (gameState.phase === "fail") {
+        ctx.fillStyle = "rgba(255, 0, 68, 0.25)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Red cracks
+        ctx.strokeStyle = "#ff0044";
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.9;
+        for (let i = 0; i < 8; i++) {
+          const startX = Math.random() * canvas.width;
+          ctx.beginPath();
+          ctx.moveTo(startX, 0);
+          let x = startX, y = 0;
+          for (let j = 0; j < 4; j++) {
+            x += (Math.random() - 0.5) * 100;
+            y += canvas.height / 4;
+            ctx.lineTo(Math.max(0, Math.min(canvas.width, x)), y);
+          }
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1.0;
+
+        ctx.fillStyle = "#ff0044";
+        ctx.font = "bold 68px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("DEAD", canvas.width / 2, canvas.height / 2 - 40);
+        ctx.fillText("BEAT", canvas.width / 2, canvas.height / 2 + 50);
+        ctx.font = "32px Arial";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(`${gameState.miss}/3 MISSES`, canvas.width / 2, canvas.height / 2 + 130);
+        ctx.font = "18px Arial";
+        ctx.fillStyle = "#aaaaaa";
+        ctx.fillText("Click to retry", canvas.width / 2, canvas.height - 40);
+        ctx.textAlign = "left";
+      }
+    }
+
+    document.getElementById("startBtn").addEventListener("click", startGame);
+
+    canvas.addEventListener("mousedown", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      if (gameState.phase === "playing" && gameState.gameStartTime) {
+        const gameTime = Date.now() - gameState.gameStartTime;
+        handleNoteTap(x, y, gameTime);
+      } else if (gameState.phase === "win" || gameState.phase === "fail") {
+        const titleScreen = document.getElementById("titleScreen");
+        titleScreen.classList.remove("hidden");
+        gameState.phase = "title";
+        gameState.score = 0;
+        gameState.combo = 0;
+        gameState.miss = 0;
+        gameState.remaining = 0;
+        gameState.notes = [];
+        updateDebug();
+      }
+    });
+
+    canvas.addEventListener("mousemove", () => { });
+    canvas.addEventListener("mouseup", () => { });
+    canvas.addEventListener("click", () => { });
+
+    function gameLoop() {
+      const gameTime = gameState.gameStartTime ? Date.now() - gameState.gameStartTime : 0;
+      drawGame(gameTime);
+
+      if (gameState.phase === "playing") {
+        requestAnimationFrame(gameLoop);
+      } else if (gameState.phase === "win" || gameState.phase === "fail") {
+        drawGame(gameTime);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      updateDebug();
+    });
+  </script>
+</body>
+</html>

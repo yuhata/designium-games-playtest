@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>もふもふごはん</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #fff0f5, #ffe4e1);
+            font-family: 'Arial', sans-serif;
+        }
+        canvas {
+            border: 3px solid #ff69b4;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+<script>
+// ==================== DEBUG CONTRACT ====================
+window.__gameDebug = {
+    objects: [],
+    metrics: { score: 0, progress: 0.0, remaining: 10, phase: "title" },
+    tapObject: function(id) { /* オーバーライド予定 */ }
+};
+
+// ==================== CONSTANTS ====================
+const CANVAS_WIDTH = 600;
+const CANVAS_HEIGHT = 800;
+const TIME_LIMIT = 180;
+const INITIAL_FOOD = 10;
+const INTIMACY_TARGET = 100;
+
+const FOOD_TYPES = [
+    { id: 'food_0', name: 'にぼし', emoji: '🐟', color: '#FFB6C1' },
+    { id: 'food_1', name: 'チーズ', emoji: '🧀', color: '#FFD700' },
+    { id: 'food_2', name: 'りんご', emoji: '🍎', color: '#FF6347' },
+    { id: 'food_3', name: 'にんじん', emoji: '🥕', color: '#FFA500' },
+    { id: 'food_4', name: 'ベリー', emoji: '🫐', color: '#9370DB' },
+    { id: 'food_5', name: 'クッキー', emoji: '🍪', color: '#CD853F' }
+];
+
+// ==================== GAME STATE ====================
+let gameState = {
+    phase: 'title',
+    intimacy: 0,
+    hunger: 100,
+    foodRemaining: INITIAL_FOOD,
+    startTime: null,
+    elapsedTime: 0,
+    animatingFood: null,
+    petMouthOpen: false,
+    petMouthFrame: 0,
+    lastFoodTapped: null,
+    flashFrame: 0
+};
+
+const canvas = document.createElement('canvas');
+canvas.width = CANVAS_WIDTH;
+canvas.height = CANVAS_HEIGHT;
+document.body.appendChild(canvas);
+const ctx = canvas.getContext('2d');
+
+// ==================== DRAWING FUNCTIONS ====================
+
+function drawPet(x, y, mouthOpen, mouthFrame, expression = 'normal') {
+    // ボディ
+    ctx.fillStyle = '#FFB6D9';
+    ctx.beginPath();
+    ctx.arc(x, y, 40, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 耳
+    ctx.fillStyle = '#FFB6D9';
+    ctx.beginPath();
+    ctx.arc(x - 25, y - 30, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 25, y - 30, 15, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 目
+    ctx.fillStyle = '#333';
+    if (expression === 'sad') {
+        ctx.beginPath();
+        ctx.arc(x - 15, y - 8, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + 15, y - 8, 6, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (expression === 'happy') {
+        ctx.beginPath();
+        ctx.ellipse(x - 15, y - 12, 8, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(x + 15, y - 12, 8, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        const eyeSize = mouthOpen ? 5 : 6;
+        ctx.beginPath();
+        ctx.arc(x - 15, y - 10, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + 15, y - 10, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // 口
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (expression === 'happy') {
+        ctx.arc(x, y + 15, 15, 0, Math.PI);
+        ctx.stroke();
+    } else if (expression === 'sad') {
+        ctx.arc(x, y + 20, 12, Math.PI, 0);
+        ctx.stroke();
+    } else if (mouthOpen) {
+        ctx.ellipse(x, y + 15, 15, 12, 0, 0, Math.PI);
+        ctx.stroke();
+    } else {
+        ctx.arc(x, y + 15, 10, 0, Math.PI);
+        ctx.stroke();
+    }
+}
+
+function drawHungerGauge(x, y, hunger) {
+    const width = 80;
+    const height = 10;
+    
+    ctx.fillStyle = '#ddd';
+    ctx.fillRect(x - width / 2, y - 20, width, height);
+    
+    ctx.fillStyle = hunger > 30 ? '#4CAF50' : hunger > 10 ? '#FFC107' : '#F44336';
+    ctx.fillRect(x - width / 2, y - 20, (hunger / 100) * width, height);
+    
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - width / 2, y - 20, width, height);
+}
+
+function drawIntimacyMeter(x, y, intimacy) {
+    const width = 150;
+    const height = 20;
+    
+    ctx.fillStyle = '#FFE4E1';
+    ctx.fillRect(x, y, width, height);
+    
+    ctx.fillStyle = '#FF69B4';
+    ctx.fillRect(x, y, (intimacy / 100) * width, height);
+    
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, width, height);
+    
+    ctx.fillStyle = '#333';
+    ctx.font = '12px Arial';
+    ctx.fillText(`親密度: ${Math.floor(intimacy)}`, x + 5, y + 15);
+}
+
+function drawFoodIcon(x, y, food, isHovered = false) {
+    const size = 32;
+    
+    ctx.fillStyle = isHovered ? '#FFE4E1' : '#fff';
+    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+    
+    ctx.strokeStyle = isHovered ? '#FF69B4' : '#ddd';
+    ctx.lineWidth = isHovered ? 2 : 1;
+    ctx.strokeRect(x - size / 2, y - size / 2, size, size);
+    
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(food.emoji, x, y);
+}
+
+function drawAnimatingFood(x, y, food) {
+    ctx.font = '28px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(food.emoji, x, y);
+}
+
+// ==================== GAME LOGIC ====================
+
+function startGame() {
+    gameState.phase = 'playing';
+    gameState.intimacy = 0;
+    gameState.hunger = 100;
+    gameState.foodRemaining = INITIAL_FOOD;
+    gameState.startTime = Date.now();
+    gameState.elapsedTime = 0;
+    gameState.animatingFood = null;
+    gameState.flashFrame = 0;
+    updateDebug();
+}
+
+function updateGameState(deltaTime) {
+    if (gameState.phase !== 'playing') return;
+    
+    gameState.elapsedTime = (Date.now() - gameState.startTime) / 1000;
+    gameState.hunger -= 0.5;
+    
+    if (gameState.animatingFood) {
+        gameState.animatingFood.progress += 0.05;
+        if (gameState.animatingFood.progress >= 1) {
+            gameState.animatingFood = null;
+            gameState.petMouthFrame = 2;
+        }
+    }
+    
+    if (gameState.petMouthFrame > 0) {
+        gameState.petMouthFrame--;
+        gameState.petMouthOpen = gameState.petMouthFrame > 0;
+    }
+    
+    if (gameState.hunger <= 0) {
+        gameState.phase = 'fail';
+        return;
+    }
+    
+    if (gameState.elapsedTime >= TIME_LIMIT) {
+        gameState.phase = 'fail';
+        return;
+    }
+    
+    if (gameState.intimacy >= INTIMACY_TARGET && gameState.elapsedTime <= TIME_LIMIT) {
+        gameState.phase = 'win';
+        gameState.flashFrame = 10;
+        return;
+    }
+}
+
+function onFoodTap(foodIndex) {
+    if (gameState.phase !== 'playing' || gameState.foodRemaining <= 0) return;
+    
+    const food = FOOD_TYPES[foodIndex];
+    
+    gameState.foodRemaining--;
+    gameState.hunger = Math.min(100, gameState.hunger + 25);
+    gameState.intimacy += 5 + Math.random() * 10;
+    gameState.intimacy = Math.min(100, gameState.intimacy);
+    
+    const petX = CANVAS_WIDTH / 2;
+    const petY = 200;
+    const foodY = CANVAS_HEIGHT - 100;
+    const foodX = CANVAS_WIDTH / 2;
+    
+    gameState.animatingFood = {
+        food: food,
+        from: { x: foodX, y: foodY },
+        to: { x: petX, y: petY },
+        progress: 0
+    };
+    
+    gameState.lastFoodTapped = foodIndex;
+    gameState.flashFrame = 5;
+    updateDebug();
+}
+
+function updateDebug() {
+    window.__gameDebug.objects = [];
+    
+    if (gameState.phase === 'title') {
+        window.__gameDebug.objects.push({
+            id: 'start',
+            enabled: true,
+            matchId: null,
+            x: CANVAS_WIDTH / 2,
+            y: CANVAS_HEIGHT / 2 + 100,
+            w: 150,
+            h: 50
+        });
+    } else if (gameState.phase === 'playing') {
+        const foodStartX = CANVAS_WIDTH / 2 - (FOOD_TYPES.length * 40 / 2);
+        FOOD_TYPES.forEach((food, index) => {
+            const x = foodStartX + index * 40 + 20;
+            const y = CANVAS_HEIGHT - 80;
+            window.__gameDebug.objects.push({
+                id: food.id,
+                enabled: gameState.foodRemaining > 0,
+                matchId: null,
+                x: x,
+                y: y,
+                w: 48,
+                h: 48
+            });
+        });
+    }
+    
+    window.__gameDebug.metrics = {
+        score: Math.floor(gameState.intimacy),
+        progress: gameState.intimacy / 100,
+        remaining: gameState.foodRemaining,
+        phase: gameState.phase
+    };
+}
+
+// ==================== RENDER ====================
+
+function render() {
+    if (gameState.flashFrame > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${gameState.flashFrame / 10 * 0.5})`;
+        gameState.flashFrame--;
+    }
+    
+    ctx.fillStyle = gameState.phase === 'win' ? '#FFF0F5' : gameState.phase === 'fail' ? '#FFE4E1' : '#FFFFFF';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    if (gameState.phase === 'title') {
+        renderTitle();
+    } else if (gameState.phase === 'playing') {
+        renderGame();
+    } else if (gameState.phase === 'win') {
+        renderWin();
+    } else if (gameState.phase === 'fail') {
+        renderFail();
+    }
+}
+
+function renderTitle() {
+    ctx.fillStyle = '#FF69B4';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('もふもふごはん', CANVAS_WIDTH / 2, 100);
+    
+    drawPet(CANVAS_WIDTH / 2, 250, false, 0);
+    
+    ctx.fillStyle = '#333';
+    ctx.font = '14px Arial';
+    ctx.fillText('画面下のえさを選んでペットに投げよう！', CANVAS_WIDTH / 2, 350);
+    ctx.fillText('3分以内に親密度100を目指そう！', CANVAS_WIDTH / 2, 380);
+    
+    const btnX = CANVAS_WIDTH / 2;
+    const btnY = CANVAS_HEIGHT / 2 + 100;
+    const btnW = 150;
+    const btnH = 50;
+    
+    ctx.fillStyle = '#FF69B4';
+    ctx.fillRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('スタート', btnX, btnY);
+}
+
+function renderGame() {
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`残り時間: ${Math.max(0, Math.floor(TIME_LIMIT - gameState.elapsedTime))}秒`, 20, 30);
+    
+    ctx.textAlign = 'right';
+    ctx.fillText(`残りえさ: ${gameState.foodRemaining}`, CANVAS_WIDTH - 20, 30);
+    
+    drawIntimacyMeter(20, 50, gameState.intimacy);
+    
+    const petX = CANVAS_WIDTH / 2;
+    const petY = 200;
+    drawPet(petX, petY, gameState.petMouthOpen, gameState.petMouthFrame);
+    
+    drawHungerGauge(petX, petY - 60, gameState.hunger);
+    
+    if (gameState.animatingFood) {
+        const food = gameState.animatingFood;
+        const t = food.progress;
+        const x = food.from.x + (food.to.x - food.from.x) * t;
+        const y = food.from.y + (food.to.y - food.from.y) * t;
+        drawAnimatingFood(x, y, food.food);
+    }
+    
+    const foodStartX = CANVAS_WIDTH / 2 - (FOOD_TYPES.length * 40 / 2);
+    FOOD_TYPES.forEach((food, index) => {
+        const x = foodStartX + index * 40 + 20;
+        const y = CANVAS_HEIGHT - 80;
+        const isHovered = gameState.lastFoodTapped === index;
+        drawFoodIcon(x, y, food, isHovered);
+    });
+    
+    ctx.fillStyle = '#999';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('下のえさをタップしてペットに投げよう', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 20);
+}
+
+function renderWin() {
+    ctx.fillStyle = 'rgba(255, 192, 203, 0.3)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    drawPet(CANVAS_WIDTH / 2, 250, false, 0, 'happy');
+    
+    ctx.fillStyle = '#FF69B4';
+    ctx.font = 'bold 40px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('ごちそうさまでした！', CANVAS_WIDTH / 2, 380);
+    
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText(`親密度: ${Math.floor(gameState.intimacy)}`, CANVAS_WIDTH / 2, 420);
+    ctx.fillText(`クリア時間: ${Math.floor(gameState.elapsedTime)}秒`, CANVAS_WIDTH / 2, 450);
+    
+    ctx.font = '14px Arial';
+    ctx.fillText('タップで再スタート', CANVAS_WIDTH / 2, 500);
+}
+
+function renderFail() {
+    ctx.fillStyle = 'rgba(255, 200, 124, 0.3)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    drawPet(CANVAS_WIDTH / 2, 250, false, 0, 'sad');
+    
+    ctx.fillStyle = '#FF6347';
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    let failMsg = 'ゲームオーバー';
+    if (gameState.hunger <= 0) {
+        failMsg = 'お腹が空いちゃった...';
+    } else if (gameState.elapsedTime >= TIME_LIMIT) {
+        failMsg = '時間切れです...';
+    }
+    ctx.fillText(failMsg, CANVAS_WIDTH / 2, 380);
+    
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(`親密度: ${Math.floor(gameState.intimacy)} / 100`, CANVAS_WIDTH / 2, 420);
+    ctx.fillText(`経過時間: ${Math.floor(gameState.elapsedTime)}秒`, CANVAS_WIDTH / 2, 450);
+    
+    ctx.font = '14px Arial';
+    ctx.fillText('タップで再スタート', CANVAS_WIDTH / 2, 500);
+}
+
+// ==================== EVENT HANDLERS ====================
+
+canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    handleCanvasClick(x, y);
+});
+
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    handleCanvasClick(x, y);
+});
+
+function handleCanvasClick(x, y) {
+    if (gameState.phase === 'title') {
+        const btnX = CANVAS_WIDTH / 2;
+        const btnY = CANVAS_HEIGHT / 2 + 100;
+        const btnW = 150;
+        const btnH = 50;
+        
+        if (x >= btnX - btnW / 2 && x <= btnX + btnW / 2 &&
+            y >= btnY - btnH / 2 && y <= btnY + btnH / 2) {
+            window.__gameDebug.tapObject('start');
+        }
+    } else if (gameState.phase === 'playing') {
+        const foodStartX = CANVAS_WIDTH / 2 - (FOOD_TYPES.length * 40 / 2);
+        FOOD_TYPES.forEach((food, index) => {
+            const fx = foodStartX + index * 40 + 20;
+            const fy = CANVAS_HEIGHT - 80;
+            if (x >= fx - 24 && x <= fx + 24 && y >= fy - 24 && y <= fy + 24) {
+                window.__gameDebug.tapObject(food.id);
+            }
+        });
+    } else if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        gameState.phase = 'title';
+    }
+}
+
+// ==================== DEBUG TAPOBJECT OVERRIDE ====================
+
+window.__gameDebug.tapObject = function(id) {
+    if (id === 'start') {
+        startGame();
+        return;
+    }
+    
+    if (id && id.startsWith('food_')) {
+        const index = parseInt(id.split('_')[1], 10);
+        if (gameState.phase === 'playing') {
+            onFoodTap(index);
+        }
+    }
+};
+
+// ==================== ANIMATION LOOP ====================
+
+let lastFrameTime = Date.now();
+
+function gameLoop() {
+    const now = Date.now();
+    const deltaTime = (now - lastFrameTime) / 1000;
+    lastFrameTime = now;
+    
+    updateGameState(deltaTime);
+    render();
+    updateDebug();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>

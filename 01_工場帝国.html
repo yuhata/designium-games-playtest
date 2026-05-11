@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工場帝国</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Courier New', monospace;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    
+    #gameContainer {
+      position: relative;
+      width: 1200px;
+      height: 800px;
+      background: #0f0f1e;
+      border: 3px solid #4a90e2;
+      box-shadow: 0 0 30px rgba(74, 144, 226, 0.6);
+      overflow: hidden;
+    }
+    
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    
+    #uiPanel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid #4a90e2;
+      padding: 12px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 10;
+      font-weight: bold;
+    }
+    
+    #uiPanel > div {
+      margin: 6px 0;
+      color: #4a90e2;
+    }
+    
+    #instructionPanel {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid #4a90e2;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      max-width: 380px;
+      z-index: 10;
+      line-height: 1.4;
+    }
+    
+    #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      gap: 30px;
+    }
+    
+    #gameOverText {
+      font-size: 72px;
+      font-weight: bold;
+      text-align: center;
+      animation: gameOverPulse 0.8s ease-in-out;
+    }
+    
+    #gameOverScore {
+      font-size: 28px;
+      text-align: center;
+      line-height: 1.6;
+      color: #4a90e2;
+    }
+    
+    #restartButton {
+      padding: 12px 35px;
+      font-size: 18px;
+      background: #4a90e2;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+      font-family: 'Courier New', monospace;
+    }
+    
+    #restartButton:hover {
+      background: #6db3ff;
+      transform: scale(1.08);
+    }
+    
+    #restartButton:active {
+      transform: scale(0.95);
+    }
+    
+    @keyframes gameOverPulse {
+      0% { transform: scale(0.5); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    
+    @keyframes winFlash {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.5); }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="uiPanel">
+      <div>⚙️ 工場帝国 v1.0</div>
+      <div>生産量: <span id="production">0</span></div>
+      <div>資金: <span id="money">100000</span>円</div>
+      <div>施設数: <span id="facilities">0</span></div>
+      <div>毎秒生産: <span id="perSecond">0</span></div>
+      <div>経過時間: <span id="timer">0</span>秒</div>
+    </div>
+    
+    <div id="instructionPanel">
+      📋 操作説明<br/>
+      🖱️ キャンバスをクリック → 施設追加（1,000円）<br/>
+      ⚙️ 施設1つ = 毎秒+1,000生産<br/>
+      💰 資金0 → 破産 ⚠️<br/>
+      🎯 目標: 生産量を1兆突破！
+    </div>
+    
+    <div id="gameOverScreen">
+      <div id="gameOverText"></div>
+      <div id="gameOverScore"></div>
+      <button id="restartButton">もう一度プレイ</button>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+    
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = 1200;
+    canvas.height = 800;
+    
+    const game = {
+      totalProduction: 0,
+      money: 100000,
+      facilityCount: 0,
+      baseOutputPerFacility: 1000,
+      facilityCost: 1000,
+      gameStartTime: Date.now(),
+      isGameOver: false,
+      isWin: false,
+      particles: [],
+      clickCount: 0,
+      hoverX: null,
+      hoverY: null,
+      isHovering: false
+    };
+    
+    class Particle {
+      constructor(x, y, isWin) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10 - 5;
+        this.life = 1.0;
+        this.decay = 0.02 + Math.random() * 0.02;
+        this.size = Math.random() * 25 + 8;
+        this.isWin = isWin;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+      }
+      
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.3;
+        this.life -= this.decay;
+        this.size *= 0.96;
+        this.rotation += this.rotationSpeed;
+      }
+      
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        
+        if (this.isWin) {
+          ctx.fillStyle = '#ffd700';
+          ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+          ctx.shadowBlur = 10;
+        } else {
+          ctx.fillStyle = '#4a90e2';
+          ctx.shadowColor = 'rgba(74, 144, 226, 0.8)';
+          ctx.shadowBlur = 8;
+        }
+        
+        ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+        ctx.restore();
+      }
+    }
+    
+    function handleCanvasClick(x, y) {
+      if (game.isGameOver) return;
+      
+      if (y < 100) return;
+      
+      if (game.money >= game.facilityCost) {
+        game.money -= game.facilityCost;
+        game.facilityCount++;
+        game.clickCount++;
+        
+        for (let i = 0; i < 8; i++) {
+          game.particles.push(new Particle(x, y, false));
+        }
+        
+        updateUI();
+      }
+    }
+    
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      handleCanvasClick(x, y);
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      game.hoverX = e.clientX - rect.left;
+      game.hoverY = e.clientY - rect.top;
+      game.isHovering = (game.hoverY > 100);
+    });
+    
+    canvas.addEventListener('mouseout', () => {
+      game.isHovering = false;
+      game.hoverX = null;
+      game.hoverY = null;
+    });
+    
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      handleCanvasClick(x, y);
+    });
+    
+    canvas.addEventListener('mouseup', () => {
+      // mouseup event handler
+    });
+    
+    canvas.addEventListener('touchstart', (e) => {
+      if (game.isGameOver) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      handleCanvasClick(x, y);
+    });
+    
+    canvas.addEventListener('touchmove', (e) => {
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      game.hoverX = touch.clientX - rect.left;
+      game.hoverY = touch.clientY - rect.top;
+      game.isHovering = (game.hoverY > 100);
+    });
+    
+    function updateUI() {
+      const prod = game.totalProduction;
+      const mon = game.money;
+      const perSec = game.facilityCount * game.baseOutputPerFacility;
+      
+      document.getElementById('production').textContent = formatNumber(prod);
+      document.getElementById('money').textContent = formatNumber(mon);
+      document.getElementById('facilities').textContent = game.facilityCount;
+      document.getElementById('perSecond').textContent = formatNumber(perSec);
+      
+      const elapsed = Math.floor((Date.now() - game.gameStartTime) / 1000);
+      document.getElementById('timer').textContent = elapsed;
+    }
+    
+    function formatNumber(n) {
+      const num = Math.floor(n);
+      if (num >= 1e12) return (num / 1e12).toFixed(2) + '兆';
+      if (num >= 1e8) return (num / 1e8).toFixed(2) + '億';
+      if (num >= 1e4) return (num / 1e4).toFixed(1) + '万';
+      return num.toString();
+    }
+    
+    function draw() {
+      const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      bgGradient.addColorStop(0, '#0f0f1e');
+      bgGradient.addColorStop(0.5, '#1a2a3e');
+      bgGradient.addColorStop(1, '#0f0f1e');
+      ctx.fillStyle = bgGradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = 'rgba(74, 144, 226, 0.15)';
+      ctx.fillRect(0, 0, canvas.width, 100);
+      ctx.strokeStyle = 'rgba(74, 144, 226, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, canvas.width, 100);
+      
+      const factoriesPerRow = 14;
+      const baseX = 40;
+      const baseY = 130;
+      const spacing = 78;
+      
+      const baseSize = 40;
+      const sizeMultiplier = Math.min(1.5, 1 + Math.log(game.facilityCount + 1) * 0.15);
+      const factorySize = baseSize * sizeMultiplier;
+      
+      for (let i = 0; i < game.facilityCount; i++) {
+        const col = i % factoriesPerRow;
+        const row = Math.floor(i / factoriesPerRow);
+        const x = baseX + col * spacing;
+        const y = baseY + row * spacing;
+        
+        if (y > canvas.height - 50) continue;
+        
+        const hue = (i * 25) % 360;
+        ctx.fillStyle = `hsl(${hue}, 75%, 55%)`;
+        
+        ctx.fillRect(x - factorySize/2, y - factorySize/2, factorySize, factorySize);
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - factorySize/2, y - factorySize/2, factorySize, factorySize);
+        
+        const windowSize = factorySize / 5;
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.7)';
+        ctx.fillRect(x - factorySize/3, y - factorySize/3, windowSize, windowSize);
+        ctx.fillRect(x + factorySize/6, y - factorySize/3, windowSize, windowSize);
+        ctx.fillRect(x - factorySize/3, y + factorySize/6, windowSize, windowSize);
+        ctx.fillRect(x + factorySize/6, y + factorySize/6, windowSize, windowSize);
+      }
+      
+      if (game.isHovering && game.hoverX && game.hoverY && !game.isGameOver) {
+        if (game.money >= game.facilityCost) {
+          ctx.fillStyle = 'rgba(74, 144, 226, 0.3)';
+          ctx.beginPath();
+          ctx.arc(game.hoverX, game.hoverY, 50, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.strokeStyle = 'rgba(74, 144, 226, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+      
+      game.particles = game.particles.filter(p => p.life > 0);
+      game.particles.forEach(p => {
+        p.update();
+        p.draw(ctx);
+      });
+      
+      if (game.isWin && !game.isGameOver) {
+        const now = Date.now();
+        const flash = (now % 300) / 300;
+        ctx.fillStyle = `rgba(255, 215, 0, ${flash * 0.15})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      requestAnimationFrame(draw);
+    }
+    
+    const productionInterval = setInterval(() => {
+      if (game.isGameOver) return;
+      
+      const elapsed = (Date.now() - game.gameStartTime) / 1000;
+      
+      game.totalProduction += game.facilityCount * game.baseOutputPerFacility;
+      
+      if (game.totalProduction >= 1e12) {
+        game.isGameOver = true;
+        game.isWin = true;
+        
+        for (let i = 0; i < 80; i++) {
+          game.particles.push(new Particle(
+            Math.random() * canvas.width,
+            Math.random() * canvas.height,
+            true
+          ));
+        }
+        
+        showGameOver();
+        return;
+      }
+      
+      if (elapsed >= 30 && game.money <= 0) {
+        game.isGameOver = true;
+        game.isWin = false;
+        showGameOver();
+        return;
+      }
+      
+      updateUI();
+    }, 1000);
+    
+    function showGameOver() {
+      clearInterval(productionInterval);
+      
+      const screen = document.getElementById('gameOverScreen');
+      const text = document.getElementById('gameOverText');
+      const score = document.getElementById('gameOverScore');
+      
+      if (game.isWin) {
+        text.textContent = '🎉 制圧完了！';
+        text.style.color = '#ffd700';
+        canvas.style.animation = 'winFlash 0.3s ease-in-out 5';
+      } else {
+        text.textContent = '💥 破産';
+        text.style.color = '#ff4444';
+      }
+      
+      const production = formatNumber(game.totalProduction);
+      score.innerHTML = `
+        最終生産量: ${production}<br/>
+        施設数: ${game.facilityCount}<br/>
+        資金: ${formatNumber(game.money)}円
+      `;
+      
+      screen.style.display = 'flex';
+    }
+    
+    document.getElementById('restartButton').addEventListener('click', () => {
+      location.reload();
+    });
+    
+    draw();
+    updateUI();
+  </script>
+</body>
+</html>

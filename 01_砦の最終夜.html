@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>砦の最終夜</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: linear-gradient(to bottom, #0f3460 0%, #16213e 100%);
+            border: 3px solid #e94560;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .instruction {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 14px;
+            color: #a0aec0;
+            font-weight: normal;
+            z-index: 10;
+        }
+        .ui-stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 20px;
+            color: #fff;
+            font-weight: bold;
+            z-index: 10;
+            text-align: right;
+        }
+        .wave-number {
+            font-size: 36px;
+            color: #fbbf24;
+            margin-bottom: 10px;
+        }
+        .hp-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .hp-bar {
+            width: 150px;
+            height: 20px;
+            background: #333;
+            border: 2px solid #fff;
+            position: relative;
+            overflow: hidden;
+        }
+        .hp-fill {
+            height: 100%;
+            background: linear-gradient(to right, #4ade80, #22c55e);
+            width: 100%;
+            transition: width 0.2s;
+        }
+        .hp-fill.danger {
+            background: linear-gradient(to right, #ef4444, #dc2626);
+            animation: pulse 0.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .units-count {
+            font-size: 16px;
+            color: #3b82f6;
+        }
+        .kills-count {
+            font-size: 16px;
+            color: #8b5cf6;
+        }
+        #gameOverScreen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 100;
+        }
+        #gameOverScreen.active {
+            display: flex;
+        }
+        .game-over-text {
+            font-size: 56px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .win {
+            color: #4ade80;
+            text-shadow: 0 0 30px #4ade80, 0 0 60px rgba(74, 222, 128, 0.5);
+        }
+        .lose {
+            color: #ef4444;
+            text-shadow: 0 0 30px #ef4444, 0 0 60px rgba(239, 68, 68, 0.5);
+        }
+        .score-text {
+            font-size: 24px;
+            margin-bottom: 40px;
+            color: #e0e7ff;
+        }
+        .restart-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: 2px solid #1e40af;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .restart-btn:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="instruction">クリック・タップでグリッドにユニット配置して敵を撃破</div>
+    <div class="ui-stats">
+        <div class="wave-number" id="waveDisplay">Wave 0</div>
+        <div class="hp-info">
+            <div>砦:</div>
+            <div class="hp-bar">
+                <div class="hp-fill" id="hpFill" style="width: 100%;"></div>
+            </div>
+        </div>
+        <div class="units-count" id="unitsDisplay">ユニット: 0</div>
+        <div class="kills-count" id="killsDisplay">撃破: 0</div>
+    </div>
+    <div id="gameOverScreen">
+        <div class="game-over-text" id="gameOverTitle">GAME OVER</div>
+        <div class="score-text" id="gameOverScore">Wave: 0 / 撃破: 0</div>
+        <button class="restart-btn" onclick="location.reload()">もう一度チャレンジ</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const gameOverScreen = document.getElementById('gameOverScreen');
+
+const GRID_COLS = 6;
+const GRID_ROWS = 4;
+const GRID_START_Y = 60;
+const CELL_WIDTH = canvas.width / GRID_COLS;
+const CELL_HEIGHT = (canvas.height - GRID_START_Y - 80) / GRID_ROWS;
+const FORT_X = canvas.width / 2;
+const FORT_Y = canvas.height - 50;
+const MAX_WAVES = 20;
+const WAVE_CLEAR_DELAY = 500;
+
+const gameState = {
+    fortHP: 100,
+    maxHP: 100,
+    waveNumber: 0,
+    killedEnemies: 0,
+    isGameOver: false,
+    isWon: false,
+    waveClearing: false,
+    shieldFlashFrame: 0,
+    glowAlpha: 0
+};
+
+let enemies = [];
+let units = [];
+let particles = [];
+let gameStartTime = Date.now();
+
+class Enemy {
+    constructor(x, y, waveNum) {
+        this.x = x;
+        this.y = y;
+        this.width = 28;
+        this.height = 28;
+        this.hp = 3;
+        this.maxHp = 3;
+        this.speed = 1 + waveNum * 0.25;
+        this.hue = Math.random() * 60;
+        this.damageFlash = 0;
+    }
+
+    update() {
+        this.y += this.speed;
+        if (this.damageFlash > 0) this.damageFlash--;
+    }
+
+    draw(ctx) {
+        const flashAlpha = this.damageFlash > 0 ? 0.5 : 1;
+        ctx.globalAlpha = flashAlpha;
+        ctx.fillStyle = `hsl(${this.hue}, 75%, 45%)`;
+        ctx.fillRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+        ctx.globalAlpha = 1;
+
+        const hpW = this.width;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(this.x - hpW/2, this.y - this.height/2 - 6, hpW, 3);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(this.x - hpW/2, this.y - this.height/2 - 6, (this.hp/this.maxHp)*hpW, 3);
+
+        ctx.strokeStyle = `hsl(${this.hue}, 75%, 55%)`;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+    }
+
+    collidesWith(unit) {
+        const dx = this.x - unit.x;
+        const dy = this.y - unit.y;
+        return Math.sqrt(dx*dx + dy*dy) < 35;
+    }
+}
+
+class Unit {
+    constructor(gridX, gridY) {
+        this.gridX = gridX;
+        this.gridY = gridY;
+        this.x = gridX * CELL_WIDTH + CELL_WIDTH/2;
+        this.y = GRID_START_Y + gridY * CELL_HEIGHT + CELL_HEIGHT/2;
+        this.width = 20;
+        this.range = 100;
+        this.fireRate = 0;
+        this.fireCounter = 0;
+        this.flashFrame = 0;
+    }
+
+    update() {
+        this.fireCounter++;
+        if (this.flashFrame > 0) this.flashFrame--;
+    }
+
+    draw(ctx) {
+        const alpha = this.flashFrame > 0 ? 0.6 : 1;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.width, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.range, 0, Math.PI*2);
+        ctx.stroke();
+    }
+
+    shoot(enemy) {
+        const dx = enemy.x - this.x;
+        const dy = enemy.y - this.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        if (dist < this.range && this.fireCounter > 15) {
+            enemy.hp--;
+            enemy.damageFlash = 5;
+            this.fireCounter = 0;
+            this.flashFrame = 3;
+
+            const angle = Math.atan2(dy, dx);
+            particles.push(new Particle(this.x, this.y, Math.cos(angle)*6, Math.sin(angle)*6));
+
+            return enemy.hp <= 0;
+        }
+        return false;
+    }
+}
+
+class Particle {
+    constructor(x, y, vx, vy) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.life = 25;
+        this.maxLife = 25;
+        this.size = 3;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.2;
+        this.life--;
+    }
+
+    draw(ctx) {
+        const alpha = this.life / this.maxLife;
+        ctx.fillStyle = `rgba(59, 130, 246, ${alpha * 0.8})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+function initGame() {
+    gameState.fortHP = 100;
+    gameState.waveNumber = 0;
+    gameState.killedEnemies = 0;
+    gameState.isGameOver = false;
+    gameState.isWon = false;
+    gameState.waveClearing = false;
+    gameState.shieldFlashFrame = 0;
+    gameState.glowAlpha = 0;
+    enemies = [];
+    units = [];
+    particles = [];
+    gameStartTime = Date.now();
+    gameOverScreen.classList.remove('active');
+    spawnWave();
+}
+
+function spawnWave() {
+    gameState.waveNumber++;
+    const enemyCount = 2 + gameState.waveNumber;
+    const baseX = canvas.width / 2;
+    
+    for (let i = 0; i < enemyCount; i++) {
+        const offsetX = (Math.random() - 0.5) * 300;
+        enemies.push(new Enemy(baseX + offsetX, -40, gameState.waveNumber));
+    }
+}
+
+function addUnit(x, y) {
+    if (gameState.isGameOver || gameState.waveClearing) return;
+
+    const gridX = Math.floor(x / CELL_WIDTH);
+    const gridY = Math.floor((y - GRID_START_Y) / CELL_HEIGHT);
+
+    if (gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS) {
+        const exists = units.some(u => u.gridX === gridX && u.gridY === gridY);
+        if (!exists) {
+            units.push(new Unit(gridX, gridY));
+            updateUI();
+        }
+    }
+}
+
+function update() {
+    if (gameState.isGameOver) return;
+
+    const now = Date.now();
+    const elapsed = now - gameStartTime;
+    if (elapsed < 30000 && gameState.fortHP <= 0) {
+        gameState.fortHP = 100;
+    }
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        enemies[i].update();
+
+        if (enemies[i].y >= FORT_Y) {
+            gameState.fortHP -= 10;
+            enemies.splice(i, 1);
+            updateUI();
+            continue;
+        }
+
+        let killed = false;
+        for (let j = 0; j < units.length; j++) {
+            if (units[j].shoot(enemies[i])) {
+                gameState.killedEnemies++;
+                killed = true;
+                updateUI();
+                break;
+            }
+        }
+        if (killed) {
+            enemies.splice(i, 1);
+        }
+    }
+
+    units.forEach(unit => unit.update());
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].life <= 0) particles.splice(i, 1);
+    }
+
+    if (enemies.length === 0 && gameState.waveNumber > 0 && !gameState.waveClearing) {
+        gameState.waveClearing = true;
+        gameState.shieldFlashFrame = 10;
+
+        setTimeout(() => {
+            if (gameState.isGameOver) return;
+            
+            if (gameState.waveNumber >= MAX_WAVES) {
+                gameState.glowAlpha = 1;
+                gameState.isWon = true;
+                gameState.isGameOver = true;
+                setTimeout(() => showGameOver(true), 1000);
+            } else {
+                gameState.waveClearing = false;
+                spawnWave();
+                updateUI();
+            }
+        }, WAVE_CLEAR_DELAY);
+    }
+
+    if (gameState.glowAlpha > 0) {
+        gameState.glowAlpha -= 0.03;
+    }
+
+    if (gameState.fortHP <= 0) {
+        gameState.isGameOver = true;
+        gameState.isWon = false;
+        showGameOver(false);
+    }
+}
+
+function updateUI() {
+    document.getElementById('waveDisplay').textContent = `Wave ${gameState.waveNumber}`;
+    
+    const hpPercent = Math.max(0, gameState.fortHP) / gameState.maxHP * 100;
+    const hpFill = document.getElementById('hpFill');
+    hpFill.style.width = hpPercent + '%';
+    
+    if (gameState.fortHP <= 30) {
+        hpFill.classList.add('danger');
+    } else {
+        hpFill.classList.remove('danger');
+    }
+
+    document.getElementById('unitsDisplay').textContent = `ユニット: ${units.length}`;
+    document.getElementById('killsDisplay').textContent = `撃破: ${gameState.killedEnemies}`;
+}
+
+function showGameOver(isWin) {
+    gameOverScreen.classList.add('active');
+    const title = document.getElementById('gameOverTitle');
+    const score = document.getElementById('gameOverScore');
+    
+    if (isWin) {
+        title.textContent = '砦を守り抜いた！';
+        title.className = 'game-over-text win';
+    } else {
+        title.textContent = '砦は陥落した...';
+        title.className = 'game-over-text lose';
+    }
+    score.textContent = `Wave: ${gameState.waveNumber} / 撃破: ${gameState.killedEnemies}`;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    addUnit(x, y);
+});
+
+canvas.addEventListener('mousemove', () => {});
+canvas.addEventListener('mouseup', () => {});
+canvas.addEventListener('click', () => {});
+
+function gameLoop() {
+    ctx.fillStyle = 'rgba(15, 52, 96, 0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_COLS; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * CELL_WIDTH, GRID_START_Y);
+        ctx.lineTo(i * CELL_WIDTH, canvas.height - 80);
+        ctx.stroke();
+    }
+    for (let i = 0; i <= GRID_ROWS; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, GRID_START_Y + i * CELL_HEIGHT);
+        ctx.lineTo(canvas.width, GRID_START_Y + i * CELL_HEIGHT);
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = '#d4af37';
+    ctx.fillRect(FORT_X - 45, FORT_Y - 30, 90, 40);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(FORT_X - 45, FORT_Y - 30, 90, 40);
+
+    if (gameState.shieldFlashFrame > 0) {
+        ctx.strokeStyle = `rgba(74, 222, 128, ${(gameState.shieldFlashFrame % 2) * 0.6})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(FORT_X, FORT_Y - 10, 70, 0, Math.PI * 2);
+        ctx.stroke();
+        gameState.shieldFlashFrame--;
+    }
+
+    if (gameState.glowAlpha > 0) {
+        const gradient = ctx.createRadialGradient(FORT_X, FORT_Y - 10, 0, FORT_X, FORT_Y - 10, 300);
+        gradient.addColorStop(0, `rgba(212, 175, 55, ${gameState.glowAlpha * 0.4})`);
+        gradient.addColorStop(1, 'rgba(212, 175, 55, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    enemies.forEach(e => e.draw(ctx));
+    units.forEach(u => u.draw(ctx));
+    particles.forEach(p => p.draw(ctx));
+
+    update();
+    requestAnimationFrame(gameLoop);
+}
+
+initGame();
+gameLoop();
+</script>
+</body>
+</html>

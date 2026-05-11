@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>完璧帳</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+    
+    .container {
+      width: 375px;
+      height: 812px;
+      background: white;
+      border-radius: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .game-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+    
+    .title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+    }
+    
+    .stats {
+      display: flex;
+      gap: 15px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .stat-label {
+      color: #666;
+    }
+    
+    .stat-value {
+      color: #667eea;
+      font-weight: 700;
+    }
+    
+    .lives-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      background: #ffe5e5;
+      border-radius: 12px;
+      color: #d32f2f;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    
+    .perfect-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #ffd700, #ffed4e);
+      border-radius: 12px;
+      color: #333;
+      font-weight: 700;
+      font-size: 12px;
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    .progress-bar {
+      height: 6px;
+      background: #eee;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      transition: width 0.3s ease;
+    }
+    
+    .question-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    
+    .question-number {
+      font-size: 14px;
+      color: #999;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    
+    .question-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 30px;
+      line-height: 1.4;
+    }
+    
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .option {
+      padding: 16px;
+      background: #f5f5f5;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 500;
+      color: #333;
+      cursor: pointer;
+      transition: all 0.2s;
+      touch-action: manipulation;
+    }
+    
+    .option:active {
+      transform: scale(0.98);
+    }
+    
+    .option:not(.disabled):hover {
+      background: #efefef;
+      border-color: #667eea;
+    }
+    
+    .option.disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+    
+    .option.correct {
+      background: #c8e6c9;
+      border-color: #4caf50;
+      color: #2e7d32;
+    }
+    
+    .option.incorrect {
+      background: #ffcdd2;
+      border-color: #f44336;
+      color: #c62828;
+    }
+    
+    .feedback {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 48px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: feedbackPop 0.5s;
+    }
+    
+    @keyframes feedbackPop {
+      0% { opacity: 0; transform: scale(0.5); }
+      50% { opacity: 1; transform: scale(1.2); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    
+    .ready-screen, .gameover-screen, .cleared-screen {
+      display: none;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .ready-screen.active, .gameover-screen.active, .cleared-screen.active {
+      display: flex;
+    }
+    
+    .ready-screen {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    }
+    
+    .gameover-screen {
+      background: linear-gradient(135deg, #f44336, #e91e63);
+      color: white;
+    }
+    
+    .cleared-screen {
+      background: linear-gradient(135deg, #ffd700, #ffed4e);
+      color: #333;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .cleared-screen::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%),
+                  radial-gradient(circle at 80% 50%, rgba(255,255,255,0.3) 0%, transparent 50%);
+      animation: sparkle 2s infinite;
+      pointer-events: none;
+    }
+    
+    @keyframes sparkle {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    
+    .screen-content {
+      position: relative;
+      z-index: 1;
+    }
+    
+    .screen-title {
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    
+    .screen-subtitle {
+      font-size: 18px;
+      margin-bottom: 30px;
+      opacity: 0.9;
+    }
+    
+    .score-display {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    
+    .badge-section {
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    
+    .master-badge {
+      display: inline-block;
+      padding: 12px 20px;
+      background: rgba(0,0,0,0.1);
+      border-radius: 12px;
+      font-weight: 700;
+      margin-top: 10px;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 30px;
+      width: 100%;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      touch-action: manipulation;
+    }
+    
+    .btn-primary {
+      background: white;
+      color: #667eea;
+    }
+    
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+    
+    .btn-secondary {
+      background: rgba(255,255,255,0.3);
+      color: white;
+      border: 2px solid white;
+    }
+    
+    .btn-secondary:active {
+      transform: scale(0.98);
+    }
+    
+    .gameover-screen .btn-primary {
+      color: #f44336;
+    }
+    
+    .cleared-screen .btn-primary {
+      color: #ffd700;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="game-screen" id="gameScreen">
+      <div class="header">
+        <div class="title">完璧帳</div>
+        <div class="stats">
+          <div class="stat-item">
+            <span class="stat-label">正解</span>
+            <span class="stat-value" id="correctCount">0</span>
+            <span class="stat-label">/10</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="perfectBadge" class="perfect-badge" style="display: none; margin-bottom: 10px;">✨ 完璧進行中</div>
+      
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+      </div>
+      
+      <div class="lives-badge">
+        <span>❤️</span>
+        <span id="livesCount">3</span>
+      </div>
+      
+      <div class="question-section">
+        <div class="question-number" id="questionNumber">問題 1/10</div>
+        <div class="question-text" id="questionText">ゲームを開始します</div>
+        
+        <div class="options" id="optionsContainer">
+          <button class="option" data-index="0">選択肢1</button>
+          <button class="option" data-index="1">選択肢2</button>
+          <button class="option" data-index="2">選択肢3</button>
+          <button class="option" data-index="3">選択肢4</button>
+        </div>
+        
+        <div class="feedback" id="feedback"></div>
+      </div>
+    </div>
+    
+    <div id="readyScreen" class="ready-screen">
+      <div class="screen-content">
+        <div class="screen-title">完璧帳</div>
+        <div class="screen-subtitle">10問すべてに正解して<br>完璧マスターになろう</div>
+        <button class="btn btn-primary" onclick="startGame()">スタート</button>
+      </div>
+    </div>
+    
+    <div id="clearedScreen" class="cleared-screen">
+      <div class="screen-content">
+        <div class="screen-title">🎉</div>
+        <div class="score-display" id="clearedScore">10/10</div>
+        <div class="screen-subtitle">完璧達成!</div>
+        <div class="badge-section">
+          <div class="master-badge">🏆 完璧帳マスター認定</div>
+        </div>
+        <div class="button-group">
+          <button class="btn btn-primary" onclick="restartGame()">もう一度</button>
+          <button class="btn btn-secondary" onclick="shareScore()">スコア送信</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="gameoverScreen" class="gameover-screen">
+      <div class="screen-content">
+        <div class="screen-title">ゲームオーバー</div>
+        <div class="score-display" id="gameoverScore">0/10</div>
+        <div class="screen-subtitle" id="gameoverMessage">あと10問</div>
+        <div class="button-group">
+          <button class="btn btn-primary" onclick="restartGame()">リスタート</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const questions = [
+      { question: "日本の首都は?", options: ["京都", "東京", "大阪", "福岡"], correct: 1 },
+      { question: "富士山の標高は約何メートル?", options: ["2800m", "3200m", "3776m", "4000m"], correct: 2 },
+      { question: "日本列島で最も大きな島は?", options: ["北海道", "本州", "九州", "四国"], correct: 1 },
+      { question: "平安京はどこにありますか?", options: ["奈良県", "京都府", "滋賀県", "兵庫県"], correct: 1 },
+      { question: "日本の通貨は?", options: ["ドル", "ユーロ", "円", "ポンド"], correct: 2 },
+      { question: "桜の季節は一般的にいつですか?", options: ["1月〜2月", "3月〜4月", "5月〜6月", "7月〜8月"], correct: 1 },
+      { question: "日本の伝統文化・能の発祥は?", options: ["鎌倉時代", "応仁の乱", "室町時代", "江戸時代"], correct: 2 },
+      { question: "日本で最初に人間国宝に認定された分野は?", options: ["絵画", "能", "陶芸", "漆芸"], correct: 1 },
+      { question: "日本の南西に位置する九州で最大の都市は?", options: ["福岡", "長崎", "熊本", "大分"], correct: 0 },
+      { question: "瀬戸内海に浮かぶ島で最も人口が多いのは?", options: ["小豆島", "直島", "宮島", "淡路島"], correct: 3 }
+    ];
+
+    const gameState = {
+      correctCount: 0,
+      mistakes: 0,
+      currentQuestionIndex: 0,
+      gameStatus: 'ready',
+      isAnswered: false,
+      bestScore: localStorage.getItem('perfectBookBest') || 0
+    };
+
+    const gameElements = {
+      gameScreen: document.getElementById('gameScreen'),
+      readyScreen: document.getElementById('readyScreen'),
+      clearedScreen: document.getElementById('clearedScreen'),
+      gameoverScreen: document.getElementById('gameoverScreen'),
+      questionNumber: document.getElementById('questionNumber'),
+      questionText: document.getElementById('questionText'),
+      optionsContainer: document.getElementById('optionsContainer'),
+      correctCount: document.getElementById('correctCount'),
+      livesCount: document.getElementById('livesCount'),
+      feedback: document.getElementById('feedback'),
+      progressFill: document.getElementById('progressFill'),
+      perfectBadge: document.getElementById('perfectBadge')
+    };
+
+    function renderQuestion() {
+      if (gameState.currentQuestionIndex >= questions.length) {
+        endGame('cleared');
+        return;
+      }
+
+      const question = questions[gameState.currentQuestionIndex];
+      gameState.isAnswered = false;
+
+      gameElements.questionNumber.textContent = `問題 ${gameState.currentQuestionIndex + 1}/10`;
+      gameElements.questionText.textContent = question.question;
+      gameElements.feedback.textContent = '';
+
+      const optionButtons = document.querySelectorAll('.option');
+      optionButtons.forEach((btn, idx) => {
+        btn.textContent = question.options[idx];
+        btn.dataset.index = idx;
+        btn.className = 'option';
+        btn.onclick = () => handleAnswer(idx);
+        btn.disabled = false;
+      });
+
+      updateProgress();
+    }
+
+    function handleAnswer(selectedIndex) {
+      if (gameState.isAnswered) return;
+      gameState.isAnswered = true;
+
+      const question = questions[gameState.currentQuestionIndex];
+      const isCorrect = selectedIndex === question.correct;
+
+      const optionButtons = document.querySelectorAll('.option');
+      optionButtons.forEach(btn => btn.disabled = true);
+
+      optionButtons[selectedIndex].classList.add(isCorrect ? 'correct' : 'incorrect');
+
+      if (isCorrect) {
+        gameState.correctCount++;
+        gameElements.feedback.textContent = '◎';
+        gameElements.correctCount.textContent = gameState.correctCount;
+        updateProgress();
+      } else {
+        gameState.mistakes++;
+        gameElements.feedback.textContent = '✗';
+        gameElements.livesCount.textContent = 3 - gameState.mistakes;
+        optionButtons[question.correct].classList.add('correct');
+      }
+
+      updatePerfectBadge();
+
+      const delay = isCorrect ? 800 : 1200;
+      setTimeout(() => {
+        gameState.currentQuestionIndex++;
+        
+        if (gameState.mistakes >= 3) {
+          endGame('gameover');
+        } else if (gameState.correctCount >= 10) {
+          endGame('cleared');
+        } else {
+          renderQuestion();
+        }
+      }, delay);
+    }
+
+    function updateProgress() {
+      const progress = (gameState.correctCount / 10) * 100;
+      gameElements.progressFill.style.width = progress + '%';
+    }
+
+    function updatePerfectBadge() {
+      if (gameState.mistakes === 0) {
+        gameElements.perfectBadge.style.display = 'inline-block';
+      } else {
+        gameElements.perfectBadge.style.display = 'none';
+      }
+    }
+
+    function showScreen(screenId) {
+      gameElements.gameScreen.style.display = 'none';
+      gameElements.readyScreen.classList.remove('active');
+      gameElements.clearedScreen.classList.remove('active');
+      gameElements.gameoverScreen.classList.remove('active');
+
+      if (screenId === 'game') {
+        gameElements.gameScreen.style.display = 'flex';
+      } else if (screenId === 'ready') {
+        gameElements.readyScreen.classList.add('active');
+      } else if (screenId === 'cleared') {
+        gameElements.clearedScreen.classList.add('active');
+      } else if (screenId === 'gameover') {
+        gameElements.gameoverScreen.classList.add('active');
+      }
+    }
+
+    function startGame() {
+      gameState.correctCount = 0;
+      gameState.mistakes = 0;
+      gameState.currentQuestionIndex = 0;
+      gameState.gameStatus = 'playing';
+      showScreen('game');
+      gameElements.correctCount.textContent = '0';
+      gameElements.livesCount.textContent = '3';
+      updatePerfectBadge();
+      renderQuestion();
+    }
+
+    function endGame(status) {
+      gameState.gameStatus = status;
+      
+      if (status === 'cleared') {
+        const bestScore = Math.max(gameState.bestScore, gameState.correctCount);
+        localStorage.setItem('perfectBookBest', bestScore);
+        document.getElementById('clearedScore').textContent = `${gameState.correctCount}/10`;
+        showScreen('cleared');
+      } else {
+        const remaining = 10 - gameState.correctCount;
+        document.getElementById('gameoverScore').textContent = `${gameState.correctCount}/10`;
+        document.getElementById('gameoverMessage').textContent = `あと${remaining}問`;
+        showScreen('gameover');
+      }
+    }
+
+    function restartGame() {
+      startGame();
+    }
+
+    function shareScore() {
+      const score = gameState.correctCount;
+      const message = score === 10 ? 
+        '完璧帳で完璧達成しました！🎉' : 
+        `完璧帳で${score}問正解しました`;
+      alert(message + '\n\nスコア送信: ' + score + '/10');
+    }
+
+    // Debug Contract
+    window.__gameDebug = {
+      metrics: {
+        correctCount: 0,
+        mistakes: 0,
+        currentQuestion: 0,
+        phase: 'ready'
+      },
+      advanceTime: function(seconds) {
+        if (gameState.gameStatus !== 'playing') {
+          startGame();
+        }
+        const questionsToComplete = Math.floor(seconds / 2);
+        for (let i = 0; i < questionsToComplete && gameState.gameStatus === 'playing'; i++) {
+          if (gameState.currentQuestionIndex >= questions.length) break;
+          const shouldWin = gameState.correctCount >= 9;
+          handleAnswer(questions[gameState.currentQuestionIndex].correct);
+          if (shouldWin && gameState.correctCount >= 10) {
+            endGame('cleared');
+            break;
+          }
+        }
+        updateDebug();
+      }
+    };
+
+    function updateDebug() {
+      window.__gameDebug.metrics = {
+        correctCount: gameState.correctCount,
+        mistakes: gameState.mistakes,
+        currentQuestion: gameState.currentQuestionIndex + 1,
+        phase: gameState.gameStatus,
+        lives: 3 - gameState.mistakes
+      };
+    }
+
+    showScreen('ready');
+  </script>
+</body>
+</html>

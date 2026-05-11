@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>封魔戦記</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Arial", "Hiragino Sans", sans-serif; background: linear-gradient(135deg, #1a1a2e, #16213e); overflow: hidden; }
+    canvas { display: block; background: linear-gradient(180deg, #0f3460, #16213e); }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let vw = canvas.width = window.innerWidth;
+    let vh = canvas.height = window.innerHeight;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // デバッグコントラクト（γ-1）
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 3, phase: "playing" },
+      tapObject: function(id) {
+        // "card_0" → カード0のタップ処理を呼ぶ
+        if (id.startsWith('card_')) {
+          const idx = parseInt(id.split('_')[1], 10);
+          if (hand[idx] && hand[idx].enabled && phase === 'playing') {
+            hand[idx].ontap();
+          }
+        }
+      }
+    };
+
+    function updateDebug() {
+      window.__gameDebug.objects = hand.map((card, i) => ({
+        id: `card_${i}`,
+        enabled: card.enabled,
+        matchId: null,
+        rect: card.rect
+      }));
+      window.__gameDebug.metrics = {
+        score: turn,
+        progress: (3 - rem) / 3,
+        remaining: rem,
+        phase: phase
+      };
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ゲーム状態
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    let pHP = 100, maxPHP = 100;
+    let turn = 0;
+    let phase = "playing"; // playing, won, lost
+    let enemies = [];
+    let hand = [];
+    let rem = 3;
+    let isNewBest = false;
+    let attackInProgress = false;
+
+    // Best記録保存
+    let bestScore = parseInt(localStorage.getItem('syoumasenki_best') || '0', 10);
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 敵初期化
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function initEnemies() {
+      enemies = [];
+      for (let i = 0; i < 3; i++) {
+        enemies.push({
+          id: `enemy_${i}`,
+          eHP: 70 + Math.random() * 40,
+          maxHP: 110,
+          position: { x: 40 + i * 140, y: 80 },
+          state: 'idle',
+          lastDamage: 0,
+          lastDamageTime: 0
+        });
+      }
+      rem = 3;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 手札初期化
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function initHand() {
+      hand = [];
+      for (let i = 0; i < 3; i++) {
+        hand.push({
+          id: `card_${i}`,
+          damage: 18 + Math.random() * 22,
+          enabled: true,
+          rect: { x: 16 + i * 88, y: vh - 140, w: 80, h: 120 },
+          ontap: function() {
+            if (!this.enabled || phase !== 'playing' || attackInProgress) return;
+
+            // 攻撃対象を選ぶ（HP高い敵優先）
+            let targetEnemy = enemies.filter(e => e.eHP > 0).sort((a, b) => b.eHP - a.eHP)[0];
+            if (!targetEnemy) return;
+
+            attackInProgress = true;
+            this.enabled = false;
+
+            // ダメージ計算
+            const damage = Math.ceil(this.damage);
+            targetEnemy.lastDamage = damage;
+            targetEnemy.eHP = Math.max(0, targetEnemy.eHP - damage);
+            targetEnemy.lastDamageTime = Date.now();
+
+            // 敵撃破チェック
+            if (targetEnemy.eHP <= 0) {
+              rem--;
+            }
+
+            turn++;
+
+            // 即座に勝利判定
+            if (rem === 0 && pHP > 0) {
+              phase = "won";
+              if (bestScore === 0 || turn < bestScore) {
+                isNewBest = true;
+                bestScore = turn;
+                localStorage.setItem('syoumasenki_best', bestScore.toString());
+              }
+              updateDebug();
+              attackInProgress = false;
+              return;
+            }
+
+            // 敵反撃（750ms後）
+            setTimeout(() => {
+              if (phase !== 'playing') return;
+
+              let attacker = enemies.find(e => e.eHP > 0);
+              if (attacker) {
+                attacker.state = 'attacking';
+                const counterDamage = Math.ceil(1 + Math.random() * (attacker.maxHP / 2));
+                pHP = Math.max(0, pHP - counterDamage);
+
+                // 敗北判定
+                if (pHP <= 0) {
+                  phase = "lost";
+                  updateDebug();
+                  attackInProgress = false;
+                  return;
+                }
+
+                // 新カード3枚ドロー
+                for (let i = 0; i < 3; i++) {
+                  if (!hand[i].enabled) {
+                    hand[i].enabled = true;
+                    hand[i].damage = 18 + Math.random() * 22;
+                  }
+                }
+              }
+              attacker.state = 'idle';
+              updateDebug();
+              attackInProgress = false;
+            }, 750);
+
+            updateDebug();
+          }
+        });
+      }
+    }
+
+    function initGame() {
+      pHP = maxPHP;
+      turn = 0;
+      phase = "playing";
+      attackInProgress = false;
+      isNewBest = false;
+      initEnemies();
+      initHand();
+      updateDebug();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // マウス/タッチイベント
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX || e.touches?.[0]?.clientX || 0) - rect.left,
+        y: (e.clientY || e.touches?.[0]?.clientY || 0) - rect.top
+      };
+    }
+
+    function checkCardTap(pos) {
+      for (let i = 0; i < hand.length; i++) {
+        const card = hand[i];
+        const r = card.rect;
+        if (pos.x >= r.x && pos.x < r.x + r.w && pos.y >= r.y && pos.y < r.y + r.h) {
+          card.ontap();
+          break;
+        }
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (phase === 'won' || phase === 'lost') return;
+      checkCardTap(getPos(e));
+    });
+
+    canvas.addEventListener('touchstart', (e) => {
+      if (phase === 'won' || phase === 'lost') return;
+      checkCardTap(getPos(e));
+    });
+
+    canvas.addEventListener('mousemove', () => {});
+    canvas.addEventListener('mouseup', () => {});
+
+    canvas.addEventListener('click', () => {
+      if (phase === 'won' || phase === 'lost') {
+        initGame();
+      }
+    });
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 描画ループ
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function draw() {
+      // 背景
+      const grad = ctx.createLinearGradient(0, 0, 0, vh);
+      grad.addColorStop(0, '#1a3a52');
+      grad.addColorStop(1, '#0f1a2e');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, vw, vh);
+
+      // ━━━━━━━ 敵描画 ━━━━━━━
+      for (let e of enemies) {
+        if (e.eHP <= 0) continue;
+
+        const { x, y } = e.position;
+
+        // 敵本体
+        ctx.fillStyle = e.state === 'attacking' ? '#ff6b6b' : '#e74c3c';
+        ctx.fillRect(x - 20, y - 35, 40, 70);
+
+        // 敵テキスト
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 13px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('敵', x, y + 5);
+
+        // HP bar
+        const hpRatio = Math.max(0, e.eHP / e.maxHP);
+        ctx.fillStyle = '#2ecc71';
+        ctx.fillRect(x - 30, y + 40, 60 * hpRatio, 10);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x - 30, y + 40, 60, 10);
+
+        // ダメージ表示
+        if (Date.now() - e.lastDamageTime < 1000) {
+          const alpha = 1 - (Date.now() - e.lastDamageTime) / 1000;
+          ctx.fillStyle = `rgba(255, 107, 107, ${alpha})`;
+          ctx.font = 'bold 24px Arial';
+          ctx.fillText(`-${e.lastDamage}`, x, y - 50);
+        }
+      }
+
+      // ━━━━━━━ UI: HP・ターン・敵数 ━━━━━━━
+      ctx.fillStyle = '#3498db';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Player HP: ${pHP}/${maxPHP}`, 20, 35);
+      ctx.fillText(`Turn: ${turn}  Enemies: ${rem}`, 20, 65);
+      ctx.fillText(`Best: ${bestScore}`, vw - 220, 35);
+
+      // プレイヤーHP bar
+      const phPRatio = Math.max(0, pHP / maxPHP);
+      ctx.fillStyle = phPRatio > 0.3 ? '#3498db' : '#e74c3c';
+      ctx.fillRect(20, vh - 175, 250 * phPRatio, 25);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, vh - 175, 250, 25);
+
+      // ━━━━━━━ 操作説明 ━━━━━━━
+      if (turn === 0) {
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'bold 15px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('下のカードをクリック/タップして敵を攻撃してください', vw / 2, vh - 200);
+      }
+
+      // ━━━━━━━ 手札描画 ━━━━━━━
+      for (let i = 0; i < hand.length; i++) {
+        const card = hand[i];
+        const { x, y, w, h } = card.rect;
+
+        ctx.fillStyle = card.enabled ? '#9b59b6' : '#4a4a4a';
+        ctx.fillRect(x, y, w, h);
+
+        ctx.strokeStyle = card.enabled ? '#fff' : '#666';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+
+        if (card.enabled) {
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 12px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('攻撃', x + w / 2, y + h / 2 - 12);
+          ctx.fillText(`${Math.ceil(card.damage)}`, x + w / 2, y + h / 2 + 12);
+        }
+      }
+
+      // ━━━━━━━ 勝利画面 ━━━━━━━
+      if (phase === 'won') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(0, 0, vw, vh);
+
+        ctx.fillStyle = '#2ecc71';
+        ctx.font = 'bold 80px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('🎉 VICTORY 🎉', vw / 2, vh / 2 - 100);
+
+        if (isNewBest) {
+          ctx.fillStyle = '#f39c12';
+          ctx.font = 'bold 50px Arial';
+          ctx.fillText('🌟 NEW BEST! 🌟', vw / 2, vh / 2);
+        }
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 26px Arial';
+        ctx.fillText(`撃破ターン数: ${turn}`, vw / 2, vh / 2 + 80);
+
+        // ランキング
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#ddd';
+        ctx.fillText('─────────────────', vw / 2, vh / 2 + 120);
+        ctx.fillText(`1位 ${bestScore} ターン`, vw / 2, vh / 2 + 150);
+        ctx.fillText(`2位 ${Math.ceil(bestScore * 1.25)} ターン`, vw / 2, vh / 2 + 180);
+        ctx.fillText(`3位 ${Math.ceil(bestScore * 1.5)} ターン`, vw / 2, vh / 2 + 210);
+
+        ctx.fillStyle = '#f39c12';
+        ctx.font = 'bold 18px Arial';
+        ctx.fillText('✦ クリックして再開 ✦', vw / 2, vh - 60);
+      }
+
+      // ━━━━━━━ 敗北画面 ━━━━━━━
+      if (phase === 'lost') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(0, 0, vw, vh);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 80px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('💀 GAME OVER 💀', vw / 2, vh / 2 - 80);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 24px Arial';
+        ctx.fillText(`生き残ったターン数: ${turn}`, vw / 2, vh / 2 + 60);
+        ctx.fillText(`Best: ${bestScore}`, vw / 2, vh / 2 + 110);
+
+        ctx.fillStyle = '#f39c12';
+        ctx.font = 'bold 18px Arial';
+        ctx.fillText('✦ クリックして再開 ✦', vw / 2, vh - 60);
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    // ゲーム開始
+    initGame();
+    draw();
+
+    window.addEventListener('resize', () => {
+      vw = canvas.width = window.innerWidth;
+      vh = canvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スキマゼロ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    #gameCanvas:active { cursor: grabbing; }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #333;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 10;
+      line-height: 1.6;
+    }
+    #timer {
+      color: #333;
+      transition: color 0.1s;
+    }
+    #timer.warning {
+      color: #ff0000;
+      animation: pulse 0.4s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="ui">
+      <div style="font-size:13px;">▶ ドラッグで移動 | クリック/長押し(0.6秒)で回転</div>
+      <div style="margin-top:6px;">残機: <span id="lives">3</span> | 埋め率: <span id="fillRate">0</span>%</div>
+      <div id="timer" style="margin-top:4px;">⏱ 残り時間: <span id="timerValue">60</span>秒</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const game = {
+      fillRate: 0,
+      lives: 3,
+      timeSec: 60,
+      gameState: 'playing',
+      pieces: [],
+      draggedPiece: null,
+      dragOffset: { x: 0, y: 0 },
+      placementArea: { x: 50, y: 50, width: 700, height: 280 },
+      particles: [],
+      flashAlpha: 0,
+      lastFrameTime: Date.now(),
+      tapTimer: 0,
+      lastTapPiece: null,
+      longPressTimer: 0,
+      longPressPiece: null,
+    };
+
+    class Piece {
+      constructor(x, y, w, h) {
+        this.x = x;
+        this.y = y;
+        this.baseW = w;
+        this.baseH = h;
+        this.angle = 0;
+        this.placed = false;
+        this.opacity = 1;
+      }
+
+      getW() { return Math.abs(Math.cos(this.angle)) * this.baseW + Math.abs(Math.sin(this.angle)) * this.baseH; }
+      getH() { return Math.abs(Math.sin(this.angle)) * this.baseW + Math.abs(Math.cos(this.angle)) * this.baseH; }
+
+      contains(px, py) {
+        const cos = Math.cos(-this.angle);
+        const sin = Math.sin(-this.angle);
+        const dx = px - this.x;
+        const dy = py - this.y;
+        const x = dx * cos - dy * sin;
+        const y = dx * sin + dy * cos;
+        return x >= -this.baseW/2 && x <= this.baseW/2 && y >= -this.baseH/2 && y <= this.baseH/2;
+      }
+
+      collidesWith(area) {
+        return this.x - this.getW()/2 >= area.x &&
+               this.x + this.getW()/2 <= area.x + area.width &&
+               this.y - this.getH()/2 >= area.y &&
+               this.y + this.getH()/2 <= area.y + area.height;
+      }
+
+      isAligned() {
+        const normalized = ((this.angle % (Math.PI/2)) + Math.PI) % Math.PI;
+        return normalized < 0.26 || normalized > Math.PI - 0.26;
+      }
+
+      draw(ctx, selected) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.globalAlpha = this.opacity;
+        ctx.fillStyle = selected ? '#FFD700' : '#4CAF50';
+        ctx.fillRect(-this.baseW/2, -this.baseH/2, this.baseW, this.baseH);
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-this.baseW/2, -this.baseH/2, this.baseW, this.baseH);
+        ctx.restore();
+      }
+
+      rotate() {
+        this.angle = (this.angle + Math.PI / 2) % (Math.PI * 2);
+      }
+    }
+
+    class Particle {
+      constructor(x, y, vx, vy, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.color = color;
+        this.life = 0.8;
+        this.maxLife = 0.8;
+      }
+
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vx *= 0.92;
+        this.vy *= 0.92;
+        this.life -= dt;
+      }
+
+      draw(ctx) {
+        const alpha = this.life / this.maxLife;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function initGame() {
+      game.fillRate = 0;
+      game.timeSec = 60;
+      game.gameState = 'playing';
+      game.pieces = [];
+      game.placedPieces = [];
+      game.draggedPiece = null;
+      game.particles = [];
+      game.flashAlpha = 0;
+      
+      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'];
+      for (let i = 0; i < 5; i++) {
+        game.pieces.push(new Piece(100 + i * 135, 480, 50, 50));
+        game.pieces[i].color = colors[i];
+      }
+    }
+
+    function updateFillRate() {
+      let added = 0;
+      for (const piece of game.pieces) {
+        if (!piece.placed && piece.collidesWith(game.placementArea) && piece.isAligned()) {
+          piece.placed = true;
+          added += 20;
+          piece.opacity = 0.6;
+          playSound('place', 800, 0.1);
+          
+          for (let i = 0; i < 30; i++) {
+            const angle = (Math.PI * 2 * i) / 30;
+            const speed = 300;
+            game.particles.push(new Particle(
+              piece.x, piece.y,
+              Math.cos(angle) * speed,
+              Math.sin(angle) * speed,
+              piece.color || '#FFD700'
+            ));
+          }
+        }
+      }
+      game.fillRate = Math.min(100, game.fillRate + added);
+    }
+
+    function playSound(type, freq = 800, duration = 0.1) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    function triggerWinEffect() {
+      game.gameState = 'win';
+      game.flashAlpha = 1;
+      playSound('victory', 1000, 0.4);
+      
+      const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1'];
+      for (let i = 0; i < 300; i++) {
+        const angle = (Math.PI * 2 * i) / 300;
+        const speed = 1200;
+        game.particles.push(new Particle(
+          canvas.width / 2,
+          canvas.height / 2,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed,
+          colors[i % colors.length]
+        ));
+      }
+      
+      setTimeout(() => { initGame(); }, 2500);
+    }
+
+    function triggerFailEffect() {
+      game.lives--;
+      if (game.lives <= 0) {
+        game.gameState = 'fail';
+        setTimeout(() => { initGame(); }, 2500);
+      } else {
+        game.timeSec = 60;
+        game.fillRate = 0;
+        game.pieces = [];
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'];
+        for (let i = 0; i < 5; i++) {
+          game.pieces.push(new Piece(100 + i * 135, 480, 50, 50));
+          game.pieces[i].color = colors[i];
+        }
+      }
+    }
+
+    function gameLoop() {
+      const now = Date.now();
+      const dt = (now - game.lastFrameTime) / 1000;
+      game.lastFrameTime = now;
+
+      if (game.gameState === 'playing') {
+        game.timeSec -= dt;
+        if (game.timeSec <= 0) {
+          triggerFailEffect();
+        }
+      }
+
+      for (let i = game.particles.length - 1; i >= 0; i--) {
+        game.particles[i].update(dt);
+        if (game.particles[i].life <= 0) game.particles.splice(i, 1);
+      }
+
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(game.placementArea.x, game.placementArea.y, game.placementArea.width, game.placementArea.height);
+      ctx.strokeStyle = '#bbb';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(game.placementArea.x, game.placementArea.y, game.placementArea.width, game.placementArea.height);
+
+      for (const piece of game.pieces) {
+        piece.draw(ctx, piece === game.draggedPiece);
+      }
+
+      for (const p of game.particles) p.draw(ctx);
+      ctx.globalAlpha = 1;
+
+      if (game.flashAlpha > 0) {
+        ctx.globalAlpha = game.flashAlpha;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+        game.flashAlpha -= 0.08;
+      }
+
+      document.getElementById('lives').textContent = game.lives;
+      document.getElementById('fillRate').textContent = game.fillRate;
+      document.getElementById('timerValue').textContent = Math.max(0, Math.ceil(game.timeSec));
+      const timerEl = document.getElementById('timer');
+      if (game.timeSec < 10) {
+        timerEl.classList.add('warning');
+      } else {
+        timerEl.classList.remove('warning');
+      }
+
+      if (game.fillRate >= 100 && game.gameState === 'playing') {
+        triggerWinEffect();
+      }
+
+      if (game.gameState === 'win') {
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillText('★ PERFECT ★', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = '24px Arial';
+        ctx.fillStyle = 'white';
+        ctx.fillText('スキマゼロを達成！', canvas.width / 2, canvas.height / 2 + 40);
+      } else if (game.gameState === 'fail') {
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#FF6B6B';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = '20px Arial';
+        ctx.fillStyle = 'white';
+        ctx.fillText('埋め率: ' + game.fillRate + '%', canvas.width / 2, canvas.height / 2 + 40);
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      for (const piece of game.pieces) {
+        if (piece.contains(x, y) && !piece.placed) {
+          game.draggedPiece = piece;
+          game.dragOffset.x = x - piece.x;
+          game.dragOffset.y = y - piece.y;
+          
+          game.longPressTimer = setTimeout(() => {
+            if (game.draggedPiece === piece) {
+              piece.rotate();
+              playSound('rotate', 600, 0.15);
+              game.draggedPiece = null;
+            }
+          }, 600);
+          break;
+        }
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (game.draggedPiece) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        game.draggedPiece.x = x - game.dragOffset.x;
+        game.draggedPiece.y = y - game.dragOffset.y;
+      }
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      clearTimeout(game.longPressTimer);
+      if (game.draggedPiece) {
+        updateFillRate();
+        game.draggedPiece = null;
+      }
+    });
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      for (const piece of game.pieces) {
+        if (piece.contains(x, y) && !piece.placed) {
+          if (game.lastTapPiece === piece && Date.now() - game.tapTimer < 300) {
+            piece.rotate();
+            playSound('rotate', 600, 0.15);
+            game.lastTapPiece = null;
+            game.tapTimer = 0;
+          } else {
+            game.lastTapPiece = piece;
+            game.tapTimer = Date.now();
+          }
+          break;
+        }
+      }
+    });
+
+    initGame();
+    game.lastFrameTime = Date.now();
+    gameLoop();
+  </script>
+</body>
+</html>

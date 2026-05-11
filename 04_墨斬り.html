@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨斬り</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            max-width: 800px;
+            max-height: 600px;
+            background: #0a0a0a;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0a;
+            cursor: crosshair;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 18px;
+            z-index: 10;
+        }
+        #time {
+            color: #ffaa00;
+            font-weight: bold;
+        }
+        #kills {
+            color: #00ff88;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        #instruction {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #888;
+            font-size: 16px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .instruction-text {
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div>TIME: <span id="time">60</span>s</div>
+            <div id="kills">KILLS: 0/30</div>
+        </div>
+        <div id="instruction">
+            <div style="font-size: 32px; color: #ffaa00;">墨斬り</div>
+            <div class="instruction-text">
+                マウスをドラッグしてスワイプ<br>
+                敵を斬って破壊しろ！<br>
+                <span style="font-size: 12px; color: #666; margin-top: 20px; display: block;">30体以上倒せばクリア</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ゲーム状態
+        const game = {
+            canvas: null,
+            ctx: null,
+            kills: 0,
+            time: 60,
+            gameState: 'instruction', // instruction -> playing -> win -> fail
+            enemies: [],
+            particles: [],
+            lastSpawnTime: 0,
+            spawnInterval: 1000,
+            swipePath: [],
+            isDrawing: false,
+            touchActive: false,
+            gameStartTime: null
+        };
+
+        // 敵クラス
+        class Enemy {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 15;
+                this.vx = (Math.random() - 0.5) * 1;
+                this.vy = Math.random() * 0.5 + 0.5;
+                this.active = true;
+                this.spawnTime = Date.now();
+                this.lifetime = 8000; // 8秒で消滅
+                this.color = '#4a90e2';
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.y > game.canvas.height + 50 || Date.now() - this.spawnTime > this.lifetime) {
+                    this.active = false;
+                }
+            }
+
+            draw(ctx) {
+                if (!this.active) return;
+
+                // グラデーション背景
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                gradient.addColorStop(0, '#6ba3ff');
+                gradient.addColorStop(1, this.color);
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 外枠
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 中心点
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            isHit(x, y) {
+                const dist = Math.sqrt((this.x - x) ** 2 + (this.y - y) ** 2);
+                return dist < this.radius;
+            }
+        }
+
+        // パーティクルクラス
+        class Particle {
+            constructor(x, y, vx, vy, life) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.life = life;
+                this.maxLife = life;
+                this.size = 4;
+                this.color = `hsla(${Math.random() * 30 + 30}, 100%, 50%, 0.8)`;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.1; // 重力
+                this.life--;
+            }
+
+            draw(ctx) {
+                const alpha = this.life / this.maxLife;
+                ctx.fillStyle = this.color.replace('0.8', alpha.toString());
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // スコアテキストパーティクル
+        class ScoreText {
+            constructor(x, y, text) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.life = 60;
+                this.maxLife = 60;
+                this.opacity = 1;
+            }
+
+            update() {
+                this.y -= 1;
+                this.life--;
+                this.opacity = this.life / this.maxLife;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = '#ffff00';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        // 敵破壊エフェクト
+        function createDestroyEffect(enemy) {
+            const particleCount = 25;
+            const angleStep = (Math.PI * 2) / particleCount;
+
+            for (let i = 0; i < particleCount; i++) {
+                const angle = angleStep * i + (Math.random() - 0.5) * 0.5;
+                const speed = Math.random() * 3 + 2;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+
+                const particle = new Particle(enemy.x, enemy.y, vx, vy, 40);
+                game.particles.push(particle);
+            }
+
+            // スコアテキスト
+            game.particles.push(new ScoreText(enemy.x, enemy.y, '+1'));
+        }
+
+        // スワイプ処理
+        function processSwipe() {
+            if (game.swipePath.length < 2) return;
+
+            const hitEnemies = new Set();
+
+            // スワイプ軌跡上の敵判定
+            for (let i = 0; i < game.swipePath.length - 1; i++) {
+                const p1 = game.swipePath[i];
+                const p2 = game.swipePath[i + 1];
+
+                for (let enemy of game.enemies) {
+                    if (!enemy.active || hitEnemies.has(enemy)) continue;
+
+                    const dist = pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y);
+                    if (dist < enemy.radius) {
+                        hitEnemies.add(enemy);
+                        enemy.active = false;
+                        game.kills++;
+                        createDestroyEffect(enemy);
+                    }
+                }
+            }
+
+            game.swipePath = [];
+        }
+
+        // 点と線分の距離を計算
+        function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
+            const closestX = x1 + t * dx;
+            const closestY = y1 + t * dy;
+            return Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2);
+        }
+
+        // マウスイベント
+        function setupInputHandlers() {
+            const canvas = game.canvas;
+            const rect = canvas.getBoundingClientRect();
+
+            function getCoords(e) {
+                if (e.touches) {
+                    return {
+                        x: e.touches[0].clientX - rect.left,
+                        y: e.touches[0].clientY - rect.top
+                    };
+                }
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            }
+
+            document.addEventListener('mousedown', (e) => {
+                if (game.gameState !== 'playing') {
+                    if (game.gameState === 'instruction') {
+                        game.gameState = 'playing';
+                        game.gameStartTime = Date.now();
+                        game.time = 60;
+                        document.getElementById('instruction').style.display = 'none';
+                    } else if (game.gameState === 'win' || game.gameState === 'fail') {
+                        resetGame();
+                    }
+                    return;
+                }
+                game.isDrawing = true;
+                const coords = getCoords(e);
+                game.swipePath = [coords];
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!game.isDrawing || game.gameState !== 'playing') return;
+                const coords = getCoords(e);
+                game.swipePath.push(coords);
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (game.isDrawing && game.gameState === 'playing') {
+                    processSwipe();
+                }
+                game.isDrawing = false;
+            });
+
+            document.addEventListener('touchstart', (e) => {
+                if (game.gameState !== 'playing') {
+                    if (game.gameState === 'instruction') {
+                        game.gameState = 'playing';
+                        game.gameStartTime = Date.now();
+                        game.time = 60;
+                        document.getElementById('instruction').style.display = 'none';
+                    } else if (game.gameState === 'win' || game.gameState === 'fail') {
+                        resetGame();
+                    }
+                    return;
+                }
+                game.touchActive = true;
+                const coords = getCoords(e);
+                game.swipePath = [coords];
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!game.touchActive || game.gameState !== 'playing') return;
+                e.preventDefault();
+                const coords = getCoords(e);
+                game.swipePath.push(coords);
+            });
+
+            document.addEventListener('touchend', () => {
+                if (game.touchActive && game.gameState === 'playing') {
+                    processSwipe();
+                }
+                game.touchActive = false;
+            });
+        }
+
+        // 敵生成
+        function spawnEnemy() {
+            const now = Date.now();
+            const currentInterval = 1000 - (Math.min(game.kills, 15) * 40); // 0.4秒まで短縮
+            const adjustedInterval = Math.max(currentInterval, 400);
+
+            if (now - game.lastSpawnTime > adjustedInterval) {
+                const xPositions = [
+                    game.canvas.width * 0.25,
+                    game.canvas.width * 0.5,
+                    game.canvas.width * 0.75
+                ];
+                const randomX = xPositions[Math.floor(Math.random() * xPositions.length)];
+                const randomX_offset = randomX + (Math.random() - 0.5) * 40;
+
+                game.enemies.push(new Enemy(randomX_offset, -20));
+                game.lastSpawnTime = now;
+            }
+        }
+
+        // ゲームループ
+        function gameLoop() {
+            // 時間更新（playing状態のとき）
+            if (game.gameState === 'playing') {
+                game.time = Math.max(0, 60 - Math.floor((Date.now() - game.gameStartTime) / 1000));
+
+                if (game.kills >= 30) {
+                    game.gameState = 'win';
+                } else if (game.time <= 0) {
+                    game.gameState = 'fail';
+                }
+
+                spawnEnemy();
+            }
+
+            // 敵更新
+            for (let enemy of game.enemies) {
+                enemy.update();
+            }
+            game.enemies = game.enemies.filter(e => e.active);
+
+            // パーティクル更新
+            for (let particle of game.particles) {
+                particle.update();
+            }
+            game.particles = game.particles.filter(p => {
+                if (p instanceof ScoreText) return p.life > 0;
+                return p.life > 0;
+            });
+
+            // UI更新
+            document.getElementById('time').textContent = game.time;
+            document.getElementById('kills').textContent = `KILLS: ${game.kills}/30`;
+
+            // 描画
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 描画
+        function draw() {
+            const ctx = game.ctx;
+            const canvas = game.canvas;
+
+            // 背景
+            if (game.gameState === 'win') {
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#000');
+                gradient.addColorStop(1, '#444400');
+                ctx.fillStyle = gradient;
+            } else if (game.gameState === 'fail') {
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#000');
+                gradient.addColorStop(1, '#440000');
+                ctx.fillStyle = gradient;
+            } else {
+                ctx.fillStyle = '#0a0a0a';
+            }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // グリッド背景
+            if (game.gameState === 'playing') {
+                ctx.strokeStyle = 'rgba(100, 100, 150, 0.1)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < canvas.width; i += 40) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, canvas.height);
+                    ctx.stroke();
+                }
+                for (let i = 0; i < canvas.height; i += 40) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(canvas.width, i);
+                    ctx.stroke();
+                }
+            }
+
+            // スワイプ軌跡描画
+            if (game.swipePath.length > 1) {
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.8)';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(game.swipePath[0].x, game.swipePath[0].y);
+                for (let i = 1; i < game.swipePath.length; i++) {
+                    ctx.lineTo(game.swipePath[i].x, game.swipePath[i].y);
+                }
+                ctx.stroke();
+            }
+
+            // 敵描画
+            for (let enemy of game.enemies) {
+                enemy.draw(ctx);
+            }
+
+            // パーティクル描画
+            for (let particle of game.particles) {
+                particle.draw(ctx);
+            }
+
+            // ゲーム状態表示
+            if (game.gameState === 'win') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ffcc00';
+                ctx.font = 'bold 60px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('VICTORY!', canvas.width / 2, canvas.height / 2 - 50);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '24px Arial';
+                ctx.fillText(`KILLS: ${game.kills}`, canvas.width / 2, canvas.height / 2 + 30);
+                ctx.fillText('Click to Retry', canvas.width / 2, canvas.height / 2 + 80);
+            } else if (game.gameState === 'fail') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ff4444';
+                ctx.font = 'bold 60px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 50);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '24px Arial';
+                ctx.fillText(`KILLS: ${game.kills}/30`, canvas.width / 2, canvas.height / 2 + 30);
+                ctx.fillText('Click to Retry', canvas.width / 2, canvas.height / 2 + 80);
+            }
+        }
+
+        // ゲーム初期化
+        function resetGame() {
+            game.kills = 0;
+            game.time = 60;
+            game.gameState = 'instruction';
+            game.enemies = [];
+            game.particles = [];
+            game.swipePath = [];
+            game.isDrawing = false;
+            game.touchActive = false;
+            game.lastSpawnTime = 0;
+            game.gameStartTime = null;
+            document.getElementById('instruction').style.display = 'block';
+            document.getElementById('time').textContent = '60';
+            document.getElementById('kills').textContent = 'KILLS: 0/30';
+        }
+
+        // 初期化
+        function init() {
+            game.canvas = document.getElementById('gameCanvas');
+            game.ctx = game.canvas.getContext('2d');
+
+            // キャンバスサイズ調整
+            const container = document.getElementById('container');
+            game.canvas.width = container.clientWidth;
+            game.canvas.height = container.clientHeight;
+
+            setupInputHandlers();
+            gameLoop();
+        }
+
+        window.addEventListener('load', init);
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('container');
+            game.canvas.width = container.clientWidth;
+            game.canvas.height = container.clientHeight;
+        });
+    </script>
+</body>
+</html>

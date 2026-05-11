@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ドタバタシェフ</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: linear-gradient(180deg, #fff8f0 0%, #ffe4cc 100%);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+      font-weight: bold;
+    }
+
+    #gameBoard {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .header {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      height: 50px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 10px;
+      padding: 0 15px;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-text {
+      font-size: 24px;
+      color: #ff6b6b;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      font-size: 16px;
+      color: #333;
+    }
+
+    .stat-label {
+      font-weight: bold;
+      color: #666;
+    }
+
+    .stat-value {
+      color: #ff6b6b;
+      font-weight: bold;
+      min-width: 40px;
+    }
+
+    #instructionText {
+      position: absolute;
+      top: 70px;
+      left: 10px;
+      right: 10px;
+      font-size: 13px;
+      color: #555;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border-left: 4px solid #ff6b6b;
+      z-index: 5;
+    }
+
+    .food-item {
+      position: absolute;
+      cursor: grab;
+      user-select: none;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: bold;
+      transition: transform 0.1s;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .food-item:active {
+      cursor: grabbing;
+    }
+
+    .food-item.dragging {
+      transform: scale(1.2);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+      z-index: 100;
+    }
+
+    .order-box {
+      position: absolute;
+      border: 3px dashed #999;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+      color: #333;
+      transition: all 0.2s;
+    }
+
+    .order-box.complete {
+      background: rgba(76, 175, 80, 0.3);
+      border-color: #4caf50;
+    }
+
+    .order-box.shake {
+      animation: shake 0.15s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .order-item {
+      font-weight: bold;
+      color: #ff6b6b;
+    }
+
+    .order-urgency {
+      margin-top: 4px;
+      font-size: 16px;
+      animation: blink 0.5s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .food-storage {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border: 2px solid #ddd;
+      overflow-x: auto;
+    }
+
+    .food-storage-label {
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      white-space: nowrap;
+      margin-right: 5px;
+    }
+
+    #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    #gameOverScreen.show {
+      display: flex;
+    }
+
+    .game-over-title {
+      font-size: 56px;
+      font-weight: bold;
+      text-align: center;
+      animation: popIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+
+    .game-over-title.win {
+      color: #4caf50;
+      text-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+    }
+
+    .game-over-title.fail {
+      color: #ff6b6b;
+      text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0) rotateZ(-10deg); opacity: 0; }
+      100% { transform: scale(1) rotateZ(0); opacity: 1; }
+    }
+
+    .score-display {
+      font-size: 32px;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .final-rank {
+      font-size: 20px;
+      color: #ffeb3b;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .restart-button {
+      padding: 12px 30px;
+      font-size: 18px;
+      font-weight: bold;
+      color: white;
+      background: #667eea;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .restart-button:hover {
+      background: #764ba2;
+      transform: scale(1.05);
+    }
+
+    .confetti {
+      position: absolute;
+      pointer-events: none;
+      animation: confettiFall 3s ease-out forwards;
+    }
+
+    @keyframes confettiFall {
+      0% {
+        transform: translateY(-100px) rotateZ(0deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(600px) rotateZ(720deg);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="gameBoard">
+      <div class="header">
+        <div class="header-text">🍳 ドタバタシェフ</div>
+        <div class="stats">
+          <div><span class="stat-label">スコア:</span><span class="stat-value" id="scoreDisplay">0</span>/8</div>
+          <div><span class="stat-label">残り:</span><span class="stat-value" id="timerDisplay">60</span>秒</div>
+          <div><span class="stat-label">注文:</span><span class="stat-value" id="orderCountDisplay">0</span></div>
+        </div>
+      </div>
+      <div id="instructionText">💡 食材をドラッグして注文に合わせてね！スコア8以上で勝利!</div>
+      <div id="ordersContainer"></div>
+      <div class="food-storage">
+        <div class="food-storage-label">🍽️ キッチン:</div>
+        <div id="foodStorageContainer"></div>
+      </div>
+    </div>
+    <div id="gameOverScreen">
+      <div class="game-over-title" id="gameOverTitle"></div>
+      <div class="score-display">スコア: <span id="finalScore">0</span> / 8</div>
+      <div class="final-rank" id="finalRank"></div>
+      <button class="restart-button" onclick="location.reload()">もう一度プレイ</button>
+    </div>
+  </div>
+
+  <script>
+    // Debug API
+    window.__gameDebug = {
+      drags: [],
+      metrics: { score: 0, progress: 0.0, remaining: 60, phase: "playing" },
+      dragObject: function(id) {
+        const foodItem = __gameState.foodItems.find(f => f.id === id);
+        if (!foodItem || !__gameState.orders.length) return;
+        
+        const targetOrder = __gameState.orders[0];
+        if (!targetOrder) return;
+        
+        foodItem.x = targetOrder.x + targetOrder.width / 2 - foodItem.width / 2;
+        foodItem.y = targetOrder.y + targetOrder.height / 2 - foodItem.height / 2;
+        
+        checkOrderCompletion(foodItem, targetOrder);
+      }
+    };
+
+    const foodTypes = [
+      { name: 'オムレツ', emoji: '🍳', color: '#FFD700' },
+      { name: 'ハンバーグ', emoji: '🍔', color: '#8B4513' },
+      { name: '寿司', emoji: '🍣', color: '#FF69B4' },
+      { name: 'パスタ', emoji: '🍝', color: '#DC143C' },
+      { name: 'サラダ', emoji: '🥗', color: '#90EE90' },
+      { name: 'スープ', emoji: '🍲', color: '#FFA500' }
+    ];
+
+    const __gameState = {
+      gameState: 'playing',
+      score: 0,
+      time: 60,
+      orders: [],
+      foodItems: [],
+      lastOrderTime: 0,
+      orderInterval: 3000,
+      draggingItem: null,
+      dragStartX: 0,
+      dragStartY: 0
+    };
+
+    function createFoodItem(x, y, type) {
+      return {
+        id: `food-${Date.now()}-${Math.random()}`,
+        x: x,
+        y: y,
+        width: 50,
+        height: 50,
+        type: type,
+        dragging: false,
+        element: null
+      };
+    }
+
+    function createOrder(x, y) {
+      const type = foodTypes[Math.floor(Math.random() * foodTypes.length)];
+      const orderId = `order-${Date.now()}-${Math.random()}`;
+      
+      return {
+        id: orderId,
+        x: x,
+        y: y,
+        width: 100,
+        height: 80,
+        type: type,
+        complete: false,
+        misses: 0,
+        element: null
+      };
+    }
+
+    function initGame() {
+      __gameState.gameState = 'playing';
+      __gameState.score = 0;
+      __gameState.time = 60;
+      __gameState.orders = [];
+      __gameState.foodItems = [];
+      __gameState.lastOrderTime = 0;
+      __gameState.orderInterval = 3000;
+
+      // Create initial food items
+      const storage = document.getElementById('foodStorageContainer');
+      storage.innerHTML = '';
+      
+      for (let i = 0; i < 6; i++) {
+        const type = foodTypes[i];
+        const foodItem = createFoodItem(0, 0, type);
+        __gameState.foodItems.push(foodItem);
+        
+        const elem = document.createElement('div');
+        elem.className = 'food-item';
+        elem.id = foodItem.id;
+        elem.textContent = type.emoji;
+        elem.style.backgroundColor = type.color;
+        elem.style.width = foodItem.width + 'px';
+        elem.style.height = foodItem.height + 'px';
+        elem.style.position = 'static';
+        storage.appendChild(elem);
+        foodItem.element = elem;
+      }
+
+      // Create first order
+      const ordersContainer = document.getElementById('ordersContainer');
+      ordersContainer.innerHTML = '';
+      spawnOrder();
+
+      document.getElementById('gameOverScreen').classList.remove('show');
+      updateDebug();
+    }
+
+    function spawnOrder() {
+      if (__gameState.orders.length >= 4 || __gameState.gameState !== 'playing') return;
+
+      const positions = [
+        { x: 50, y: 120 },
+        { x: 250, y: 120 },
+        { x: 450, y: 120 },
+        { x: 650, y: 120 }
+      ];
+
+      const usedPositions = __gameState.orders.map(o => `${o.x}-${o.y}`);
+      const availablePos = positions.find(p => !usedPositions.includes(`${p.x}-${p.y}`));
+      
+      if (!availablePos) return;
+
+      const order = createOrder(availablePos.x, availablePos.y);
+      __gameState.orders.push(order);
+
+      const elem = document.createElement('div');
+      elem.className = 'order-box';
+      elem.id = order.id;
+      elem.style.left = order.x + 'px';
+      elem.style.top = order.y + 'px';
+      elem.style.width = order.width + 'px';
+      elem.style.height = order.height + 'px';
+      elem.innerHTML = `<div class="order-item">${order.type.emoji}</div><div style="font-size:11px;">${order.type.name}</div>`;
+      
+      document.getElementById('ordersContainer').appendChild(elem);
+      order.element = elem;
+    }
+
+    function checkOrderCompletion(foodItem, order) {
+      const fx = foodItem.x + foodItem.width / 2;
+      const fy = foodItem.y + foodItem.height / 2;
+      
+      const ox = order.x + order.width / 2;
+      const oy = order.y + order.height / 2;
+      
+      const distance = Math.sqrt((fx - ox) ** 2 + (fy - oy) ** 2);
+      const threshold = (order.width + order.height) / 3;
+
+      if (distance < threshold && foodItem.type === order.type) {
+        // Success
+        completeOrder(foodItem, order);
+      } else if (distance < threshold) {
+        // Wrong food - miss with feedback
+        order.misses++;
+        playMissSound();
+        shakeOrder(order);
+        if (order.misses >= 2) {
+          addUrgency(order);
+        }
+      }
+    }
+
+    function completeOrder(foodItem, order) {
+      __gameState.score++;
+      order.complete = true;
+      order.element.classList.add('complete');
+      
+      // Remove food item from storage
+      foodItem.element.style.display = 'none';
+
+      playSuccessSound();
+      
+      // Remove completed order after brief delay
+      setTimeout(() => {
+        order.element.remove();
+        __gameState.orders = __gameState.orders.filter(o => o !== order);
+        spawnOrder();
+        updateDebug();
+
+        if (__gameState.score >= 8) {
+          endGame('win');
+        }
+      }, 400);
+
+      updateDebug();
+    }
+
+    function shakeOrder(order) {
+      order.element.classList.remove('shake');
+      void order.element.offsetWidth; // Trigger reflow
+      order.element.classList.add('shake');
+      setTimeout(() => {
+        order.element.classList.remove('shake');
+      }, 300);
+    }
+
+    function addUrgency(order) {
+      if (order.element.querySelector('.order-urgency')) return;
+      
+      const urgency = document.createElement('div');
+      urgency.className = 'order-urgency';
+      urgency.textContent = '!!!';
+      order.element.appendChild(urgency);
+    }
+
+    function playSuccessSound() {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.1);
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    }
+
+    function playMissSound() {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.2);
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.2);
+    }
+
+    function updateDebug() {
+      window.__gameDebug.drags = __gameState.foodItems.map(f => ({
+        id: f.id,
+        type: f.type.name,
+        enabled: __gameState.gameState === 'playing' && f.element.style.display !== 'none',
+        x: f.x,
+        y: f.y
+      }));
+      
+      window.__gameDebug.metrics = {
+        score: __gameState.score,
+        progress: __gameState.score / 8,
+        remaining: Math.max(0, Math.ceil(__gameState.time)),
+        phase: __gameState.gameState
+      };
+    }
+
+    function endGame(result) {
+      __gameState.gameState = result;
+      
+      const screen = document.getElementById('gameOverScreen');
+      const title = document.getElementById('gameOverTitle');
+      const finalScore = document.getElementById('finalScore');
+      const finalRank = document.getElementById('finalRank');
+
+      finalScore.textContent = __gameState.score;
+
+      if (result === 'win') {
+        title.textContent = '🎉 SUCCESS! 🎉';
+        title.className = 'game-over-title win';
+        
+        let rank = 'シェフレベル: S (完璧!)';
+        if (__gameState.score < 8) rank = 'シェフレベル: A (優秀)';
+        finalRank.textContent = rank;
+
+        createConfetti();
+      } else {
+        title.textContent = '😅 GAME OVER';
+        title.className = 'game-over-title fail';
+        
+        let rank = 'シェフレベル: D (修行中...)';
+        if (__gameState.score >= 3) rank = 'シェフレベル: C (頑張ってます)';
+        finalRank.textContent = rank;
+      }
+
+      screen.classList.add('show');
+      updateDebug();
+    }
+
+    function createConfetti() {
+      const container = document.getElementById('gameContainer');
+      for (let i = 0; i < 30; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.textContent = ['🎉', '🎊', '⭐', '🌟'][Math.floor(Math.random() * 4)];
+        confetti.style.left = Math.random() * 100 + '%';
+        confetti.style.fontSize = (20 + Math.random() * 10) + 'px';
+        confetti.style.animationDelay = Math.random() * 0.5 + 's';
+        container.appendChild(confetti);
+        
+        setTimeout(() => confetti.remove(), 3500);
+      }
+    }
+
+    // Mouse event handlers
+    document.addEventListener('pointerdown', (e) => {
+      if (__gameState.gameState !== 'playing') return;
+      
+      const storage = document.getElementById('foodStorageContainer');
+      const foodItem = __gameState.foodItems.find(f => f.element === e.target);
+      
+      if (!foodItem || foodItem.element.style.display === 'none') return;
+      
+      __gameState.draggingItem = foodItem;
+      foodItem.dragging = true;
+      foodItem.element.classList.add('dragging');
+      
+      const rect = foodItem.element.getBoundingClientRect();
+      const boardRect = document.getElementById('gameBoard').getBoundingClientRect();
+      
+      foodItem.x = rect.left - boardRect.left;
+      foodItem.y = rect.top - boardRect.top;
+    });
+
+    document.addEventListener('pointermove', (e) => {
+      if (!__gameState.draggingItem) return;
+      
+      const boardRect = document.getElementById('gameBoard').getBoundingClientRect();
+      const item = __gameState.draggingItem;
+      
+      item.x = e.clientX - boardRect.left - item.width / 2;
+      item.y = e.clientY - boardRect.top - item.height / 2;
+      
+      item.element.style.position = 'absolute';
+      item.element.style.left = item.x + 'px';
+      item.element.style.top = item.y + 'px';
+    });
+
+    document.addEventListener('pointerup', (e) => {
+      if (!__gameState.draggingItem) return;
+      
+      const item = __gameState.draggingItem;
+      item.dragging = false;
+      item.element.classList.remove('dragging');
+      
+      // Check collision with orders
+      let matched = false;
+      for (const order of __gameState.orders) {
+        if (!order.complete) {
+          checkOrderCompletion(item, order);
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched) {
+        // Return to storage
+        const storage = document.getElementById('foodStorageContainer');
+        storage.appendChild(item.element);
+        item.element.style.position = 'static';
+        item.element.style.left = 'auto';
+        item.element.style.top = 'auto';
+      }
+
+      __gameState.draggingItem = null;
+    });
+
+    // Game loop
+    let lastTime = performance.now();
+    function gameLoop(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (__gameState.gameState === 'playing') {
+        __gameState.time -= dt;
+
+        // Update order spawn rate based on time
+        if (__gameState.time > 40) {
+          __gameState.orderInterval = 3000;
+        } else if (__gameState.time > 20) {
+          __gameState.orderInterval = 2000;
+        } else {
+          __gameState.orderInterval = 1000;
+        }
+
+        __gameState.lastOrderTime += dt * 1000;
+        if (__gameState.lastOrderTime >= __gameState.orderInterval) {
+          spawnOrder();
+          __gameState.lastOrderTime = 0;
+        }
+
+        // Update UI
+        document.getElementById('scoreDisplay').textContent = __gameState.score;
+        document.getElementById('timerDisplay').textContent = Math.max(0, Math.ceil(__gameState.time));
+        document.getElementById('orderCountDisplay').textContent = __gameState.orders.length;
+
+        // Check fail condition
+        if (__gameState.time <= 0) {
+          if (__gameState.score < 3) {
+            endGame('fail');
+          } else {
+            endGame('win');
+          }
+        }
+
+        updateDebug();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start game
+    initGame();
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

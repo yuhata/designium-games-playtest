@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>妖怪図鑑ガチャ</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // ゲーム状態
+        const gameState = {
+            zukanCount: 0,
+            timeRemaining: 60,
+            gameOver: false,
+            gameWon: false,
+            collectedPokemon: new Set(),
+            currentPokemon: null,
+            currentPokemonShowTime: 0,
+            lastTapTime: 0,
+            particles: [],
+            floatingTexts: [],
+            gachaAnimProgress: 0,
+            gameStartTime: Date.now(),
+            lastFrameTime: Date.now()
+        };
+
+        const yokaiList = [
+            '👹', '👺', '🌙', '⭐', '🔮',
+            '🎃', '🦇', '🐉', '🐺', '🦊',
+            '🦋', '🌸', '🍄', '🎆', '💎',
+            '🔥', '❄️', '⚡', '🌊', '🌪️'
+        ];
+
+        function getTapAreaBounds() {
+            const width = canvas.width * 0.8;
+            const height = 150;
+            const x = (canvas.width - width) / 2;
+            const y = canvas.height - height - 40;
+            return { x, y, width, height };
+        }
+
+        function performGacha() {
+            let selectedYokai;
+            const newYokaiChance = Math.random() < 0.18;
+
+            if (newYokaiChance && gameState.collectedPokemon.size < 20) {
+                let availableYokai = yokaiList.filter(y => !gameState.collectedPokemon.has(y));
+                if (availableYokai.length > 0) {
+                    selectedYokai = availableYokai[Math.floor(Math.random() * availableYokai.length)];
+                    gameState.collectedPokemon.add(selectedYokai);
+                    gameState.zukanCount = gameState.collectedPokemon.size;
+                } else {
+                    selectedYokai = yokaiList[Math.floor(Math.random() * yokaiList.length)];
+                }
+            } else {
+                selectedYokai = yokaiList[Math.floor(Math.random() * yokaiList.length)];
+                if (!gameState.collectedPokemon.has(selectedYokai) && gameState.collectedPokemon.size < 20) {
+                    gameState.collectedPokemon.add(selectedYokai);
+                    gameState.zukanCount = gameState.collectedPokemon.size;
+                } else if (gameState.collectedPokemon.size < 20) {
+                    return performGacha();
+                }
+            }
+
+            gameState.currentPokemon = selectedYokai;
+            gameState.currentPokemonShowTime = Date.now();
+            gameState.gachaAnimProgress = 0;
+
+            if (gameState.zukanCount >= 20) {
+                gameState.gameWon = true;
+                triggerWinEffect();
+            }
+
+            return true;
+        }
+
+        function handleTap(x, y) {
+            const tapArea = getTapAreaBounds();
+            const isInTapArea = x >= tapArea.x && x <= tapArea.x + tapArea.width &&
+                                y >= tapArea.y && y <= tapArea.y + tapArea.height;
+
+            if (!isInTapArea || gameState.gameOver || gameState.gameWon) return;
+
+            performGacha();
+            createScoreFloatingText('+1', tapArea.x + tapArea.width / 2, tapArea.y);
+        }
+
+        // イベントリスナー
+        document.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            handleTap(e.clientX - rect.left, e.clientY - rect.top);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            // マウスムーブイベント処理（オプション）
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            // マウスアップイベント処理（オプション）
+        });
+
+        document.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            handleTap(e.clientX - rect.left, e.clientY - rect.top);
+        });
+
+        document.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            handleTap(touch.clientX - rect.left, touch.clientY - rect.top);
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchend', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+
+        function createScoreFloatingText(text, x, y) {
+            gameState.floatingTexts.push({
+                text, x, y,
+                lifeTime: 1000,
+                startTime: Date.now()
+            });
+        }
+
+        function createParticles() {
+            for (let i = 0; i < 50; i++) {
+                const angle = (Math.PI * 2 * i) / 50;
+                const speed = Math.random() * 5 + 3;
+                gameState.particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 2000,
+                    startTime: Date.now(),
+                    color: `hsl(${Math.random() * 360}, 100%, 50%)`
+                });
+            }
+        }
+
+        function triggerWinEffect() {
+            createParticles();
+            playWinSound();
+        }
+
+        function playWinSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const now = audioCtx.currentTime;
+                const notes = [659.25, 783.99, 987.77, 1318.51];
+
+                notes.forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.frequency.value = freq;
+                    osc.type = 'sine';
+                    gain.gain.setValueAtTime(0.3, now + i * 0.15);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.15 + 0.4);
+                    osc.start(now + i * 0.15);
+                    osc.stop(now + i * 0.15 + 0.4);
+                });
+            } catch (e) {
+                // Audio not available
+            }
+        }
+
+        function drawProgressBar() {
+            const barHeight = 12;
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, 0, canvas.width, barHeight);
+            
+            const progress = (gameState.zukanCount / 20) * 100;
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(0, 0, (progress / 100) * canvas.width, barHeight);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${gameState.zukanCount}/20`, 15, 25);
+        }
+
+        function drawTimer() {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'right';
+            const timeStr = Math.max(0, gameState.timeRemaining).toFixed(1);
+            ctx.fillText(timeStr, canvas.width - 20, 50);
+        }
+
+        function drawTapArea() {
+            const tapArea = getTapAreaBounds();
+            const isActive = !gameState.gameOver && !gameState.gameWon;
+
+            ctx.fillStyle = isActive ? 'rgba(100, 200, 255, 0.3)' : 'rgba(200, 100, 100, 0.2)';
+            ctx.strokeStyle = isActive ? '#64c8ff' : '#c86464';
+            ctx.lineWidth = 3;
+            ctx.fillRect(tapArea.x, tapArea.y, tapArea.width, tapArea.height);
+            ctx.strokeRect(tapArea.x, tapArea.y, tapArea.width, tapArea.height);
+
+            ctx.fillStyle = isActive ? '#64c8ff' : '#999';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('ガチャ！', canvas.width / 2, canvas.height - 70);
+            ctx.textAlign = 'left';
+        }
+
+        function drawCurrentPokemon() {
+            if (!gameState.currentPokemon) return;
+
+            const elapsed = Date.now() - gameState.currentPokemonShowTime;
+            if (elapsed > 1000) {
+                gameState.currentPokemon = null;
+                return;
+            }
+
+            const progress = elapsed / 1000;
+            const scale = 1 + progress * 1.5;
+            const opacity = 1 - progress * 0.7;
+
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.font = `${120 * scale}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText(gameState.currentPokemon, canvas.width / 2, canvas.height / 2);
+            ctx.restore();
+        }
+
+        function drawCollectedPokemon() {
+            const collected = Array.from(gameState.collectedPokemon);
+            const cols = Math.max(5, Math.floor(canvas.width / 80));
+            ctx.font = '50px Arial';
+            ctx.textAlign = 'center';
+
+            collected.forEach((pokemon, index) => {
+                const x = (index % cols) * (canvas.width / cols) + canvas.width / (cols * 2);
+                const y = 80 + Math.floor(index / cols) * 70;
+                ctx.fillText(pokemon, x, y);
+            });
+        }
+
+        function drawParticles() {
+            gameState.particles = gameState.particles.filter(p => {
+                const elapsed = Date.now() - p.startTime;
+                const progress = elapsed / p.life;
+
+                if (progress >= 1) return false;
+
+                const x = p.x + p.vx * elapsed / 100;
+                const y = p.y + p.vy * elapsed / 100;
+
+                ctx.save();
+                ctx.globalAlpha = 1 - progress;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return true;
+            });
+        }
+
+        function drawInstructions() {
+            ctx.fillStyle = '#aaa';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('下のボタンをタップして妖怪を20体集めよう！', 20, canvas.height - 20);
+        }
+
+        function drawFloatingTexts() {
+            gameState.floatingTexts = gameState.floatingTexts.filter(text => {
+                const elapsed = Date.now() - text.startTime;
+                if (elapsed > text.lifeTime) return false;
+
+                const opacity = 1 - (elapsed / text.lifeTime);
+                const offsetY = (elapsed / text.lifeTime) * 60;
+
+                ctx.save();
+                ctx.globalAlpha = opacity;
+                ctx.fillStyle = '#4CAF50';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(text.text, text.x, text.y - offsetY);
+                ctx.restore();
+                return true;
+            });
+        }
+
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#ff6b6b';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - 60);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '28px Arial';
+            ctx.fillText(`集めた妖怪: ${gameState.zukanCount}/20`, canvas.width / 2, canvas.height / 2 + 40);
+
+            ctx.fillStyle = '#64c8ff';
+            ctx.font = '18px Arial';
+            ctx.fillText('ページをリロードしてプレイ', canvas.width / 2, canvas.height / 2 + 110);
+            ctx.textAlign = 'left';
+        }
+
+        function drawGameWon() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.font = '180px Arial';
+            ctx.textAlign = 'center';
+            ctx.globalAlpha = 0.9;
+            ctx.fillText(gameState.currentPokemon, canvas.width / 2, canvas.height / 2 - 50);
+            ctx.restore();
+
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 56px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('図鑑完成！', canvas.width / 2, canvas.height / 2 + 180);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '22px Arial';
+            ctx.fillText('ページをリロードしてプレイ', canvas.width / 2, canvas.height / 2 + 260);
+            ctx.textAlign = 'left';
+        }
+
+        function gameLoop() {
+            const now = Date.now();
+            const deltaTime = (now - gameState.lastFrameTime) / 1000;
+            gameState.lastFrameTime = now;
+
+            if (!gameState.gameOver && !gameState.gameWon) {
+                gameState.timeRemaining -= deltaTime;
+                if (gameState.timeRemaining <= 0) {
+                    gameState.timeRemaining = 0;
+                    gameState.gameOver = true;
+                }
+            }
+
+            ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawProgressBar();
+            drawTimer();
+            drawCollectedPokemon();
+            drawCurrentPokemon();
+            drawParticles();
+            drawTapArea();
+            drawInstructions();
+            drawFloatingTexts();
+
+            if (gameState.gameOver) {
+                drawGameOver();
+            } else if (gameState.gameWon) {
+                drawGameWon();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>陣奪い</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        .game-container {
+            width: 375px;
+            height: 812px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .hud {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            font-size: 14px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .hud-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .hud-label {
+            font-size: 11px;
+            opacity: 0.9;
+        }
+
+        .hud-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .grid-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+            aspect-ratio: 1;
+            width: 100%;
+            max-width: 320px;
+            background: #e0e0e0;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: #e0e0e0;
+            transition: background-color 0.15s ease-out;
+            border: 2px solid transparent;
+        }
+
+        .cell:hover {
+            box-shadow: 0 0 8px rgba(100,150,255,0.6);
+        }
+
+        .cell.player {
+            background-color: #3b82f6;
+        }
+
+        .cell.enemy {
+            background-color: #ef4444;
+        }
+
+        .cell.empty {
+            background-color: #e0e0e0;
+        }
+
+        .cell.disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1.0); }
+            50% { transform: scale(1.15); }
+        }
+
+        .cell.pulse {
+            animation: pulse 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            animation: modalShow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-width: 300px;
+        }
+
+        @keyframes modalShow {
+            from { transform: scale(0.7); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .result-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .result-title.win {
+            color: #3b82f6;
+        }
+
+        .result-title.lose {
+            color: #ef4444;
+        }
+
+        .result-score {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .result-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn.primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn.primary:hover {
+            background-color: #2563eb;
+        }
+
+        .btn.secondary {
+            background-color: #d1d5db;
+            color: #374151;
+        }
+
+        .btn.secondary:hover {
+            background-color: #bfdbfe;
+        }
+
+        .intro {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .intro-text {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            font-size: 18px;
+            text-align: center;
+            color: #333;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            animation: intros 2s ease-in-out forwards;
+        }
+
+        @keyframes intros {
+            0% { opacity: 0; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.8); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="hud">
+            <div class="hud-item">
+                <span class="hud-label">自マス</span>
+                <span class="hud-value" id="playerScore">5</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">敵マス</span>
+                <span class="hud-value" id="enemyScore">5</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">残り手数</span>
+                <span class="hud-value" id="movesLeft">20</span>
+            </div>
+        </div>
+        <div class="grid-container">
+            <div class="grid" id="grid"></div>
+        </div>
+    </div>
+
+    <div class="intro" id="intro">
+        <div class="intro-text">
+            自マスを40以上に増やし、敵を支配しよう
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE = 8;
+        const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
+        const INITIAL_MOVES = 20;
+        const WIN_THRESHOLD = 40;
+        const EMPTY = 0;
+        const PLAYER = 1;
+        const ENEMY = -1;
+
+        let grid = [];
+        let moves = INITIAL_MOVES;
+        let gameOver = false;
+
+        function initGame() {
+            grid = Array(TOTAL_CELLS).fill(EMPTY);
+            
+            placeRandomCells(PLAYER, 5);
+            placeRandomCells(ENEMY, 5);
+            
+            moves = INITIAL_MOVES;
+            gameOver = false;
+            
+            renderGrid();
+            updateHUD();
+
+            setTimeout(() => {
+                document.getElementById('intro').style.display = 'none';
+            }, 2000);
+        }
+
+        function placeRandomCells(type, count) {
+            let placed = 0;
+            while (placed < count) {
+                const idx = Math.floor(Math.random() * TOTAL_CELLS);
+                if (grid[idx] === EMPTY) {
+                    grid[idx] = type;
+                    placed++;
+                }
+            }
+        }
+
+        function renderGrid() {
+            const gridEl = document.getElementById('grid');
+            gridEl.innerHTML = '';
+            
+            grid.forEach((cell, idx) => {
+                const cellEl = document.createElement('div');
+                cellEl.className = 'cell';
+                
+                if (cell === PLAYER) {
+                    cellEl.classList.add('player');
+                } else if (cell === ENEMY) {
+                    cellEl.classList.add('enemy');
+                } else {
+                    cellEl.classList.add('empty');
+                }
+                
+                if (!gameOver) {
+                    cellEl.addEventListener('click', () => onCellClick(idx, cellEl));
+                }
+                
+                gridEl.appendChild(cellEl);
+            });
+        }
+
+        function onCellClick(idx, cellEl) {
+            if (gameOver || grid[idx] !== EMPTY) return;
+            
+            grid[idx] = PLAYER;
+            cellEl.classList.remove('empty');
+            cellEl.classList.add('player');
+            
+            moves--;
+            
+            captureEnemyGroups();
+            updateHUD();
+            
+            const playerCount = grid.filter(c => c === PLAYER).length;
+            if (playerCount > WIN_THRESHOLD) {
+                endGame(true, playerCount);
+            } else if (moves === 0) {
+                endGame(false, playerCount);
+            }
+        }
+
+        function captureEnemyGroups() {
+            const visited = Array(TOTAL_CELLS).fill(false);
+            
+            for (let i = 0; i < TOTAL_CELLS; i++) {
+                if (grid[i] === ENEMY && !visited[i]) {
+                    const group = getConnectedGroup(i, visited);
+                    
+                    if (isGroupSurrounded(group)) {
+                        group.forEach(idx => {
+                            grid[idx] = PLAYER;
+                            const cells = document.querySelectorAll('.cell');
+                            cells[idx].classList.remove('enemy');
+                            cells[idx].classList.add('player', 'pulse');
+                        });
+                    }
+                }
+            }
+        }
+
+        function getConnectedGroup(start, visited) {
+            const group = [];
+            const stack = [start];
+            
+            while (stack.length > 0) {
+                const idx = stack.pop();
+                if (visited[idx]) continue;
+                
+                visited[idx] = true;
+                if (grid[idx] === ENEMY) {
+                    group.push(idx);
+                    const neighbors = getNeighbors(idx);
+                    neighbors.forEach(n => {
+                        if (!visited[n] && grid[n] === ENEMY) {
+                            stack.push(n);
+                        }
+                    });
+                }
+            }
+            
+            return group;
+        }
+
+        function isGroupSurrounded(group) {
+            const exterior = new Set();
+            const visited = new Set();
+            
+            group.forEach(idx => {
+                getNeighbors(idx).forEach(n => {
+                    if (!group.includes(n) && !visited.has(n)) {
+                        visited.add(n);
+                        if (grid[n] === EMPTY) {
+                            exterior.add(n);
+                        }
+                    }
+                });
+            });
+            
+            return exterior.size === 0;
+        }
+
+        function getNeighbors(idx) {
+            const row = Math.floor(idx / GRID_SIZE);
+            const col = idx % GRID_SIZE;
+            const neighbors = [];
+            
+            if (row > 0) neighbors.push(idx - GRID_SIZE);
+            if (row < GRID_SIZE - 1) neighbors.push(idx + GRID_SIZE);
+            if (col > 0) neighbors.push(idx - 1);
+            if (col < GRID_SIZE - 1) neighbors.push(idx + 1);
+            
+            return neighbors;
+        }
+
+        function updateHUD() {
+            const playerCount = grid.filter(c => c === PLAYER).length;
+            const enemyCount = grid.filter(c => c === ENEMY).length;
+            
+            document.getElementById('playerScore').textContent = playerCount;
+            document.getElementById('enemyScore').textContent = enemyCount;
+            document.getElementById('movesLeft').textContent = moves;
+        }
+
+        function endGame(isWin, playerCount) {
+            gameOver = true;
+            
+            document.querySelectorAll('.cell').forEach(el => {
+                el.classList.add('disabled');
+            });
+            
+            setTimeout(() => {
+                showResult(isWin, playerCount);
+            }, 300);
+        }
+
+        function showResult(isWin, playerCount) {
+            const enemyCount = grid.filter(c => c === ENEMY).length;
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            
+            const title = document.createElement('div');
+            title.className = `result-title ${isWin ? 'win' : 'lose'}`;
+            title.textContent = isWin ? 'WIN' : 'LOSE';
+            
+            const score = document.createElement('div');
+            score.className = 'result-score';
+            score.innerHTML = `最終スコア<br>自マス ${playerCount}個 / 敵マス ${enemyCount}個`;
+            
+            const buttons = document.createElement('div');
+            buttons.className = 'result-buttons';
+            
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'btn primary';
+            retryBtn.textContent = 'もう一度プレイ';
+            retryBtn.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+                document.getElementById('intro').style.display = 'flex';
+                initGame();
+            });
+            
+            const homeBtn = document.createElement('button');
+            homeBtn.className = 'btn secondary';
+            homeBtn.textContent = 'ホームに戻る';
+            homeBtn.addEventListener('click', () => {
+                location.reload();
+            });
+            
+            buttons.appendChild(retryBtn);
+            buttons.appendChild(homeBtn);
+            
+            modal.appendChild(title);
+            modal.appendChild(score);
+            modal.appendChild(buttons);
+            overlay.appendChild(modal);
+            
+            document.body.appendChild(overlay);
+        }
+
+        initGame();
+    </script>
+</body>
+</html>

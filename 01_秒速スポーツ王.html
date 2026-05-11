@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>秒速スポーツ王</title>
+<style>
+body { margin: 0; padding: 0; overflow: hidden; font-family: 'Arial', sans-serif; background: #0a0a0a; }
+canvas { display: block; background: #1a1a1a; }
+#uiContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; pointer-events: all; color: white; }
+.overlay-content { text-align: center; }
+.overlay-title { font-size: 72px; margin-bottom: 30px; font-weight: bold; }
+.overlay-text { font-size: 36px; margin: 20px 0; }
+.retry-btn { margin-top: 50px; padding: 20px 50px; font-size: 28px; background: linear-gradient(to bottom, #FFD700, #FFA500); color: #000; border: 3px solid #FFD700; cursor: pointer; border-radius: 10px; font-weight: bold; pointer-events: auto; }
+.retry-btn:hover { background: linear-gradient(to bottom, #FFA500, #FF8500); }
+#newBestText { position: absolute; top: 120px; right: 40px; font-size: 32px; color: #FFD700; font-weight: bold; text-shadow: 0 0 10px #FFD700; animation: pulse 0.5s infinite; z-index: 100; pointer-events: none; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="uiContainer"></div>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const uiContainer = document.getElementById('uiContainer');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Game state
+let gameState = 'playing';
+let gameStartTime = Date.now();
+let gameElapsedSeconds = 0;
+
+const disciplines = ['短距離走', '砲丸投げ', '跳び幅', '走り幅跳び', '高跳び'];
+let currentDisciplineIdx = 0;
+let tapCounter = 0;
+let lastTapTime = 0;
+let lastInputTime = Date.now();
+let swipeDirection = 0;
+let selectedCellScale = 1;
+
+// Players
+const players = [
+  { name: 'YOU', scores: [0, 0, 0, 0, 0], isPlayer: true, color: '#00FF00' },
+  { name: '田中太郎', scores: [12, 18, 16, 19, 17], isPlayer: false, color: '#FF6B6B' },
+  { name: '佐藤花子', scores: [14, 16, 18, 17, 19], isPlayer: false, color: '#4DB8FF' },
+  { name: '山田次郎', scores: [11, 15, 14, 16, 13], isPlayer: false, color: '#FFB84D' }
+];
+
+const bestScoreKey = 'sokusokuSpeed_best';
+let bestScore = parseInt(localStorage.getItem(bestScoreKey)) || 0;
+let newBestShowTime = 0;
+
+function getTotalScore(player) {
+  return player.scores.reduce((a, b) => a + b, 0);
+}
+
+function getPlayerRanking() {
+  const ranked = players.map((p, i) => ({
+    ...p,
+    totalScore: getTotalScore(p),
+    originalIndex: i
+  }));
+  ranked.sort((a, b) => b.totalScore - a.totalScore);
+  return ranked;
+}
+
+function getPlayerRankNumber() {
+  const ranking = getPlayerRanking();
+  for (let i = 0; i < ranking.length; i++) {
+    if (ranking[i].isPlayer) return i + 1;
+  }
+  return 999;
+}
+
+function playToneSound(freq, dur) {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur / 1000);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + dur / 1000);
+  } catch (e) {}
+}
+
+function showWinOverlay() {
+  gameState = 'won';
+  const total = getTotalScore(players[0]);
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="overlay-content">
+      <div class="overlay-title" style="color: #FFD700;">🏆 優勝! 🏆</div>
+      <div class="overlay-text">総合スコア: ${total}</div>
+      <button class="retry-btn" onclick="location.reload()">もう一度プレイ</button>
+    </div>
+  `;
+  uiContainer.appendChild(overlay);
+  
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => {
+      canvas.style.backgroundColor = '#FFFF00';
+      playToneSound(800, 150);
+    }, i * 200);
+    setTimeout(() => {
+      canvas.style.backgroundColor = '#1a1a1a';
+    }, i * 200 + 100);
+  }
+}
+
+function showLoseOverlay() {
+  gameState = 'lost';
+  const total = getTotalScore(players[0]);
+  const rank = getPlayerRankNumber();
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="overlay-content">
+      <div class="overlay-title" style="color: #FF6B6B;">❌ ゲームオーバー ❌</div>
+      <div class="overlay-text">総合スコア: ${total}</div>
+      <div class="overlay-text">順位: ${rank}位</div>
+      <button class="retry-btn" onclick="location.reload()">リトライ</button>
+    </div>
+  `;
+  uiContainer.appendChild(overlay);
+  playToneSound(200, 400);
+}
+
+// Touch & Mouse handlers
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 0) {
+    const touch = e.touches[0];
+    const now = Date.now();
+    if (now - lastTapTime < 150) {
+      tapCounter++;
+    } else {
+      tapCounter = 1;
+    }
+    lastTapTime = now;
+    lastInputTime = now;
+    playToneSound(650 + tapCounter * 60, 80);
+  }
+}, { passive: true });
+
+document.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 0) {
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const relX = touch.clientX - rect.left;
+    const relY = touch.clientY - rect.top;
+    if (relX >= 0 && relX <= canvas.width && relY >= 0 && relY <= canvas.height) {
+      // Swipe detection would go here but we use simple direction toggle
+    }
+  }
+}, { passive: true });
+
+let lastMouseX = -1;
+let isMousePressed = false;
+
+document.addEventListener('mousedown', (e) => {
+  isMousePressed = true;
+  lastMouseX = e.clientX;
+  const now = Date.now();
+  if (now - lastTapTime < 150) {
+    tapCounter++;
+  } else {
+    tapCounter = 1;
+  }
+  lastTapTime = now;
+  lastInputTime = now;
+  playToneSound(650 + tapCounter * 60, 80);
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (isMousePressed && lastMouseX >= 0) {
+    const deltaX = e.clientX - lastMouseX;
+    if (Math.abs(deltaX) > 50) {
+      swipeDirection = deltaX > 0 ? 1 : -1;
+      const newIdx = currentDisciplineIdx + swipeDirection;
+      if (newIdx >= 0 && newIdx < disciplines.length) {
+        currentDisciplineIdx = newIdx;
+        lastInputTime = Date.now();
+        playToneSound(850, 120);
+      }
+      lastMouseX = e.clientX;
+    }
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  isMousePressed = false;
+  lastMouseX = -1;
+  lastInputTime = Date.now();
+});
+
+document.addEventListener('click', () => {
+  if (gameState === 'won' || gameState === 'lost') {
+    location.reload();
+  }
+});
+
+// Main game loop (0.1 seconds)
+setInterval(() => {
+  if (gameState !== 'playing') return;
+
+  const now = Date.now();
+  gameElapsedSeconds = (now - gameStartTime) / 1000;
+
+  // Reset tap counter if no input for 100ms
+  if (now - lastInputTime > 100) {
+    tapCounter = 0;
+    swipeDirection = 0;
+  }
+
+  // Apply score increase
+  if (tapCounter > 0) {
+    const scoreIncrease = tapCounter;
+    players[0].scores[currentDisciplineIdx] += scoreIncrease;
+  }
+
+  // NPC random scoring
+  if (Math.random() < 0.4) {
+    const npcIdx = Math.floor(Math.random() * 3) + 1;
+    const discIdx = Math.floor(Math.random() * 5);
+    players[npcIdx].scores[discIdx] += Math.floor(Math.random() * 4) + 1;
+  }
+
+  // Check win condition
+  const playerRank = getPlayerRankNumber();
+  const playerTotal = getTotalScore(players[0]);
+
+  if (playerRank === 1 && gameElapsedSeconds > 2) {
+    showWinOverlay();
+    return;
+  }
+
+  // Check lose condition (only after 30 seconds)
+  if (gameElapsedSeconds > 30 && playerRank > 3) {
+    showLoseOverlay();
+    return;
+  }
+
+  // Check for new best score
+  if (playerTotal > bestScore) {
+    bestScore = playerTotal;
+    localStorage.setItem(bestScoreKey, bestScore);
+    newBestShowTime = now;
+    playToneSound(1200, 250);
+    
+    const newBestEl = document.getElementById('newBestText');
+    if (!newBestEl) {
+      const el = document.createElement('div');
+      el.id = 'newBestText';
+      el.textContent = '🌟 NEW BEST! 🌟';
+      uiContainer.appendChild(el);
+    }
+  }
+
+  if (now - newBestShowTime > 1500) {
+    const el = document.getElementById('newBestText');
+    if (el) el.remove();
+  }
+
+  // Animation for selected cell
+  selectedCellScale = 1 + Math.sin(now / 200) * 0.05;
+
+}, 100);
+
+// Render loop
+function render() {
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const playerRank = getPlayerRankNumber();
+  const playerTotal = getTotalScore(players[0]);
+  const ranking = getPlayerRanking();
+
+  // Draw title
+  ctx.fillStyle = '#FFD700';
+  ctx.font = 'bold 56px Arial';
+  ctx.fillText('秒速スポーツ王', 30, 80);
+
+  // Draw instructions
+  ctx.fillStyle = '#AAAAAA';
+  ctx.font = '18px Arial';
+  ctx.fillText('🖱️ タップ連打でスコア加算 | ← → スワイプで種目変更', 30, 120);
+
+  // Draw timer, rank, best
+  ctx.fillStyle = '#00FF00';
+  ctx.font = 'bold 26px Arial';
+  ctx.fillText(`⏱ ${Math.floor(gameElapsedSeconds)}秒 | 順位: ${playerRank}位 | Best: ${bestScore}`, 30, 160);
+
+  // Draw disciplines
+  let yPos = 220;
+  ctx.font = '22px Arial';
+  for (let i = 0; i < disciplines.length; i++) {
+    const isSelected = i === currentDisciplineIdx;
+    const score = players[0].scores[i];
+
+    if (isSelected) {
+      ctx.strokeStyle = '#00FF00';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(20, yPos - 32, 320, 44);
+    }
+
+    ctx.fillStyle = isSelected ? '#00FF00' : '#CCCCCC';
+    ctx.fillText(`${i + 1}. ${disciplines[i]}: ${score}`, 35, yPos);
+    yPos += 60;
+  }
+
+  // Draw ranking
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 22px Arial';
+  ctx.fillText('ランキング', canvas.width - 350, 220);
+
+  yPos = 270;
+  for (let i = 0; i < Math.min(ranking.length, 4); i++) {
+    const p = ranking[i];
+    const rankColor = p.isPlayer ? '#FFD700' : p.color;
+    ctx.fillStyle = rankColor;
+    const boldFont = i === 0 ? 'bold 28px Arial' : '20px Arial';
+    ctx.font = boldFont;
+    
+    const marker = i === 0 ? '👑' : (i + 1) + '位';
+    const text = `${marker} ${p.name}: ${p.totalScore}`;
+    ctx.fillText(text, canvas.width - 340, yPos);
+    yPos += 50;
+  }
+
+  // Draw tap indicator
+  if (tapCounter > 0) {
+    ctx.fillStyle = '#FF6B6B';
+    ctx.font = 'bold 40px Arial';
+    ctx.fillText(`TAP x${tapCounter}`, canvas.width / 2 - 80, canvas.height - 60);
+  }
+
+  requestAnimationFrame(render);
+}
+
+render();
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>

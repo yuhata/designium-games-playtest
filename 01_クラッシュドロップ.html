@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>クラッシュドロップ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    const game = {
+      depth: 0,
+      velocity: 0,
+      hp: 100,
+      score: 0,
+      combo: 0,
+      comboTimer: 0,
+      chainMultiplier: 1,
+      state: 'playing',
+      startTime: Date.now(),
+      inputCount: 0,
+      shakeTimer: 0,
+      shakeIntensity: 0
+    };
+    
+    const player = {
+      x: canvas.width / 2 - 20,
+      y: canvas.height / 2,
+      width: 40,
+      height: 40,
+      flashTime: 0
+    };
+    
+    const obstacles = [];
+    const particles = [];
+    const destroyedThisFrame = [];
+    
+    function init() {
+      game.depth = 0;
+      game.velocity = 0;
+      game.hp = 100;
+      game.score = 0;
+      game.combo = 0;
+      game.state = 'playing';
+      game.startTime = Date.now();
+      game.inputCount = 0;
+      game.chainMultiplier = 1;
+      obstacles.length = 0;
+      particles.length = 0;
+      
+      for (let i = 0; i < 12; i++) {
+        spawnObstacle(i * 100 - 200);
+      }
+    }
+    
+    function spawnObstacle(yOffset) {
+      obstacles.push({
+        x: Math.random() * (canvas.width - 50),
+        y: yOffset,
+        width: 50,
+        height: 30,
+        vx: (Math.random() - 0.5) * 20,
+        health: 1,
+        color: `hsl(${Math.random() * 120 + 180}, 85%, 50%)`,
+        debris: [],
+        isDestroyed: false
+      });
+    }
+    
+    function handleInput() {
+      if (game.state !== 'playing') return;
+      game.velocity = Math.min(game.velocity + 3, 25);
+      game.inputCount++;
+      player.flashTime = 0.1;
+    }
+    
+    document.addEventListener('mousedown', handleInput);
+    document.addEventListener('mouseup', handleInput);
+    document.addEventListener('mousemove', handleInput);
+    document.addEventListener('click', handleInput);
+    document.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleInput();
+    });
+    document.addEventListener('touchmove', (e) => e.preventDefault());
+    document.addEventListener('touchend', (e) => e.preventDefault());
+    
+    function update(dt) {
+      if (game.state !== 'playing') return;
+      
+      const elapsed = (Date.now() - game.startTime) / 1000;
+      
+      game.velocity = Math.min(game.velocity + 0.4 * dt, 25);
+      game.depth += game.velocity * 50 * dt;
+      
+      for (let obs of obstacles) {
+        obs.y += game.velocity * 50 * dt;
+        obs.x += obs.vx * dt;
+      }
+      
+      destroyedThisFrame.length = 0;
+      
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        if (checkCollision(player, obstacles[i]) && !obstacles[i].isDestroyed) {
+          const damage = Math.max(1, Math.floor(game.velocity / 10));
+          game.hp -= damage;
+          game.combo++;
+          game.comboTimer = 1.5;
+          
+          destroyObstacle(obstacles[i], i, 20);
+          game.chainMultiplier = Math.min(4, 1 + Math.floor(game.combo / 3));
+          game.score += 10 * game.chainMultiplier;
+          
+          destroyedThisFrame.push(i);
+        }
+      }
+      
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        if (obs.debris && obs.debris.length > 0) {
+          for (let j = obs.debris.length - 1; j >= 0; j--) {
+            const debris = obs.debris[j];
+            debris.x += debris.vx * dt;
+            debris.y += debris.vy * dt;
+            debris.vy += 150 * dt;
+            debris.life -= dt;
+            
+            if (debris.life <= 0) {
+              obs.debris.splice(j, 1);
+            } else {
+              for (let k = 0; k < obstacles.length; k++) {
+                if (k !== i && !obstacles[k].isDestroyed &&
+                    Math.hypot(debris.x - (obstacles[k].x + obstacles[k].width / 2),
+                              debris.y - (obstacles[k].y + obstacles[k].height / 2)) < 60) {
+                  if (!destroyedThisFrame.includes(k)) {
+                    destroyObstacle(obstacles[k], k, 30);
+                    game.combo++;
+                    game.chainMultiplier = Math.min(4, 1 + Math.floor(game.combo / 3));
+                    game.score += 15 * game.chainMultiplier;
+                    destroyedThisFrame.push(k);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].life -= dt;
+        particles[i].x += particles[i].vx * dt;
+        particles[i].y += particles[i].vy * dt;
+        particles[i].vy += 100 * dt;
+        if (particles[i].life <= 0) particles.splice(i, 1);
+      }
+      
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        if (obstacles[i].y > canvas.height + 100 || obstacles[i].isDestroyed) {
+          obstacles.splice(i, 1);
+          if (obstacles.length < 12) spawnObstacle(-80);
+        }
+      }
+      
+      game.comboTimer -= dt;
+      if (game.comboTimer <= 0) game.combo = 0;
+      
+      if (game.shakeTimer > 0) {
+        game.shakeTimer -= dt;
+      } else {
+        game.shakeIntensity = 0;
+      }
+      
+      if (Math.random() < 0.04 && obstacles.length < 14) spawnObstacle(-60);
+      
+      if (game.depth >= 1000) {
+        game.state = 'win';
+      } else if (game.hp <= 0 && elapsed >= 30) {
+        game.state = 'fail';
+      }
+    }
+    
+    function destroyObstacle(obs, idx, particleCount) {
+      obs.isDestroyed = true;
+      
+      const centerX = obs.x + obs.width / 2;
+      const centerY = obs.y + obs.height / 2;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.3;
+        const speed = 120 + Math.random() * 180;
+        particles.push({
+          x: centerX,
+          y: centerY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 80,
+          life: 0.5,
+          color: obs.color
+        });
+      }
+      
+      for (let i = 0; i < 5; i++) {
+        obs.debris = obs.debris || [];
+        obs.debris.push({
+          x: centerX + (Math.random() - 0.5) * 20,
+          y: centerY + (Math.random() - 0.5) * 20,
+          vx: (Math.random() - 0.5) * 150,
+          vy: (Math.random() - 0.5) * 150,
+          size: 8 + Math.random() * 12,
+          life: 0.6,
+          color: obs.color
+        });
+      }
+      
+      game.shakeIntensity = 3;
+      game.shakeTimer = 0.2;
+    }
+    
+    function checkCollision(r1, r2) {
+      return r1.x < r2.x + r2.width &&
+             r1.x + r1.width > r2.x &&
+             r1.y < r2.y + r2.height &&
+             r1.y + r1.height > r2.y;
+    }
+    
+    function draw() {
+      const depthRatio = Math.min(1, game.depth / 1000);
+      const r = Math.floor(10 + depthRatio * 50);
+      const g = Math.floor(14 + depthRatio * 30);
+      const b = Math.floor(39 + depthRatio * 120);
+      
+      ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      for (let i = 0; i < 6; i++) {
+        const h = (depthRatio * 200 + i * 50) % 360;
+        ctx.fillStyle = `hsla(${h}, 90%, 35%, ${0.15 - i * 0.02})`;
+        ctx.fillRect(0, (i * canvas.height / 6) % canvas.height, canvas.width, canvas.height / 6);
+      }
+      
+      const shakeX = (Math.random() - 0.5) * game.shakeIntensity;
+      const shakeY = (Math.random() - 0.5) * game.shakeIntensity;
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+      
+      ctx.fillStyle = player.flashTime > 0 ? '#ffff00' : '#00ff00';
+      ctx.shadowColor = '#00ff00';
+      ctx.shadowBlur = 15;
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+      ctx.shadowBlur = 0;
+      
+      for (let obs of obstacles) {
+        if (!obs.isDestroyed) {
+          ctx.fillStyle = obs.color;
+          ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+        }
+        
+        if (obs.debris) {
+          for (let d of obs.debris) {
+            ctx.fillStyle = d.color;
+            ctx.globalAlpha = d.life / 0.6;
+            ctx.fillRect(d.x - d.size / 2, d.y - d.size / 2, d.size, d.size);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+      
+      for (let p of particles) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = Math.max(0, p.life / 0.5);
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+        const sz = 5 * (p.life / 0.5);
+        ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+      
+      ctx.restore();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px Arial';
+      
+      ctx.fillText(`深度: ${Math.floor(game.depth)}m`, 20, 45);
+      ctx.fillText(`❤ ${Math.max(0, game.hp)}`, canvas.width - 200, 45);
+      ctx.fillText(`スコア: ${game.score}`, 20, 90);
+      
+      if (game.chainMultiplier > 1) {
+        ctx.fillStyle = `hsl(${game.combo * 10}, 100%, 60%)`;
+        ctx.font = 'bold 24px Arial';
+        ctx.fillText(`×${game.chainMultiplier}`, 20, 130);
+      }
+      
+      ctx.fillStyle = '#aaffaa';
+      ctx.font = '18px Arial';
+      ctx.fillText('【クリック/タップで加速】障害物を粉砕！1000mを目指そう！', 20, canvas.height - 30);
+      
+      if (game.combo > 2) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, game.comboTimer);
+        ctx.font = `bold ${40 + game.combo * 3}px Arial`;
+        ctx.fillStyle = `hsl(${game.combo * 15}, 100%, 50%)`;
+        ctx.textAlign = 'center';
+        ctx.shadowColor = `hsl(${game.combo * 15}, 100%, 50%)`;
+        ctx.shadowBlur = 20;
+        ctx.fillText(`×${game.combo} COMBO!`, canvas.width / 2, canvas.height / 3);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+      
+      if (game.state === 'win') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 100px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#00ff00';
+        ctx.shadowBlur = 30;
+        ctx.fillText('🎉 クリア！', canvas.width / 2, canvas.height / 2 - 80);
+        ctx.shadowBlur = 0;
+        ctx.font = 'bold 50px Arial';
+        ctx.fillText(`最終スコア: ${game.score}`, canvas.width / 2, canvas.height / 2 + 50);
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#ffff00';
+        ctx.fillText('クリックで再スタート', canvas.width / 2, canvas.height / 2 + 140);
+        ctx.textAlign = 'left';
+      }
+      
+      if (game.state === 'fail') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ff4444';
+        ctx.font = 'bold 100px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#ff4444';
+        ctx.shadowBlur = 30;
+        ctx.fillText('💥 GAME OVER', canvas.width / 2, canvas.height / 2 - 80);
+        ctx.shadowBlur = 0;
+        ctx.font = 'bold 50px Arial';
+        ctx.fillText(`スコア: ${game.score}`, canvas.width / 2, canvas.height / 2 + 50);
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#ffff00';
+        ctx.fillText('クリックで再スタート', canvas.width / 2, canvas.height / 2 + 140);
+        ctx.textAlign = 'left';
+      }
+    }
+    
+    let lastTime = Date.now();
+    function gameLoop() {
+      const now = Date.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.016);
+      lastTime = now;
+      
+      if (player.flashTime > 0) player.flashTime -= dt;
+      
+      update(dt);
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    document.addEventListener('click', () => {
+      if (game.state !== 'playing') init();
+    });
+    
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+    
+    init();
+    gameLoop();
+  </script>
+</body>
+</html>

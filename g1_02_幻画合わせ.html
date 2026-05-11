@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>幻画合わせ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+    }
+    .game-container {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 90%;
+    }
+    .game-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .game-title {
+      font-size: 32px;
+      color: #333;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    .game-stats {
+      display: flex;
+      justify-content: space-around;
+      margin: 15px 0;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .stat-item {
+      color: #667eea;
+    }
+    .stat-label {
+      color: #999;
+      font-size: 12px;
+      font-weight: normal;
+    }
+    .instruction {
+      background: #f0f4ff;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      color: #333;
+      font-size: 14px;
+      margin-bottom: 20px;
+      min-height: 40px;
+    }
+    .game-board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+      perspective: 1000px;
+    }
+    .card {
+      aspect-ratio: 1;
+      position: relative;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.3s ease-out;
+      transform-style: preserve-3d;
+    }
+    .card.flipped .card-inner {
+      transform: rotateY(0deg);
+    }
+    .card.back .card-inner {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backface-visibility: hidden;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 32px;
+    }
+    .card-back {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      z-index: 2;
+      transform: rotateY(180deg);
+    }
+    .card-front {
+      background: white;
+      border: 2px solid #ddd;
+      color: #333;
+    }
+    .card.matched .card-inner {
+      animation: matchPulse 0.6s ease-out;
+    }
+    .card.unmatched .card-inner {
+      animation: unmatchShake 0.4s ease-out;
+    }
+    @keyframes matchPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(0); opacity: 0; }
+    }
+    @keyframes unmatchShake {
+      0%, 100% { transform: rotateZ(0deg); }
+      25% { transform: rotateZ(-5deg); }
+      75% { transform: rotateZ(5deg); }
+    }
+    .game-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .game-overlay.show {
+      display: flex;
+    }
+    .result-box {
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: popIn 0.4s ease-out;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .result-title {
+      font-size: 48px;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+    .result-title.win {
+      color: #667eea;
+    }
+    .result-title.fail {
+      color: #ef5350;
+    }
+    .result-text {
+      font-size: 20px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .result-score {
+      font-size: 36px;
+      color: #667eea;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .btn {
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #764ba2;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+    .btn-secondary {
+      background: #f0f4ff;
+      color: #667eea;
+    }
+    .btn-secondary:hover {
+      background: #e0e8ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="game-header">
+      <div class="game-title">幻画合わせ</div>
+      <div class="game-stats">
+        <div class="stat-item">
+          <div class="stat-label">残り組数</div>
+          <div id="remaining">8</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">タップ数</div>
+          <div id="tapCount">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">残り時間</div>
+          <div id="timer">60</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="instruction" id="instruction">2つのカードをタップしてペアを見つけよう！</div>
+    
+    <div class="game-board" id="gameBoard"></div>
+    
+    <div class="button-group">
+      <button class="btn btn-secondary" id="resetBtn">リセット</button>
+    </div>
+  </div>
+
+  <div class="game-overlay" id="gameOverlay">
+    <div class="result-box" id="resultBox">
+      <div class="result-title" id="resultTitle">WIN!</div>
+      <div class="result-text" id="resultText">全てのペアを見つけました！</div>
+      <div class="result-score" id="resultScore">タップ数: 0</div>
+      <div class="button-group">
+        <button class="btn btn-primary" id="retryBtn">もう一度プレイ</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Debug API - Playwright用
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 8, phase: "playing" },
+      tapObject: function(id) {}
+    };
+
+    // Game state
+    const game = {
+      cards: [],
+      state: "playing",
+      firstSelectedCard: null,
+      totalTime: 60,
+      currentTime: 60,
+      lastFrameTime: Date.now(),
+      consumedPairs: 0,
+      totalPairs: 8,
+      tapCount: 0,
+      isProcessing: false
+    };
+
+    // Emoji pairs
+    const emojiPairs = [
+      "🌟", "🌟",
+      "🦋", "🦋",
+      "🎨", "🎨",
+      "🌈", "🌈",
+      "✨", "✨",
+      "🎭", "🎭",
+      "🔮", "🔮",
+      "💎", "💎"
+    ];
+
+    // Shuffle
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // Initialize
+    function initGame() {
+      game.state = "playing";
+      game.firstSelectedCard = null;
+      game.currentTime = game.totalTime;
+      game.consumedPairs = 0;
+      game.tapCount = 0;
+      game.isProcessing = false;
+      game.lastFrameTime = Date.now();
+
+      const board = document.getElementById("gameBoard");
+      board.innerHTML = "";
+      game.cards = [];
+
+      const shuffled = shuffle(emojiPairs);
+      shuffled.forEach((emoji, idx) => {
+        const card = document.createElement("div");
+        card.className = "card back";
+        card.setAttribute("data-card-id", idx);
+        card.setAttribute("data-emoji", emoji);
+
+        card.innerHTML = `
+          <div class="card-inner">
+            <div class="card-back">?</div>
+            <div class="card-front">${emoji}</div>
+          </div>
+        `;
+
+        card.addEventListener("click", () => handleCardTap(idx));
+        board.appendChild(card);
+
+        game.cards.push({
+          element: card,
+          emoji: emoji,
+          index: idx,
+          matchId: Math.floor(idx / 2),
+          flipped: false,
+          matched: false
+        });
+      });
+
+      updateDisplay();
+      updateDebug();
+      document.getElementById("gameOverlay").classList.remove("show");
+    }
+
+    // Handle tap
+    function handleCardTap(index) {
+      if (game.isProcessing || game.state === "game_over") return;
+      if (game.cards[index].matched || game.cards[index].flipped) return;
+
+      const cardEl = game.cards[index].element;
+      cardEl.classList.remove("back");
+      cardEl.classList.add("flipped");
+      game.cards[index].flipped = true;
+      game.tapCount++;
+
+      playSound("flip");
+
+      if (game.state === "playing") {
+        game.firstSelectedCard = index;
+        game.state = "first_selected";
+        updateDisplay();
+      } else if (game.state === "first_selected" && index !== game.firstSelectedCard) {
+        game.state = "checking";
+        game.isProcessing = true;
+
+        setTimeout(() => {
+          judgeMatch(game.firstSelectedCard, index);
+        }, 200);
+      }
+
+      updateDebug();
+    }
+
+    // Judge match
+    function judgeMatch(firstIdx, secondIdx) {
+      const firstCard = game.cards[firstIdx];
+      const secondCard = game.cards[secondIdx];
+
+      if (firstCard.matchId === secondCard.matchId) {
+        // Match
+        firstCard.element.classList.add("matched");
+        secondCard.element.classList.add("matched");
+        firstCard.matched = true;
+        secondCard.matched = true;
+        game.consumedPairs++;
+
+        playSound("match");
+
+        setTimeout(() => {
+          firstCard.element.style.visibility = "hidden";
+          secondCard.element.style.visibility = "hidden";
+          game.state = "playing";
+          game.firstSelectedCard = null;
+          game.isProcessing = false;
+
+          if (game.consumedPairs === game.totalPairs) {
+            endGame("win");
+          } else {
+            updateDisplay();
+            updateDebug();
+          }
+        }, 600);
+      } else {
+        // No match
+        firstCard.element.classList.add("unmatched");
+        secondCard.element.classList.add("unmatched");
+
+        playSound("nomatch");
+
+        setTimeout(() => {
+          firstCard.element.classList.remove("unmatched");
+          secondCard.element.classList.remove("unmatched");
+          firstCard.element.classList.add("back");
+          secondCard.element.classList.add("back");
+          firstCard.element.classList.remove("flipped");
+          secondCard.element.classList.remove("flipped");
+          firstCard.flipped = false;
+          secondCard.flipped = false;
+          game.state = "playing";
+          game.firstSelectedCard = null;
+          game.isProcessing = false;
+
+          updateDisplay();
+          updateDebug();
+        }, 400);
+      }
+    }
+
+    // Update display
+    function updateDisplay() {
+      document.getElementById("remaining").textContent = game.totalPairs - game.consumedPairs;
+      document.getElementById("tapCount").textContent = game.tapCount;
+      document.getElementById("timer").textContent = Math.ceil(game.currentTime);
+
+      const instruction = document.getElementById("instruction");
+      if (game.state === "first_selected") {
+        instruction.textContent = "もう1つカードをタップしよう！";
+      } else if (game.state === "checking") {
+        instruction.textContent = "マッチ判定中...";
+      } else {
+        instruction.textContent = "2つのカードをタップしてペアを見つけよう！";
+      }
+    }
+
+    // Update debug
+    function updateDebug() {
+      window.__gameDebug.objects = game.cards.map((card, idx) => {
+        const rect = card.element.getBoundingClientRect();
+        return {
+          id: `tile_${idx}`,
+          enabled: !card.matched && !card.flipped,
+          matchId: `pair_${card.matchId}`,
+          x: rect.left,
+          y: rect.top,
+          w: rect.width,
+          h: rect.height
+        };
+      });
+
+      window.__gameDebug.metrics = {
+        score: game.tapCount,
+        progress: game.consumedPairs / game.totalPairs,
+        remaining: game.totalPairs - game.consumedPairs,
+        phase: game.state === "game_over" ? 
+          (game.consumedPairs === game.totalPairs ? "win" : "fail") : 
+          "playing"
+      };
+    }
+
+    // Override tapObject
+    window.__gameDebug.tapObject = function(id) {
+      const idx = parseInt(id.split("_").pop(), 10);
+      handleCardTap(idx);
+    };
+
+    // End game
+    function endGame(result) {
+      game.state = "game_over";
+      const overlay = document.getElementById("gameOverlay");
+      const resultTitle = document.getElementById("resultTitle");
+      const resultText = document.getElementById("resultText");
+      const resultScore = document.getElementById("resultScore");
+
+      if (result === "win") {
+        resultTitle.textContent = "🎉 WIN! 🎉";
+        resultTitle.className = "result-title win";
+        resultText.textContent = "全てのペアを見つけました！完璧です！";
+        playSound("win");
+      } else {
+        resultTitle.textContent = "💔 GAME OVER 💔";
+        resultTitle.className = "result-title fail";
+        resultText.textContent = "時間が終わってしまいました...";
+        playSound("fail");
+      }
+
+      resultScore.textContent = `タップ数: ${game.tapCount}回 | 見つけたペア: ${game.consumedPairs}/${game.totalPairs}`;
+      overlay.classList.add("show");
+
+      updateDebug();
+    }
+
+    // Game loop
+    function gameLoop() {
+      const now = Date.now();
+      const deltaTime = (now - game.lastFrameTime) / 1000;
+      game.lastFrameTime = now;
+
+      if (game.state !== "game_over") {
+        game.currentTime -= deltaTime;
+        if (game.currentTime <= 0) {
+          game.currentTime = 0;
+          endGame("fail");
+        }
+      }
+
+      updateDisplay();
+      updateDebug();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Sound
+    function playSound(type) {
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioContext.currentTime;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+        switch (type) {
+          case "flip":
+            osc.frequency.value = 600;
+            osc.start(now);
+            osc.stop(now + 0.1);
+            break;
+          case "match":
+            osc.frequency.value = 800;
+            osc.start(now);
+            osc.stop(now + 0.15);
+            break;
+          case "nomatch":
+            osc.frequency.value = 300;
+            osc.start(now);
+            osc.stop(now + 0.2);
+            break;
+          case "win":
+            osc.frequency.value = 1000;
+            osc.start(now);
+            osc.stop(now + 0.3);
+            break;
+          case "fail":
+            osc.frequency.value = 200;
+            osc.start(now);
+            osc.stop(now + 0.3);
+            break;
+        }
+      } catch (e) {
+        // Audio not available
+      }
+    }
+
+    // Event listeners
+    document.getElementById("resetBtn").addEventListener("click", initGame);
+    document.getElementById("retryBtn").addEventListener("click", initGame);
+
+    // Start
+    initGame();
+    gameLoop();
+  </script>
+</body>
+</html>

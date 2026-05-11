@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ワンショット</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1a1a1a;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 3px solid #333;
+      background: #0a0a0a;
+      display: block;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const GAME_STATE = { START: 'start', PLAYING: 'playing', WIN: 'win', LOSE: 'lose' };
+
+    let gameState = GAME_STATE.START;
+    let gameTime = 60;
+    let bullets = 20;
+    let kills = 0;
+    let maxKills = 20;
+    let lastTime = Date.now();
+    let enemies = [];
+    let particles = [];
+    let mouseDown = false;
+    let mouseX = canvas.width / 2;
+    let mouseY = canvas.height / 2;
+    let scopeShake = 0;
+
+    class Enemy {
+      constructor() {
+        this.size = 15;
+        this.x = Math.random() * (canvas.width - 40) + 20;
+        this.y = Math.random() * (canvas.height - 80) + 40;
+        this.vx = (Math.random() - 0.5) * 3;
+        this.vy = (Math.random() - 0.5) * 3;
+        this.color = '#ff3333';
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.x - this.size < 0 || this.x + this.size > canvas.width) {
+          this.vx *= -1;
+          this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+        }
+        if (this.y - this.size < 0 || this.y + this.size > canvas.height) {
+          this.vy *= -1;
+          this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+        }
+      }
+
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ff6666';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      contains(x, y) {
+        const dx = this.x - x;
+        const dy = this.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < this.size + 5;
+      }
+    }
+
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 14;
+        this.vy = (Math.random() - 0.5) * 14 - 2;
+        this.life = 1;
+        this.color = `hsl(${Math.random() * 20}, 100%, 50%)`;
+        this.size = Math.random() * 5 + 2;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.4;
+        this.life -= 0.02;
+      }
+
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    function initGame() {
+      gameState = GAME_STATE.PLAYING;
+      gameTime = 60;
+      bullets = 20;
+      kills = 0;
+      lastTime = Date.now();
+      enemies = [];
+      particles = [];
+      mouseDown = false;
+
+      for (let i = 0; i < 4; i++) {
+        enemies.push(new Enemy());
+      }
+    }
+
+    function update() {
+      const now = Date.now();
+      const deltaTime = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (gameState !== GAME_STATE.PLAYING) return;
+
+      gameTime -= deltaTime;
+      if (gameTime <= 0) {
+        gameTime = 0;
+        gameState = GAME_STATE.LOSE;
+      }
+
+      enemies.forEach(e => e.update());
+      particles = particles.filter(p => p.life > 0);
+      particles.forEach(p => p.update());
+      scopeShake = Math.max(0, scopeShake - 0.08);
+    }
+
+    function drawStartScreen() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 40px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('ワンショット', canvas.width / 2, 120);
+
+      ctx.font = '16px Arial';
+      ctx.fillStyle = '#aaa';
+      ctx.fillText('敵を20体破壊しよう！', canvas.width / 2, 180);
+      ctx.fillText('マウス：照準→離して発射 | 時間制限：60秒', canvas.width / 2, 250);
+      ctx.fillText('敵が多いほどスコープが揺れる', canvas.width / 2, 280);
+
+      ctx.fillStyle = '#ffff00';
+      ctx.font = 'bold 18px Arial';
+      ctx.fillText('クリックしてスタート', canvas.width / 2, 400);
+    }
+
+    function drawPlayingScreen() {
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      enemies.forEach(e => e.draw());
+      particles.forEach(p => p.draw());
+
+      if (mouseDown) {
+        const shakeX = (Math.random() - 0.5) * scopeShake * 15;
+        const shakeY = (Math.random() - 0.5) * scopeShake * 15;
+        const scopeX = mouseX + shakeX;
+        const scopeY = mouseY + shakeY;
+
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(scopeX, scopeY, 35, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(scopeX - 20, scopeY);
+        ctx.lineTo(scopeX + 20, scopeY);
+        ctx.moveTo(scopeX, scopeY - 20);
+        ctx.lineTo(scopeX, scopeY + 20);
+        ctx.stroke();
+
+        scopeShake = Math.min(1, scopeShake + enemies.length * 0.08);
+      }
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`時間: ${Math.ceil(gameTime)}秒`, 10, 25);
+      ctx.fillText(`弾: ${bullets}`, 10, 45);
+      ctx.fillText(`撃破: ${kills}/${maxKills}`, 10, 65);
+
+      if (gameTime < 10) {
+        ctx.fillStyle = '#ff0000';
+        ctx.fillText(`⚠ ${Math.ceil(gameTime)}`, 10, 85);
+      }
+    }
+
+    function drawWinScreen() {
+      ctx.fillStyle = 'rgba(0, 150, 0, 0.4)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#00ff00';
+      ctx.font = 'bold 50px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('✓ 勝利！', canvas.width / 2, 180);
+
+      ctx.font = '18px Arial';
+      ctx.fillStyle = '#aaffaa';
+      ctx.fillText(`${kills}体の敵を破壊！`, canvas.width / 2, 250);
+      ctx.fillText(`残り時間: ${Math.ceil(gameTime)}秒`, canvas.width / 2, 280);
+
+      ctx.fillStyle = '#ffff00';
+      ctx.font = '14px Arial';
+      ctx.fillText('クリックしてリトライ', canvas.width / 2, 380);
+    }
+
+    function drawLoseScreen() {
+      ctx.fillStyle = 'rgba(150, 0, 0, 0.4)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#ff3333';
+      ctx.font = 'bold 50px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('時間切れ', canvas.width / 2, 180);
+
+      ctx.font = '18px Arial';
+      ctx.fillStyle = '#ffaaaa';
+      ctx.fillText(`撃破: ${kills}/${maxKills}`, canvas.width / 2, 250);
+      ctx.fillText(`あと${maxKills - kills}体必要です`, canvas.width / 2, 280);
+
+      ctx.fillStyle = '#ffff00';
+      ctx.font = '14px Arial';
+      ctx.fillText('クリックしてリトライ', canvas.width / 2, 380);
+    }
+
+    function draw() {
+      if (gameState === GAME_STATE.START) {
+        drawStartScreen();
+      } else if (gameState === GAME_STATE.PLAYING) {
+        drawPlayingScreen();
+      } else if (gameState === GAME_STATE.WIN) {
+        drawWinScreen();
+      } else if (gameState === GAME_STATE.LOSE) {
+        drawLoseScreen();
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+
+      if (gameState === GAME_STATE.START) {
+        initGame();
+      } else if (gameState === GAME_STATE.PLAYING) {
+        mouseDown = true;
+      } else if (gameState === GAME_STATE.WIN || gameState === GAME_STATE.LOSE) {
+        initGame();
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (gameState === GAME_STATE.PLAYING && mouseDown && bullets > 0) {
+        bullets--;
+        const shakeX = (Math.random() - 0.5) * scopeShake * 15;
+        const shakeY = (Math.random() - 0.5) * scopeShake * 15;
+        const shootX = mouseX + shakeX;
+        const shootY = mouseY + shakeY;
+
+        let hit = false;
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          if (enemies[i].contains(shootX, shootY)) {
+            const enemy = enemies[i];
+            for (let j = 0; j < 12; j++) {
+              particles.push(new Particle(enemy.x, enemy.y));
+            }
+            enemies.splice(i, 1);
+            kills++;
+            hit = true;
+
+            if (kills >= maxKills) {
+              gameState = GAME_STATE.WIN;
+            }
+            break;
+          }
+        }
+
+        if (enemies.length < 3) {
+          enemies.push(new Enemy());
+        }
+      }
+
+      mouseDown = false;
+    });
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

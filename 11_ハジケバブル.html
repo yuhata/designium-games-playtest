@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ハジケバブル</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: linear-gradient(180deg, #87ceeb 0%, #e0f6ff 100%);
+            border: 3px solid #333;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            color: #333;
+            font-weight: bold;
+            z-index: 10;
+        }
+        
+        .ui-item {
+            background: rgba(255,255,255,0.8);
+            padding: 8px 16px;
+            border-radius: 5px;
+            border: 2px solid #333;
+        }
+        
+        #instruction {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+            z-index: 5;
+            max-width: 90%;
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            z-index: 20;
+            min-width: 300px;
+        }
+        
+        #gameOver h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        #gameOver.win {
+            background: rgba(0,150,0,0.9);
+        }
+        
+        #gameOver.win h1 {
+            color: #00ff00;
+            text-shadow: 0 0 20px #00ff00;
+            animation: pulse 0.5s;
+        }
+        
+        #gameOver.lose {
+            background: rgba(150,0,0,0.9);
+        }
+        
+        #gameOver.lose h1 {
+            color: #ff6666;
+            text-shadow: 0 0 20px #ff6666;
+        }
+        
+        #gameOver p {
+            font-size: 24px;
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+        
+        #restartBtn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 20px;
+            background: #ffff00;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        #restartBtn:hover {
+            background: #ffffff;
+            transform: scale(1.05);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div class="ui-item">スコア: <span id="score">0</span></div>
+            <div class="ui-item">バブル: <span id="bubbles">0</span></div>
+            <div class="ui-item">弾: <span id="shots">0</span></div>
+        </div>
+        <div id="instruction">マウスを押して狙いを定め、リリースで発射！</div>
+        <div id="gameOver">
+            <h1 id="gameOverTitle"></h1>
+            <p id="gameOverMessage"></p>
+            <p>スコア: <span id="finalScore">0</span></p>
+            <button id="restartBtn">もう一度プレイ</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 800;
+        canvas.height = 600;
+        
+        const game = {
+            state: 'playing',
+            score: 0,
+            bubbles: [],
+            shots: 5,
+            maxShots: 5,
+            particles: [],
+            isAiming: false,
+            mouseX: 0,
+            mouseY: 0,
+            ballX: 400,
+            ballY: 560,
+            vx: 0,
+            vy: 0,
+            gravity: 0.5,
+            ballRadius: 8,
+            ballFired: false
+        };
+        
+        function initBubbles() {
+            game.bubbles = [];
+            const rows = 3;
+            const cols = 4;
+            const spacing = canvas.width / (cols + 1);
+            
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    game.bubbles.push({
+                        x: spacing * (j + 1),
+                        y: 100 + i * 80,
+                        radius: 25,
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: (Math.random() - 0.5) * 2,
+                        color: `hsl(${Math.random() * 360}, 80%, 50%)`,
+                        hp: 1
+                    });
+                }
+            }
+        }
+        
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                const speed = 5 + Math.random() * 3;
+                game.particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 30,
+                    maxLife: 30,
+                    color: color,
+                    radius: 4 + Math.random() * 4
+                });
+            }
+        }
+        
+        function checkCollisions() {
+            for (let i = game.bubbles.length - 1; i >= 0; i--) {
+                const bubble = game.bubbles[i];
+                const dx = game.ballX - bubble.x;
+                const dy = game.ballY - bubble.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < game.ballRadius + bubble.radius) {
+                    game.bubbles.splice(i, 1);
+                    game.score += 10;
+                    createExplosion(bubble.x, bubble.y, bubble.color);
+                    game.ballFired = false;
+                    game.vx = 0;
+                    game.vy = 0;
+                    
+                    if (game.bubbles.length === 0) {
+                        endGame(true);
+                    }
+                    return;
+                }
+            }
+        }
+        
+        function endGame(won) {
+            game.state = won ? 'won' : 'lost';
+            const gameOverDiv = document.getElementById('gameOver');
+            const title = document.getElementById('gameOverTitle');
+            const message = document.getElementById('gameOverMessage');
+            const finalScore = document.getElementById('finalScore');
+            
+            if (won) {
+                gameOverDiv.classList.add('win');
+                gameOverDiv.classList.remove('lose');
+                title.textContent = '🎉 クリア！';
+                message.textContent = 'すべてのバブルを破壊しました！';
+            } else {
+                gameOverDiv.classList.add('lose');
+                gameOverDiv.classList.remove('win');
+                title.textContent = '💥 ゲームオーバー';
+                message.textContent = '弾がなくなりました...';
+            }
+            
+            finalScore.textContent = game.score;
+            gameOverDiv.style.display = 'block';
+        }
+        
+        function restart() {
+            game.state = 'playing';
+            game.score = 0;
+            game.shots = 5;
+            game.particles = [];
+            game.isAiming = false;
+            game.ballFired = false;
+            game.vx = 0;
+            game.vy = 0;
+            game.ballX = 400;
+            game.ballY = 560;
+            initBubbles();
+            document.getElementById('gameOver').style.display = 'none';
+            gameLoop();
+        }
+        
+        function draw() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87ceeb');
+            gradient.addColorStop(1, '#e0f6ff');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            game.bubbles.forEach(bubble => {
+                ctx.fillStyle = bubble.color;
+                ctx.beginPath();
+                ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+            
+            ctx.fillStyle = '#ff6600';
+            ctx.beginPath();
+            ctx.arc(game.ballX, game.ballY, game.ballRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ff3300';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            if (game.isAiming && !game.ballFired) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(game.ballX, game.ballY);
+                ctx.lineTo(game.mouseX, game.mouseY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            
+            game.particles.forEach((p) => {
+                const alpha = p.life / p.maxLife;
+                ctx.fillStyle = p.color.replace('hsl', 'hsla').replace(')', `, ${alpha})`);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+        
+        function update() {
+            for (let i = game.particles.length - 1; i >= 0; i--) {
+                const p = game.particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2;
+                p.life--;
+                if (p.life <= 0) {
+                    game.particles.splice(i, 1);
+                }
+            }
+            
+            if (game.ballFired) {
+                game.ballX += game.vx;
+                game.ballY += game.vy;
+                game.vy += game.gravity;
+                
+                if (game.ballY > canvas.height || game.ballX < 0 || game.ballX > canvas.width) {
+                    game.ballFired = false;
+                    game.vx = 0;
+                    game.vy = 0;
+                    game.ballX = 400;
+                    game.ballY = 560;
+                }
+                
+                checkCollisions();
+            }
+            
+            game.bubbles.forEach(bubble => {
+                bubble.x += bubble.vx;
+                bubble.y += bubble.vy;
+                bubble.vy += 0.1;
+                
+                if (bubble.x - bubble.radius < 0 || bubble.x + bubble.radius > canvas.width) {
+                    bubble.vx *= -1;
+                }
+                if (bubble.y - bubble.radius < 0 || bubble.y + bubble.radius > canvas.height) {
+                    bubble.vy *= -1;
+                }
+                
+                bubble.x = Math.max(bubble.radius, Math.min(canvas.width - bubble.radius, bubble.x));
+                bubble.y = Math.max(bubble.radius, Math.min(canvas.height - bubble.radius, bubble.y));
+            });
+            
+            document.getElementById('score').textContent = game.score;
+            document.getElementById('bubbles').textContent = game.bubbles.length;
+            document.getElementById('shots').textContent = game.shots;
+        }
+        
+        function gameLoop() {
+            if (game.state === 'playing') {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if (game.state === 'playing' && !game.ballFired) {
+                game.isAiming = true;
+                const rect = canvas.getBoundingClientRect();
+                game.mouseX = e.clientX - rect.left;
+                game.mouseY = e.clientY - rect.top;
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (game.isAiming) {
+                const rect = canvas.getBoundingClientRect();
+                game.mouseX = e.clientX - rect.left;
+                game.mouseY = e.clientY - rect.top;
+            }
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+            if (game.isAiming && !game.ballFired && game.shots > 0) {
+                game.isAiming = false;
+                
+                const dx = game.mouseX - game.ballX;
+                const dy = game.mouseY - game.ballY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const power = Math.min(distance / 50, 15);
+                
+                if (distance > 5) {
+                    game.vx = (dx / distance) * power;
+                    game.vy = (dy / distance) * power;
+                    game.ballFired = true;
+                    game.shots--;
+                    
+                    if (game.shots === 0 && game.bubbles.length > 0) {
+                        setTimeout(() => {
+                            if (game.state === 'playing') {
+                                endGame(false);
+                            }
+                        }, 2000);
+                    }
+                }
+            }
+        });
+        
+        document.getElementById('restartBtn').addEventListener('click', restart);
+        
+        initBubbles();
+        gameLoop();
+    </script>
+</body>
+</html>

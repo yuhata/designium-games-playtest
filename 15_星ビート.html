@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星ビート</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #e0f4f7 0%, #f0e6f6 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 9/16;
+            background: linear-gradient(180deg, #fff8f5 0%, #f5f0ff 100%);
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(200, 150, 220, 0.3);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = 600;
+    canvas.height = 800;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ゲーム状態
+const gameState = {
+    state: 'idle',
+    score: 0,
+    combo: 0,
+    lives: 3,
+    accuracy: 0,
+    totalJudges: 0,
+    perfectCount: 0,
+    goodCount: 0,
+    okCount: 0,
+    missCount: 0,
+    startTime: 0,
+    elapsedTime: 0,
+    songDuration: 30000,
+    notes: [],
+    particles: [],
+    noteSpawnCounter: 0,
+    noteSpawnInterval: 700,
+    scoreFloat: 0
+};
+
+const CANVAS_WIDTH = 600;
+const CANVAS_HEIGHT = 800;
+const JUDGE_LINE_Y = CANVAS_HEIGHT * 0.6;
+const NOTE_SPEED = 120;
+const JUDGE_WINDOW = 400;
+
+function drawText(text, x, y, size, color, align = 'center', bold = false) {
+    ctx.font = `${bold ? 'bold ' : ''}${size}px Arial`;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y);
+}
+
+function drawUI() {
+    // スコア
+    drawText(`Score: ${Math.floor(gameState.scoreFloat)}`, 40, 35, 20, '#333', 'left');
+    
+    // コンボ（中央上部・大きく）
+    const comboColor = gameState.combo > 0 ? '#ff6b9d' : '#ccc';
+    drawText(`${gameState.combo}`, CANVAS_WIDTH / 2, 50, 40, comboColor, 'center', true);
+    drawText('COMBO', CANVAS_WIDTH / 2, 90, 14, comboColor, 'center');
+    
+    // 精度
+    let accStr = '0.0';
+    if (gameState.totalJudges > 0) {
+        accStr = (gameState.accuracy / gameState.totalJudges * 100).toFixed(1);
+    }
+    drawText(`Acc: ${accStr}%`, CANVAS_WIDTH - 40, 35, 20, '#333', 'right');
+    
+    // ハート（残機）
+    ctx.font = '20px Arial';
+    ctx.fillStyle = '#ff6b9d';
+    for (let i = 0; i < gameState.lives; i++) {
+        ctx.fillText('♥', 20 + i * 30, CANVAS_HEIGHT - 40);
+    }
+    
+    // タイマー
+    const timeLeft = Math.max(0, gameState.songDuration - gameState.elapsedTime);
+    const sec = (timeLeft / 1000).toFixed(1);
+    drawText(`${sec}s`, CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40, 18, '#999');
+}
+
+function drawJudgeLine() {
+    ctx.strokeStyle = 'rgba(200, 150, 220, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(40, JUDGE_LINE_Y);
+    ctx.lineTo(CANVAS_WIDTH - 40, JUDGE_LINE_Y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    ctx.font = '14px Arial';
+    ctx.fillStyle = 'rgba(200, 150, 220, 0.6)';
+    ctx.textAlign = 'center';
+    ctx.fillText('TAP', CANVAS_WIDTH / 2, JUDGE_LINE_Y - 25);
+}
+
+function drawNotes() {
+    gameState.notes.forEach(note => {
+        if (note.removed) return;
+        
+        const timeSinceSpawn = gameState.elapsedTime - note.spawnTime;
+        const y = note.startY + timeSinceSpawn * NOTE_SPEED / 1000;
+        
+        if (y < CANVAS_HEIGHT + 100) {
+            const alpha = note.judged ? 0.2 : 0.8;
+            ctx.globalAlpha = alpha;
+            
+            ctx.fillStyle = note.judged ? '#ddd' : '#c9a2e0';
+            ctx.beginPath();
+            ctx.arc(note.x, y, 18, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 判定ラインに近いとき
+            const distToJudge = Math.abs(y - JUDGE_LINE_Y);
+            if (distToJudge < 60 && !note.judged) {
+                ctx.strokeStyle = '#ff8cc3';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(note.x, y, 22, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            ctx.globalAlpha = 1;
+        }
+    });
+}
+
+function drawParticles() {
+    gameState.particles.forEach(p => {
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+}
+
+function spawnNote() {
+    const x = 80 + Math.random() * (CANVAS_WIDTH - 160);
+    gameState.notes.push({
+        x: x,
+        startY: -50,
+        spawnTime: gameState.elapsedTime,
+        judged: false,
+        removed: false,
+        judgeType: null
+    });
+}
+
+function judgeNotes(clickX, clickY) {
+    let judgedCount = 0;
+    
+    gameState.notes.forEach(note => {
+        if (note.judged || note.removed) return;
+        
+        const timeSinceSpawn = gameState.elapsedTime - note.spawnTime;
+        const y = note.startY + timeSinceSpawn * NOTE_SPEED / 1000;
+        
+        // 距離が近い＆時間が適切
+        const dist = Math.abs(y - JUDGE_LINE_Y);
+        if (dist < 80) {
+            const timeToJudge = (JUDGE_LINE_Y - note.startY) / NOTE_SPEED * 1000;
+            const errorTime = Math.abs(gameState.elapsedTime - (note.spawnTime + timeToJudge));
+            
+            if (errorTime <= JUDGE_WINDOW) {
+                note.judged = true;
+                judgedCount++;
+                
+                let points = 0;
+                let judgeType = 'miss';
+                
+                if (errorTime <= 100) {
+                    points = 100;
+                    judgeType = 'perfect';
+                    gameState.perfectCount++;
+                } else if (errorTime <= 200) {
+                    points = 70;
+                    judgeType = 'good';
+                    gameState.goodCount++;
+                } else if (errorTime <= 300) {
+                    points = 40;
+                    judgeType = 'ok';
+                    gameState.okCount++;
+                } else {
+                    points = 20;
+                    judgeType = 'miss';
+                    gameState.missCount++;
+                }
+                
+                note.judgeType = judgeType;
+                gameState.score += points * (1 + gameState.combo * 0.05);
+                gameState.scoreFloat = gameState.score;
+                gameState.combo++;
+                gameState.accuracy += (JUDGE_WINDOW - errorTime) / JUDGE_WINDOW;
+                gameState.totalJudges++;
+                
+                // パーティクル
+                for (let i = 0; i < 8; i++) {
+                    const ang = (Math.PI * 2 * i) / 8;
+                    gameState.particles.push({
+                        x: note.x,
+                        y: y,
+                        vx: Math.cos(ang) * 150,
+                        vy: Math.sin(ang) * 150 - 80,
+                        life: 0.6,
+                        maxLife: 0.6,
+                        size: 5,
+                        color: '#ff8cc3'
+                    });
+                }
+            }
+        }
+    });
+    
+    return judgedCount > 0;
+}
+
+function checkMissedNotes() {
+    gameState.notes.forEach(note => {
+        if (!note.judged && !note.removed) {
+            const timeSinceSpawn = gameState.elapsedTime - note.spawnTime;
+            const y = note.startY + timeSinceSpawn * NOTE_SPEED / 1000;
+            
+            if (y > JUDGE_LINE_Y + 100) {
+                note.removed = true;
+                gameState.combo = 0;
+                
+                // 30秒以降のみミス判定
+                if (gameState.elapsedTime >= 30000) {
+                    gameState.lives--;
+                }
+            }
+        }
+    });
+}
+
+function update(dt) {
+    if (gameState.state !== 'playing') return;
+    
+    gameState.elapsedTime = Date.now() - gameState.startTime;
+    
+    // ノーツ生成
+    gameState.noteSpawnCounter += dt;
+    if (gameState.noteSpawnCounter >= gameState.noteSpawnInterval / 1000) {
+        spawnNote();
+        gameState.noteSpawnCounter = 0;
+    }
+    
+    // ミス判定
+    checkMissedNotes();
+    
+    // パーティクル更新
+    gameState.particles = gameState.particles.filter(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 300 * dt;
+        p.life -= dt;
+        return p.life > 0;
+    });
+    
+    // ノーツクリーンアップ
+    gameState.notes = gameState.notes.filter(n => !n.removed && gameState.elapsedTime - n.spawnTime < 5000);
+    
+    // 終了判定
+    if (gameState.lives <= 0) {
+        gameState.state = 'gameover';
+    } else if (gameState.elapsedTime >= gameState.songDuration) {
+        const finalAcc = gameState.totalJudges > 0 
+            ? gameState.accuracy / gameState.totalJudges 
+            : 0;
+        
+        if (finalAcc > 0.7) {
+            gameState.state = 'clear';
+            // クリア演出：白星パーティクル
+            for (let i = 0; i < 60; i++) {
+                gameState.particles.push({
+                    x: CANVAS_WIDTH / 2 + (Math.random() - 0.5) * 80,
+                    y: CANVAS_HEIGHT + 50,
+                    vx: (Math.random() - 0.5) * 80,
+                    vy: -(Math.random() * 250 + 150),
+                    life: 3.5,
+                    maxLife: 3.5,
+                    size: Math.random() * 6 + 2,
+                    color: '#ffffff'
+                });
+            }
+        } else {
+            gameState.state = 'gameover';
+        }
+    }
+}
+
+function draw() {
+    // 背景
+    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    grad.addColorStop(0, '#fff8f5');
+    grad.addColorStop(1, '#f5f0ff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    if (gameState.state === 'idle') {
+        drawText('星ビート', CANVAS_WIDTH / 2, 150, 52, '#c9a2e0', 'center', true);
+        drawText('★ Tap to Start ★', CANVAS_WIDTH / 2, 280, 24, '#ff8cc3');
+        drawText('ノーツが判定ラインに到達したらタップ', CANVAS_WIDTH / 2, 400, 16, '#999');
+        drawText('Accuracy > 70% でクリア', CANVAS_WIDTH / 2, 440, 16, '#999');
+        drawText('最初の30秒はペナルティなし', CANVAS_WIDTH / 2, 480, 14, '#bbb');
+    } else if (gameState.state === 'playing') {
+        drawJudgeLine();
+        drawNotes();
+        drawParticles();
+        drawUI();
+    } else if (gameState.state === 'clear') {
+        drawJudgeLine();
+        drawNotes();
+        drawParticles();
+        drawUI();
+        
+        // Clear演出
+        const clearStart = gameState.songDuration + 200;
+        if (gameState.elapsedTime >= clearStart) {
+            const clearTime = gameState.elapsedTime - clearStart;
+            if (clearTime < 2000) {
+                ctx.globalAlpha = Math.sin((clearTime / 2000) * Math.PI) * 0.9;
+                drawText('CLEAR!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 50, 72, '#ff8cc3', 'center', true);
+                ctx.globalAlpha = 1;
+            }
+        }
+    } else if (gameState.state === 'gameover') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        drawText('GAME OVER', CANVAS_WIDTH / 2, 150, 48, '#333', 'center', true);
+        drawText(`Score: ${Math.floor(gameState.score)}`, CANVAS_WIDTH / 2, 240, 28, '#666');
+        
+        let accStr = '0.0';
+        if (gameState.totalJudges > 0) {
+            accStr = (gameState.accuracy / gameState.totalJudges * 100).toFixed(1);
+        }
+        drawText(`Accuracy: ${accStr}%`, CANVAS_WIDTH / 2, 300, 24, '#666');
+        drawText(`Perfect: ${gameState.perfectCount} | Good: ${gameState.goodCount} | OK: ${gameState.okCount}`, 
+            CANVAS_WIDTH / 2, 360, 16, '#999');
+        drawText('Tap to Restart', CANVAS_WIDTH / 2, 500, 20, '#bbb');
+    }
+}
+
+function initGame() {
+    gameState.state = 'playing';
+    gameState.score = 0;
+    gameState.scoreFloat = 0;
+    gameState.combo = 0;
+    gameState.lives = 3;
+    gameState.accuracy = 0;
+    gameState.totalJudges = 0;
+    gameState.perfectCount = 0;
+    gameState.goodCount = 0;
+    gameState.okCount = 0;
+    gameState.missCount = 0;
+    gameState.notes = [];
+    gameState.particles = [];
+    gameState.noteSpawnCounter = 0;
+    gameState.startTime = Date.now();
+    gameState.elapsedTime = 0;
+}
+
+// イベントリスナー
+function handleClick(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+    const y = (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+    
+    if (gameState.state === 'idle' || gameState.state === 'gameover') {
+        initGame();
+    } else if (gameState.state === 'playing') {
+        judgeNotes(x, y);
+    }
+}
+
+canvas.addEventListener('mousedown', handleClick);
+canvas.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    handleClick({
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        preventDefault: () => {}
+    });
+    e.preventDefault();
+});
+
+// ゲームループ
+let lastTime = Date.now();
+function gameLoop() {
+    const now = Date.now();
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+    
+    update(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>

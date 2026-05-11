@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>メタルフォース</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0a15 0%, #1a1a2e 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        
+        #gameWrapper {
+            position: relative;
+            background: #0a0a15;
+            border: 4px solid #00ff88;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(180deg, #1a1a3e 0%, #0a0a20 100%);
+        }
+        
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #00ff88;
+            font-size: 14px;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.7);
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            z-index: 10;
+        }
+        
+        .ui-line {
+            margin: 5px 0;
+            padding: 2px 5px;
+            background: rgba(0, 30, 60, 0.6);
+            border-left: 3px solid #00ff88;
+        }
+        
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            z-index: 20;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+        }
+        
+        .overlay-text {
+            font-size: 72px;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 1);
+        }
+        
+        .victory {
+            color: #ffff00;
+            text-shadow: 0 0 40px rgba(255, 255, 0, 1);
+        }
+        
+        .gameover {
+            color: #ff3333;
+            text-shadow: 0 0 40px rgba(255, 50, 50, 1);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameWrapper">
+        <canvas id="gameCanvas" width="1200" height="700"></canvas>
+        <div id="ui">
+            <div class="ui-line">🎮 ドラッグしてパーツをロボに装着。進化させて敵を圧倒！</div>
+            <div class="ui-line">Wave: <span id="waveNum">1</span>/10 | HP: <span id="hpNum">100</span> | Parts: <span id="partsNum">0</span>/5 | Score: <span id="scoreNum">0</span></div>
+        </div>
+        <div id="overlay">
+            <div class="overlay-text" id="overlayText"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const overlayText = document.getElementById('overlayText');
+
+        const game = {
+            wave: 1,
+            robotHp: 100,
+            robotMaxHp: 100,
+            score: 0,
+            gameOver: false,
+            gameWon: false,
+            frameCount: 0,
+            
+            robot: {
+                x: 200,
+                y: 350,
+                parts: [],
+                maxParts: 5,
+                vx: 0,
+                vy: 0
+            },
+            
+            parts: [
+                { id: 1, name: 'Head', x: 30, y: 100, w: 50, h: 50, dx: 30, dy: 100, isDocked: false },
+                { id: 2, name: 'Chest', x: 30, y: 180, w: 60, h: 60, dx: 30, dy: 180, isDocked: false },
+                { id: 3, name: 'Arm-L', x: 30, y: 280, w: 45, h: 45, dx: 30, dy: 280, isDocked: false },
+                { id: 4, name: 'Arm-R', x: 30, y: 360, w: 45, h: 45, dx: 30, dy: 360, isDocked: false },
+                { id: 5, name: 'Leg-L', x: 30, y: 440, w: 50, h: 55, dx: 30, dy: 440, isDocked: false },
+                { id: 6, name: 'Leg-R', x: 30, y: 520, w: 50, h: 55, dx: 30, dy: 520, isDocked: false }
+            ],
+            
+            enemies: [],
+            particles: [],
+            
+            getAttackPower() {
+                return 5 + this.robot.parts.length * 8 + this.wave * 2;
+            },
+            
+            getRobotColor() {
+                const wave = this.wave;
+                if (wave === 10) return { h: 50, s: 100, l: 55 };
+                if (wave >= 7) return { h: 290, s: 100, l: 50 };
+                if (wave >= 4) return { h: 200, s: 100, l: 55 };
+                return { h: 120, s: 100, l: 50 };
+            },
+            
+            getRobotSize() {
+                return 25 + this.robot.parts.length * 18 + this.wave * 4;
+            }
+        };
+
+        let draggedPart = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let lastClickTime = 0;
+
+        function initWave() {
+            game.enemies = [];
+            const enemyCount = Math.min(1 + Math.floor(game.wave / 2), 6);
+            
+            for (let i = 0; i < enemyCount; i++) {
+                game.enemies.push({
+                    id: Math.random(),
+                    x: 700 + Math.random() * 300,
+                    y: 100 + Math.random() * 500,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    hp: 25 + game.wave * 12,
+                    maxHp: 25 + game.wave * 12,
+                    size: 12 + game.wave * 3,
+                    hue: 0 + Math.random() * 30
+                });
+            }
+        }
+
+        function addParticle(x, y, hue, vel) {
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI * 2 / 8) * i;
+                game.particles.push({
+                    x, y, hue,
+                    vx: Math.cos(angle) * vel,
+                    vy: Math.sin(angle) * vel,
+                    life: 40,
+                    maxLife: 40,
+                    size: 2 + Math.random() * 3
+                });
+            }
+        }
+
+        function drawRobot() {
+            const size = game.getRobotSize();
+            const col = game.getRobotColor();
+            const color = `hsl(${col.h}, ${col.s}%, ${col.l}%)`;
+            const x = game.robot.x;
+            const y = game.robot.y;
+            
+            // Glow effect
+            ctx.fillStyle = `hsla(${col.h}, ${col.s}%, ${col.l}%, 0.3)`;
+            ctx.beginPath();
+            ctx.arc(x, y, size * 1.2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = color;
+            
+            // Head (always)
+            if (game.robot.parts.length >= 1 || true) {
+                ctx.beginPath();
+                ctx.arc(x, y - size * 0.55, size * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Eyes glow
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(x - size * 0.15, y - size * 0.65, size * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x + size * 0.15, y - size * 0.65, size * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = color;
+            }
+            
+            // Chest
+            if (game.robot.parts.length >= 2) {
+                ctx.fillRect(x - size * 0.3, y - size * 0.25, size * 0.6, size * 0.5);
+            }
+            
+            // Arms
+            if (game.robot.parts.length >= 4) {
+                ctx.fillRect(x - size * 0.6, y - size * 0.1, size * 0.3, size * 0.25);
+                ctx.fillRect(x + size * 0.3, y - size * 0.1, size * 0.3, size * 0.25);
+            } else if (game.robot.parts.length >= 3) {
+                ctx.fillRect(x - size * 0.5, y - size * 0.1, size * 0.25, size * 0.2);
+            }
+            
+            // Legs
+            if (game.robot.parts.length >= 5) {
+                ctx.fillRect(x - size * 0.2, y + size * 0.25, size * 0.18, size * 0.45);
+                ctx.fillRect(x + size * 0.02, y + size * 0.25, size * 0.18, size * 0.45);
+            }
+            
+            // HP Bar
+            ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            ctx.fillRect(x - size * 0.5, y - size * 0.9, size * 1.0, 12);
+            const hpRatio = Math.max(0, game.robotHp / game.robotMaxHp);
+            const hpColor = hpRatio > 0.3 ? '#00ff00' : '#ff3333';
+            ctx.fillStyle = hpColor;
+            ctx.fillRect(x - size * 0.5, y - size * 0.9, size * hpRatio, 12);
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x - size * 0.5, y - size * 0.9, size * 1.0, 12);
+        }
+
+        function drawEnemies() {
+            for (const enemy of game.enemies) {
+                // Enemy glow
+                ctx.fillStyle = `hsla(${enemy.hue}, 100%, 50%, 0.2)`;
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.size * 1.3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Enemy body
+                ctx.fillStyle = `hsl(${enemy.hue}, 100%, 50%)`;
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Enemy HP
+                ctx.fillStyle = 'rgba(40, 40, 40, 0.9)';
+                ctx.fillRect(enemy.x - enemy.size * 1.2, enemy.y - enemy.size - 12, enemy.size * 2.4, 8);
+                ctx.fillStyle = `hsl(${enemy.hue}, 100%, 50%)`;
+                ctx.fillRect(enemy.x - enemy.size * 1.2, enemy.y - enemy.size - 12, enemy.size * 2.4 * (enemy.hp / enemy.maxHp), 8);
+            }
+        }
+
+        function drawParticles() {
+            for (let i = game.particles.length - 1; i >= 0; i--) {
+                const p = game.particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.1;
+                p.life--;
+                
+                const alpha = p.life / p.maxLife;
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = `hsl(${p.hue}, 100%, 55%)`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                if (p.life <= 0) {
+                    game.particles.splice(i, 1);
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        function drawParts() {
+            for (const part of game.parts) {
+                const x = part.isDocked ? game.robot.x + 80 + part.id * 25 : part.x;
+                const y = part.isDocked ? game.robot.y - 20 : part.y;
+                
+                ctx.fillStyle = draggedPart === part ? 'rgba(255, 200, 50, 0.9)' : 
+                               part.isDocked ? 'rgba(100, 255, 100, 0.7)' : 'rgba(100, 150, 255, 0.6)';
+                ctx.fillRect(x, y, part.w, part.h);
+                
+                ctx.strokeStyle = part.isDocked ? '#00ff00' : '#00ffff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, part.w, part.h);
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(part.name, x + part.w / 2, y + part.h / 2 + 4);
+                
+                part.x = x;
+                part.y = y;
+            }
+        }
+
+        function updateGame() {
+            if (game.gameOver || game.gameWon) return;
+            
+            game.frameCount++;
+            
+            // Move enemies
+            for (const enemy of game.enemies) {
+                enemy.x += enemy.vx;
+                enemy.y += enemy.vy;
+                
+                if (enemy.x < 650 || enemy.x > 1150) enemy.vx *= -1;
+                if (enemy.y < 50 || enemy.y > 650) enemy.vy *= -1;
+            }
+            
+            // Auto attack
+            const attackPower = game.getAttackPower();
+            for (const enemy of game.enemies) {
+                const damage = attackPower * 0.016;
+                enemy.hp -= damage;
+                
+                if (Math.random() < 0.08) {
+                    addParticle(enemy.x, enemy.y, enemy.hue, 3 + Math.random() * 2);
+                }
+            }
+            
+            // Remove dead enemies
+            game.enemies = game.enemies.filter(e => {
+                if (e.hp <= 0) {
+                    const baseScore = 200 + game.wave * 100;
+                    game.score += baseScore + game.robot.parts.length * 50;
+                    addParticle(e.x, e.y, 60, 6);
+                    return false;
+                }
+                return true;
+            });
+            
+            // Wave progression
+            if (game.enemies.length === 0) {
+                if (game.wave < 10) {
+                    game.wave++;
+                    game.score += game.wave * 800;
+                    initWave();
+                    game.robotHp = Math.min(game.robotMaxHp, game.robotHp + 20);
+                } else {
+                    game.gameWon = true;
+                    showVictory();
+                }
+            }
+            
+            // Enemy counter-attack
+            for (const enemy of game.enemies) {
+                if (Math.random() < 0.015) {
+                    const dmg = 3 + game.wave;
+                    game.robotHp -= dmg;
+                    addParticle(game.robot.x, game.robot.y, 0, 4);
+                }
+            }
+            
+            if (game.robotHp <= 0) {
+                game.gameOver = true;
+                showGameOver();
+            }
+            
+            // Update UI
+            document.getElementById('waveNum').textContent = game.wave;
+            document.getElementById('hpNum').textContent = Math.max(0, Math.floor(game.robotHp));
+            document.getElementById('partsNum').textContent = game.robot.parts.length;
+            document.getElementById('scoreNum').textContent = game.score;
+        }
+
+        function showVictory() {
+            overlay.style.display = 'flex';
+            overlayText.className = 'overlay-text victory';
+            overlayText.innerHTML = `🎆 VICTORY! 🎆<br><span style="font-size: 48px;">Final Score: ${game.score}</span>`;
+        }
+
+        function showGameOver() {
+            overlay.style.display = 'flex';
+            overlayText.className = 'overlay-text gameover';
+            overlayText.innerHTML = `GAME OVER<br><span style="font-size: 48px;">Score: ${game.score}</span>`;
+        }
+
+        function draw() {
+            // Background with Wave 10 effect
+            if (game.wave === 10 && !game.gameWon) {
+                const pulse = Math.sin(game.frameCount / 15) * 0.4 + 0.6;
+                ctx.fillStyle = `rgba(40, 20, 0, ${0.4 + pulse * 0.3})`;
+            } else {
+                ctx.fillStyle = 'rgba(10, 10, 20, 0.8)';
+            }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Wave 10 climax overlay
+            if (game.wave === 10 && !game.gameWon) {
+                ctx.fillStyle = `rgba(255, 200, 0, ${0.1 * Math.sin(game.frameCount / 10)})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.strokeStyle = `rgba(255, 200, 0, 0.5)`;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(50, 50, canvas.width - 100, canvas.height - 100);
+            }
+            
+            // Draw game objects
+            drawParts();
+            drawRobot();
+            drawEnemies();
+            drawParticles();
+            
+            // Wave 10 text
+            if (game.wave === 10 && !game.gameWon) {
+                ctx.fillStyle = 'rgba(255, 200, 0, 0.8)';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('⚡ FINAL WAVE ⚡', canvas.width - 200, 60);
+            }
+        }
+
+        function gameLoop() {
+            updateGame();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            for (const part of game.parts) {
+                if (x >= part.x && x <= part.x + part.w &&
+                    y >= part.y && y <= part.y + part.h &&
+                    !part.isDocked) {
+                    draggedPart = part;
+                    dragOffsetX = x - part.x;
+                    dragOffsetY = y - part.y;
+                    break;
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (draggedPart) {
+                const rect = canvas.getBoundingClientRect();
+                draggedPart.x = e.clientX - rect.left - dragOffsetX;
+                draggedPart.y = e.clientY - rect.top - dragOffsetY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (draggedPart) {
+                const dx = draggedPart.x + draggedPart.w / 2 - game.robot.x;
+                const dy = draggedPart.y + draggedPart.h / 2 - game.robot.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 120 && game.robot.parts.length < game.robot.maxParts) {
+                    draggedPart.isDocked = true;
+                    game.robot.parts.push(draggedPart);
+                    game.score += 100;
+                    game.robotMaxHp += 10;
+                    addParticle(game.robot.x, game.robot.y, 120, 5);
+                } else {
+                    draggedPart.x = draggedPart.dx;
+                    draggedPart.y = draggedPart.dy;
+                }
+                draggedPart = null;
+            }
+        });
+
+        initWave();
+        gameLoop();
+    </script>
+</body>
+</html>

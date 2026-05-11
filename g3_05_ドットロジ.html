@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ドットロジ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 8px;
+        }
+        
+        .container {
+            width: 375px;
+            height: 812px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        
+        .game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            overflow-y: auto;
+        }
+        
+        .board-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .hints-top {
+            display: flex;
+            justify-content: center;
+            gap: 2px;
+            margin-bottom: 2px;
+            margin-left: 40px;
+        }
+        
+        .hint-col {
+            width: 50px;
+            text-align: center;
+            font-size: 10px;
+            color: #333;
+            font-weight: bold;
+            line-height: 1.2;
+            min-height: 30px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        
+        .board-row {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 2px;
+            align-items: center;
+        }
+        
+        .hint-row {
+            width: 36px;
+            text-align: right;
+            font-size: 10px;
+            color: #333;
+            font-weight: bold;
+            padding-right: 4px;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+        
+        .board {
+            display: inline-grid;
+            grid-template-columns: repeat(5, 50px);
+            gap: 2px;
+        }
+        
+        .cell {
+            width: 50px;
+            height: 50px;
+            background: #e8e8e8;
+            border: 2px solid #999;
+            cursor: pointer;
+            transition: background-color 0.15s ease, box-shadow 0.15s ease;
+            user-select: none;
+            border-radius: 4px;
+        }
+        
+        .cell.filled {
+            background: #1a237e;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .cell.error-flash {
+            animation: errorFlash 0.4s;
+        }
+        
+        @keyframes errorFlash {
+            0%, 100% { background: #ff4444; }
+            50% { background: #ff8888; }
+        }
+        
+        .cell:hover {
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.4);
+        }
+        
+        .cell.filled:hover {
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(102, 126, 234, 0.4);
+        }
+        
+        .hint-confirmed {
+            color: #4caf50 !important;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+        }
+        
+        .footer {
+            padding: 12px 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+        }
+        
+        button {
+            padding: 10px 18px;
+            font-size: 13px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+        }
+        
+        .btn-reset {
+            background: #ff9800;
+            color: white;
+            flex: 1;
+        }
+        
+        .btn-reset:active {
+            background: #f57c00;
+            transform: scale(0.98);
+        }
+        
+        .btn-hint {
+            background: #2196f3;
+            color: white;
+            flex: 1;
+        }
+        
+        .btn-hint:active {
+            background: #1976d2;
+            transform: scale(0.98);
+        }
+        
+        .result-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .result-modal.show {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .result-content {
+            background: white;
+            padding: 40px 30px;
+            border-radius: 20px;
+            text-align: center;
+            animation: scaleUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-width: 320px;
+        }
+        
+        @keyframes scaleUp {
+            from { transform: scale(0.3); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        
+        .result-title {
+            font-size: 56px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            color: #4caf50;
+        }
+        
+        .result-content.lose .result-title {
+            color: #f44336;
+        }
+        
+        .result-score {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 24px;
+            line-height: 1.8;
+        }
+        
+        .result-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .btn-restart {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-restart:active {
+            background: #5568d3;
+            transform: scale(0.98);
+        }
+        
+        .status-text {
+            color: #999;
+            font-size: 12px;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ドットロジ</h1>
+            <div class="stats">
+                <div>エラー: <span id="error-count">0</span>/3</div>
+                <div>時間: <span id="time">0:00</span></div>
+            </div>
+        </div>
+        
+        <div class="game-area">
+            <div class="board-wrapper">
+                <div class="hints-top" id="hints-top"></div>
+                <div id="board-container">
+                    <div class="board" id="board"></div>
+                </div>
+            </div>
+            <p class="status-text">目標: 全マスが確定し、エラー0でPERFECT達成</p>
+        </div>
+        
+        <div class="footer">
+            <button class="btn-reset" onclick="resetGame()">リセット</button>
+            <button class="btn-hint" onclick="showHint()">ルール</button>
+        </div>
+    </div>
+    
+    <div class="result-modal" id="result-modal">
+        <div class="result-content" id="result-content">
+            <div class="result-title" id="result-title">PERFECT!</div>
+            <div class="result-score" id="result-score"></div>
+            <div class="result-buttons">
+                <button class="btn-restart" onclick="restartGame()">リスタート</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const GRID_SIZE = 5;
+        const MAX_ERRORS = 3;
+        const SOLUTION = [
+            [1, 1, 0, 1, 0],
+            [1, 0, 1, 0, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 0, 1, 0],
+            [1, 0, 1, 1, 1]
+        ];
+        const ROW_HINTS = [[2, 1], [1, 1, 1], [5], [2, 1], [1, 3]];
+        const COL_HINTS = [[4], [2, 1], [1, 3], [3, 1], [1, 2]];
+        
+        let gameState = [];
+        let errorCount = 0;
+        let startTime = 0;
+        let gameOver = false;
+        let gameWon = false;
+        let timerInterval = null;
+        let hintsConfirmed = { rows: new Set(), cols: new Set() };
+        
+        function initGame() {
+            gameState = Array(GRID_SIZE).fill(null).map(() => 
+                Array(GRID_SIZE).fill(0)
+            );
+            errorCount = 0;
+            gameOver = false;
+            gameWon = false;
+            hintsConfirmed = { rows: new Set(), cols: new Set() };
+            startTime = Date.now();
+            document.getElementById('error-count').textContent = '0';
+            document.getElementById('result-modal').classList.remove('show');
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            renderBoard();
+            renderHints();
+        }
+        
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('time').textContent = 
+                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        function renderHints() {
+            const hintTop = document.getElementById('hints-top');
+            hintTop.innerHTML = '';
+            for (let c = 0; c < GRID_SIZE; c++) {
+                const hint = COL_HINTS[c];
+                const div = document.createElement('div');
+                div.className = 'hint-col';
+                div.textContent = hint.join(' ');
+                if (hintsConfirmed.cols.has(c)) div.classList.add('hint-confirmed');
+                hintTop.appendChild(div);
+            }
+        }
+        
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            const container = document.getElementById('board-container');
+            
+            gameState.forEach((row, r) => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'board-row';
+                
+                const hintDiv = document.createElement('div');
+                hintDiv.className = 'hint-row';
+                const hint = ROW_HINTS[r];
+                hintDiv.textContent = hint.join(' ');
+                if (hintsConfirmed.rows.has(r)) hintDiv.classList.add('hint-confirmed');
+                rowDiv.appendChild(hintDiv);
+                
+                row.forEach((cell, c) => {
+                    const cellEl = document.createElement('div');
+                    cellEl.className = 'cell' + (cell === 1 ? ' filled' : '');
+                    cellEl.onclick = () => toggleCell(r, c);
+                    rowDiv.appendChild(cellEl);
+                });
+                
+                container.appendChild(rowDiv);
+            });
+        }
+        
+        function toggleCell(r, c) {
+            if (gameOver || gameWon) return;
+            gameState[r][c] = gameState[r][c] === 0 ? 1 : 0;
+            renderBoard();
+            validateAndCheck();
+        }
+        
+        function validateAndCheck() {
+            hintsConfirmed = { rows: new Set(), cols: new Set() };
+            let hasViolation = false;
+            
+            for (let r = 0; r < GRID_SIZE; r++) {
+                const groups = getFilledGroups(gameState[r]);
+                const hint = ROW_HINTS[r];
+                
+                if (isLineComplete(groups, hint)) {
+                    hintsConfirmed.rows.add(r);
+                } else if (!isLinePossible(groups, hint)) {
+                    hasViolation = true;
+                    break;
+                }
+            }
+            
+            if (!hasViolation) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const col = gameState.map(r => r[c]);
+                    const groups = getFilledGroups(col);
+                    const hint = COL_HINTS[c];
+                    
+                    if (isLineComplete(groups, hint)) {
+                        hintsConfirmed.cols.add(c);
+                    } else if (!isLinePossible(groups, hint)) {
+                        hasViolation = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (hasViolation) {
+                if (errorCount < MAX_ERRORS) {
+                    errorCount++;
+                    document.getElementById('error-count').textContent = errorCount;
+                    gameState[gameState.length - 1][gameState[0].length - 1] = gameState[gameState.length - 1][gameState[0].length - 1];
+                    
+                    if (errorCount >= MAX_ERRORS) {
+                        endGame(false);
+                    }
+                }
+            } else {
+                renderHints();
+                checkWinCondition();
+            }
+        }
+        
+        function getFilledGroups(line) {
+            const groups = [];
+            let count = 0;
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === 1) {
+                    count++;
+                } else {
+                    if (count > 0) groups.push(count);
+                    count = 0;
+                }
+            }
+            if (count > 0) groups.push(count);
+            return groups;
+        }
+        
+        function isLineComplete(groups, hint) {
+            if (groups.length !== hint.length) return false;
+            for (let i = 0; i < groups.length; i++) {
+                if (groups[i] !== hint[i]) return false;
+            }
+            return true;
+        }
+        
+        function isLinePossible(groups, hint) {
+            if (groups.length > hint.length) return false;
+            for (let i = 0; i < groups.length; i++) {
+                if (groups[i] > hint[i]) return false;
+            }
+            return true;
+        }
+        
+        function checkWinCondition() {
+            if (hintsConfirmed.rows.size === GRID_SIZE && 
+                hintsConfirmed.cols.size === GRID_SIZE && 
+                errorCount === 0) {
+                endGame(true);
+            }
+        }
+        
+        function endGame(won) {
+            gameWon = won;
+            gameOver = true;
+            clearInterval(timerInterval);
+            
+            const modal = document.getElementById('result-modal');
+            const content = document.getElementById('result-content');
+            const title = document.getElementById('result-title');
+            const score = document.getElementById('result-score');
+            
+            if (won) {
+                content.style.background = 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)';
+                title.textContent = 'PERFECT!';
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                score.innerHTML = `
+                    <p style="font-size: 18px; color: #333;">エラー: 0/3</p>
+                    <p style="font-size: 18px; color: #333;">所要時間: ${mins}:${secs.toString().padStart(2, '0')}</p>
+                    <p style="color: #4caf50; font-weight: bold; margin-top: 12px; font-size: 16px;">★ パーフェクト達成 ★</p>
+                `;
+            } else {
+                content.style.background = 'linear-gradient(135deg, #fceaa3 0%, #f7ce68 100%)';
+                title.style.color = '#f44336';
+                title.textContent = 'GAME OVER';
+                score.innerHTML = `
+                    <p style="font-size: 16px; color: #333;">エラー: ${errorCount}/3に到達</p>
+                    <p style="font-size: 14px; color: #666; margin-top: 8px;">もう一度チャレンジしてください</p>
+                `;
+            }
+            
+            modal.classList.add('show');
+        }
+        
+        function resetGame() {
+            initGame();
+        }
+        
+        function restartGame() {
+            initGame();
+        }
+        
+        function showHint() {
+            alert('【ドットロジのルール】\n\n・各行・列の左上に表示された数字は「連続した塗マスの個数」\n・例：「2 1」= 塗2マス、空1マス以上、塗1マス\n・全マスが確定し、エラーが0でPERFECT達成！\n・ルール違反でエラーが増えます\n・エラーが3回で GAME OVER');
+        }
+        
+        initGame();
+    </script>
+</body>
+</html>

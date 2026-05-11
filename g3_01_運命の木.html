@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>運命の木</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        
+        .game-container {
+            width: 375px;
+            height: 812px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 40px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .game-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header {
+            padding: 16px 12px;
+            text-align: center;
+            color: #fff;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 4px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        
+        .header p {
+            font-size: 11px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            font-size: 10px;
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            border-radius: 8px;
+            margin: 0 8px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            color: #64ff9a;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .goal-info {
+            font-size: 11px;
+            color: #64ff9a;
+            margin-top: 6px;
+            text-align: center;
+            background: rgba(100,255,154,0.1);
+            padding: 4px;
+            border-radius: 4px;
+        }
+        
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        #gameCanvas {
+            width: 160px;
+            height: 240px;
+            filter: drop-shadow(0 0 10px rgba(100,255,154,0.3));
+        }
+        
+        .choices {
+            padding: 12px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        
+        .choice-btn {
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 12px;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+        }
+        
+        .choice-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #7c8ff4 0%, #8a5ab7 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .choice-btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        
+        .choice-btn:disabled {
+            opacity: 0.25;
+            pointer-events: none;
+        }
+        
+        .result-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 10;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .result-content {
+            background: rgba(20,30,50,0.98);
+            border-radius: 20px;
+            padding: 25px;
+            max-width: 300px;
+            border: 2px solid rgba(100,255,154,0.4);
+        }
+        
+        .result-screen.victory .result-content {
+            border-color: rgba(100,255,154,0.9);
+        }
+        
+        .result-screen.defeat .result-content {
+            border-color: rgba(255,100,100,0.8);
+        }
+        
+        .result-icon {
+            font-size: 50px;
+            margin-bottom: 12px;
+        }
+        
+        .result-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 10px;
+        }
+        
+        .result-message {
+            color: #aaa;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+        
+        .insight-score {
+            font-size: 28px;
+            font-weight: bold;
+            color: #64ff9a;
+            margin-bottom: 12px;
+        }
+        
+        .discoveries {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+            text-align: left;
+            max-height: 120px;
+            overflow-y: auto;
+            min-height: 40px;
+        }
+        
+        .discovery-item {
+            color: #64ff9a;
+            font-size: 11px;
+            margin: 4px 0;
+            padding: 3px 0;
+        }
+        
+        .retry-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .retry-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .tree-blur {
+            filter: blur(2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-screen" id="gameScreen">
+            <div class="header">
+                <h1>🌳 運命の木</h1>
+                <p>選択肢をタップして木の謎を探ろう</p>
+                <div class="stats">
+                    <div class="stat-item">
+                        <div>洞察</div>
+                        <div class="stat-value" id="insightValue">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div>発見</div>
+                        <div class="stat-value" id="discoveryValue">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div>目標</div>
+                        <div class="stat-value">3+</div>
+                    </div>
+                </div>
+                <div class="goal-info">勝利条件: 洞察が3以上で、かつ3つ以上発見する</div>
+            </div>
+            
+            <div class="canvas-area">
+                <canvas id="gameCanvas" width="160" height="240"></canvas>
+            </div>
+            
+            <div class="choices" id="choicesContainer"></div>
+        </div>
+        
+        <div class="result-screen" id="resultScreen">
+            <div class="result-content">
+                <div class="result-icon" id="resultIcon">✨</div>
+                <div class="result-title" id="resultTitle">勝利</div>
+                <div class="result-message" id="resultMessage">メッセージ</div>
+                <div class="insight-score">洞察: <span id="finalInsight">0</span></div>
+                <div class="discoveries" id="discoveryList"></div>
+                <button class="retry-btn" onclick="location.reload()">もう一度遊ぶ</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const gameState = {
+            insight: 0,
+            flags: [false, false, false, false, false],
+            gameOver: false,
+            selectedChoices: new Set(),
+            moves: 0
+        };
+        
+        const choices = [
+            {
+                text: '幹の一部が金色に光ってる',
+                insightGain: 2,
+                flagIndex: 0,
+                description: '光る幹'
+            },
+            {
+                text: '根元から不思議な音がする',
+                insightGain: 2,
+                flagIndex: 1,
+                description: '謎の音'
+            },
+            {
+                text: '夜中だけ成長する',
+                insightGain: 2,
+                flagIndex: 2,
+                description: '夜間成長'
+            },
+            {
+                text: '葉が薄く光っている',
+                insightGain: 1,
+                flagIndex: 3,
+                description: '光る葉'
+            },
+            {
+                text: '何もわからない',
+                insightGain: 0,
+                flagIndex: 4,
+                description: null
+            }
+        ];
+        
+        let treeGrowth = 0;
+        let particles = [];
+        let time = 0;
+        
+        function drawTree() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const hue1 = 120 + Math.sin(time / 3000) * 30;
+            const hue2 = 100 + Math.sin(time / 4000) * 40;
+            
+            // Trunk
+            ctx.fillStyle = `hsl(${hue1}, 60%, 40%)`;
+            const trunkX = 65;
+            const trunkY = 140 + (80 - treeGrowth * 0.8);
+            const trunkH = 80 + treeGrowth;
+            ctx.fillRect(trunkX, trunkY, 30, trunkH);
+            
+            // Canopy
+            ctx.fillStyle = `hsl(${hue2}, 70%, 45%)`;
+            const radius = 45 + treeGrowth * 0.4;
+            ctx.beginPath();
+            ctx.arc(80, 90, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Glow
+            ctx.strokeStyle = `rgba(100, 255, 154, ${0.3 + Math.sin(time / 1000) * 0.2})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(80, 90, radius + 8, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Insight sparkles
+            if (gameState.insight > 0) {
+                ctx.fillStyle = `rgba(255, 255, 100, ${0.6 + Math.sin(time / 500) * 0.3})`;
+                for (let i = 0; i < gameState.insight; i++) {
+                    const angle = (i / Math.max(1, gameState.insight)) * Math.PI * 2 + time / 2000;
+                    const dist = radius + 15;
+                    const x = 80 + Math.cos(angle) * dist;
+                    const y = 90 + Math.sin(angle) * dist;
+                    ctx.fillRect(x - 2, y - 2, 4, 4);
+                }
+            }
+            
+            // Particles
+            particles.forEach((p, idx) => {
+                ctx.fillStyle = `rgba(255, 255, 100, ${p.life})`;
+                ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+                p.y -= 1.5;
+                p.life -= 0.02;
+                if (p.life <= 0) particles.splice(idx, 1);
+            });
+            
+            time += 16;
+        }
+        
+        function renderChoices() {
+            const container = document.getElementById('choicesContainer');
+            container.innerHTML = '';
+            
+            choices.forEach((choice, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn';
+                btn.textContent = choice.text;
+                btn.dataset.index = idx;
+                
+                if (gameState.selectedChoices.has(idx)) {
+                    btn.disabled = true;
+                }
+                
+                btn.addEventListener('click', () => selectChoice(idx));
+                container.appendChild(btn);
+            });
+        }
+        
+        function selectChoice(choiceIdx) {
+            if (gameState.gameOver || gameState.selectedChoices.has(choiceIdx)) return;
+            
+            const choice = choices[choiceIdx];
+            gameState.selectedChoices.add(choiceIdx);
+            gameState.insight += choice.insightGain;
+            gameState.flags[choice.flagIndex] = true;
+            gameState.moves += 1;
+            
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: 80,
+                    y: 90,
+                    life: 1
+                });
+            }
+            
+            treeGrowth = Math.min(100, treeGrowth + choice.insightGain * 12);
+            
+            document.getElementById('insightValue').textContent = gameState.insight;
+            document.getElementById('discoveryValue').textContent = gameState.flags.filter(f => f).length;
+            
+            renderChoices();
+            checkWinCondition();
+        }
+        
+        function checkWinCondition() {
+            const discoveryCount = gameState.flags.filter(f => f).length;
+            
+            if (gameState.moves >= 3) {
+                if (gameState.insight >= 3 && discoveryCount >= 3) {
+                    endGame(true);
+                } else if (gameState.insight === 0 || discoveryCount === 0) {
+                    endGame(false);
+                }
+            }
+        }
+        
+        function endGame(isVictory) {
+            gameState.gameOver = true;
+            
+            const resultScreen = document.getElementById('resultScreen');
+            const gameScreen = document.getElementById('gameScreen');
+            
+            if (isVictory) {
+                resultScreen.classList.add('victory');
+                resultScreen.classList.remove('defeat');
+                document.getElementById('resultIcon').textContent = '✨';
+                document.getElementById('resultTitle').textContent = '木の謎を解いた！';
+                document.getElementById('resultMessage').textContent = '新しい洞察を得た...';
+            } else {
+                resultScreen.classList.add('defeat');
+                resultScreen.classList.remove('victory');
+                document.getElementById('resultIcon').textContent = '🌙';
+                document.getElementById('resultTitle').textContent = '謎は深まるばかり';
+                document.getElementById('resultMessage').textContent = '木の秘密はまだ遠い...';
+            }
+            
+            document.getElementById('finalInsight').textContent = gameState.insight;
+            
+            const discoveryList = document.getElementById('discoveryList');
+            discoveryList.innerHTML = '';
+            
+            const discoveryNames = ['光る幹', '謎の音', '夜間成長', '光る葉'];
+            gameState.flags.slice(0, 4).forEach((flag, idx) => {
+                if (flag) {
+                    const item = document.createElement('div');
+                    item.className = 'discovery-item';
+                    item.textContent = '✓ ' + discoveryNames[idx];
+                    discoveryList.appendChild(item);
+                }
+            });
+            
+            if (discoveryList.innerHTML === '') {
+                discoveryList.innerHTML = '<div style="color:#888; font-size:11px;">発見なし</div>';
+            }
+            
+            gameScreen.classList.add('tree-blur');
+            resultScreen.style.display = 'flex';
+        }
+        
+        function animate() {
+            drawTree();
+            requestAnimationFrame(animate);
+        }
+        
+        renderChoices();
+        animate();
+    </script>
+</body>
+</html>

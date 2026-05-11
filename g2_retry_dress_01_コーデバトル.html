@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>コーデバトル</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    #gameContainer {
+      width: 1100px;
+      max-width: 100%;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      display: flex;
+      gap: 40px;
+    }
+    #gameArea {
+      flex: 1;
+      position: relative;
+      background: linear-gradient(to bottom, #fff9e6, #ffe6f0);
+      border-radius: 15px;
+      padding: 30px;
+      min-height: 650px;
+      border: 3px solid #ddd;
+    }
+    .instructions {
+      background: #e3f2fd;
+      padding: 12px 15px;
+      border-left: 4px solid #2196f3;
+      border-radius: 5px;
+      font-size: 13px;
+      color: #1565c0;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+    #gameTitle {
+      text-align: center;
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 28px;
+      font-weight: bold;
+    }
+    #modelZone {
+      position: relative;
+      width: 220px;
+      height: 580px;
+      margin: 0 auto 20px;
+      background: rgba(200, 200, 255, 0.15);
+      border-radius: 10px;
+      border: 2px dashed #999;
+    }
+    .wearZone {
+      position: absolute;
+      width: 80px;
+      height: 100px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      color: #999;
+      transition: all 0.2s;
+      left: 70px;
+      background: rgba(255, 255, 255, 0.6);
+    }
+    .wearZone.active {
+      background: rgba(100, 200, 100, 0.3);
+      border-color: #4caf50;
+      box-shadow: 0 0 10px rgba(100, 200, 100, 0.4);
+    }
+    #wardrobeArea {
+      max-height: 300px;
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-start;
+      align-content: flex-start;
+    }
+    .outfit {
+      width: 80px;
+      height: 100px;
+      border-radius: 8px;
+      cursor: grab;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 4px;
+      color: white;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+      border: 2px solid #333;
+      font-size: 11px;
+      font-weight: bold;
+      user-select: none;
+      touch-action: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .outfit:hover {
+      transform: scale(1.05);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    .outfit.dragging {
+      opacity: 0.7;
+      cursor: grabbing;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+    .outfit.equipped {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: scale(0.95);
+    }
+    #sidePanel {
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel {
+      background: #f5f5f5;
+      border-radius: 10px;
+      padding: 18px;
+      border: 2px solid #ddd;
+    }
+    .panel h3 {
+      color: #333;
+      margin-bottom: 12px;
+      font-size: 15px;
+      font-weight: bold;
+    }
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+    .stat-label {
+      color: #666;
+      font-weight: bold;
+    }
+    .stat-value {
+      color: #667eea;
+      font-weight: bold;
+      font-size: 20px;
+    }
+    #progressBar {
+      width: 100%;
+      height: 12px;
+      background: #ddd;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+    #progressFill {
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50, #8bc34a);
+      width: 0%;
+      transition: width 0.5s;
+    }
+    .timer {
+      font-size: 28px;
+      font-weight: bold;
+      color: #f5576c;
+      text-align: center;
+    }
+    .audit-display {
+      background: #fff3e0;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #e65100;
+      text-align: center;
+      font-weight: bold;
+    }
+    #resultScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #resultScreen.show {
+      display: flex;
+    }
+    .resultCard {
+      background: white;
+      padding: 60px;
+      border-radius: 20px;
+      text-align: center;
+      max-width: 550px;
+      animation: popup 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+    @keyframes popup {
+      0% {
+        transform: scale(0) rotate(-10deg);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+      }
+    }
+    .resultCard.win {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .resultCard.fail {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+    }
+    .resultTitle {
+      font-size: 52px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    .resultScore {
+      font-size: 72px;
+      font-weight: bold;
+      margin: 16px 0;
+    }
+    .resultText {
+      font-size: 18px;
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+    button {
+      padding: 14px 40px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background: #667eea;
+      color: white;
+      transition: all 0.3s;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+    }
+    .resultCard.fail button {
+      background: #f5576c;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .equip-pulse {
+      animation: pulse 0.4s;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="gameArea">
+      <div class="instructions">
+        📌 衣装アイテムをドラッグして着用ゾーンに配置。色合いが調和するほどスコアアップ！
+      </div>
+      <div id="gameTitle">コーデバトル</div>
+      <div id="modelZone">
+        <div class="wearZone" id="zone-0" style="top: 120px;">👤 頭</div>
+        <div class="wearZone" id="zone-1" style="top: 280px;">👕 胸</div>
+        <div class="wearZone" id="zone-2" style="top: 420px;">👖 下</div>
+        <div class="wearZone" id="zone-3" style="top: 520px;">👞 靴</div>
+        <div class="wearZone" id="zone-4" style="top: 180px; left: 15px; width: 60px; font-size: 10px;">💍小物1</div>
+        <div class="wearZone" id="zone-5" style="top: 180px; right: 15px; width: 60px; font-size: 10px;">💍小物2</div>
+      </div>
+      <div style="text-align: center; margin-bottom: 12px; font-size: 12px; color: #999;">
+        配置可能な衣装一覧（クリックしてドラッグ）
+      </div>
+      <div id="wardrobeArea"></div>
+    </div>
+
+    <div id="sidePanel">
+      <div class="panel">
+        <h3>⏱️ 残り時間</h3>
+        <div class="timer" id="timer">60秒</div>
+      </div>
+
+      <div class="panel">
+        <h3>📊 スコア</h3>
+        <div class="stat">
+          <span class="stat-label">現在:</span>
+          <span class="stat-value" id="scoreDisplay">0</span>
+        </div>
+        <div id="progressBar">
+          <div id="progressFill"></div>
+        </div>
+        <div style="text-align: center; font-size: 12px; color: #999; margin-top: 8px;">
+          ⭐ 目標: 80点以上
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>👗 装備状況</h3>
+        <div class="stat">
+          <span class="stat-label">装備済み:</span>
+          <span class="stat-value" id="equippedCount">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">残り:</span>
+          <span class="stat-value" id="remainingCount">6</span>
+        </div>
+      </div>
+
+      <div class="panel audit-display" id="auditDisplay">
+        📝 審査評価: -
+      </div>
+    </div>
+  </div>
+
+  <div id="resultScreen">
+    <div class="resultCard" id="resultCard">
+      <div class="resultTitle" id="resultTitle">勝利!</div>
+      <div class="resultScore" id="resultScore">80</div>
+      <div class="resultText" id="resultText">素晴らしいコーディネート！</div>
+      <button onclick="location.reload()">もう一度プレイ</button>
+    </div>
+  </div>
+
+  <script>
+    // ==================== Debug Contract ====================
+    window.__gameDebug = {
+      drags: [],
+      metrics: {
+        score: 0,
+        progress: 0.0,
+        remaining: 6,
+        phase: "playing"
+      },
+      dragObject: function(id) {
+        // Will be fully implemented below
+        if (!gameState) return;
+        const outfit = gameState.wardrobe.find(o => o.id === id);
+        if (!outfit) return;
+        
+        for (let zoneId = 0; zoneId < 6; zoneId++) {
+          if (!gameState.equipped[zoneId]) {
+            equipOutfit(id, zoneId);
+            break;
+          }
+        }
+      }
+    };
+
+    // ==================== Game State ====================
+    const gameState = {
+      wardrobe: [
+        { id: "outfit_0", name: "赤ドレス", color: "#e74c3c", category: "top" },
+        { id: "outfit_1", name: "青シャツ", color: "#3498db", category: "top" },
+        { id: "outfit_2", name: "黄スカート", color: "#f1c40f", category: "bottom" },
+        { id: "outfit_3", name: "緑パンツ", color: "#2ecc71", category: "bottom" },
+        { id: "outfit_4", name: "紫帽子", color: "#9b59b6", category: "hat" },
+        { id: "outfit_5", name: "橙靴", color: "#e67e22", category: "shoe" }
+      ],
+      equipped: { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null },
+      score: 0,
+      remaining: 6,
+      startTime: Date.now(),
+      duration: 60000,
+      phase: "playing",
+      auditScore: 0,
+      draggedItem: null
+    };
+
+    const ZONES = {
+      0: { x: 70, y: 120, width: 80, height: 100 },
+      1: { x: 70, y: 280, width: 80, height: 100 },
+      2: { x: 70, y: 420, width: 80, height: 100 },
+      3: { x: 70, y: 520, width: 80, height: 100 },
+      4: { x: 15, y: 180, width: 60, height: 80 },
+      5: { x: 165, y: 180, width: 60, height: 80 }
+    };
+    const THRESHOLD = 60;
+
+    // ==================== Initialize ====================
+    function initWardrobe() {
+      const wardrobeArea = document.getElementById("wardrobeArea");
+      wardrobeArea.innerHTML = "";
+      gameState.wardrobe.forEach(outfit => {
+        const el = document.createElement("div");
+        el.className = "outfit";
+        el.id = outfit.id;
+        el.style.backgroundColor = outfit.color;
+        el.textContent = outfit.name;
+        wardrobeArea.appendChild(el);
+      });
+    }
+
+    // ==================== Debug Update ====================
+    function updateDebug() {
+      window.__gameDebug.drags = [];
+      gameState.wardrobe.forEach(outfit => {
+        const el = document.getElementById(outfit.id);
+        if (el && !el.classList.contains("equipped")) {
+          const rect = el.getBoundingClientRect();
+          window.__gameDebug.drags.push({
+            id: outfit.id,
+            type: outfit.category,
+            enabled: true
+          });
+        }
+      });
+
+      const equippedCount = Object.values(gameState.equipped).filter(e => e).length;
+      window.__gameDebug.metrics = {
+        score: gameState.score,
+        progress: Math.min(1.0, gameState.score / 100),
+        remaining: gameState.remaining,
+        phase: gameState.phase
+      };
+    }
+
+    // ==================== Equip Logic ====================
+    function equipOutfit(outfitId, zoneId) {
+      if (gameState.equipped[zoneId]) return;
+      
+      const outfit = gameState.wardrobe.find(o => o.id === outfitId);
+      if (!outfit) return;
+
+      gameState.equipped[zoneId] = outfit;
+      const el = document.getElementById(outfitId);
+      el.classList.add("equipped");
+      el.classList.add("equip-pulse");
+
+      const equippedCount = Object.values(gameState.equipped).filter(e => e).length;
+      const harmonyBonus = calculateColorHarmony(
+        Object.values(gameState.equipped).filter(e => e).map(e => e.color)
+      );
+      const points = 10 + Math.floor(harmonyBonus * 8);
+      
+      gameState.score += points;
+      gameState.remaining--;
+
+      updateUI();
+      updateDebug();
+    }
+
+    function calculateColorHarmony(colors) {
+      if (colors.length < 2) return 0.5;
+      let sum = 0;
+      for (let i = 0; i < colors.length; i++) {
+        for (let j = i + 1; j < colors.length; j++) {
+          sum += colorSimilarity(colors[i], colors[j]);
+        }
+      }
+      const pairs = (colors.length * (colors.length - 1)) / 2;
+      return sum / pairs;
+    }
+
+    function colorSimilarity(c1, c2) {
+      const rgb1 = hexToRgb(c1);
+      const rgb2 = hexToRgb(c2);
+      const dist = Math.hypot(
+        rgb1.r - rgb2.r,
+        rgb1.g - rgb2.g,
+        rgb1.b - rgb2.b
+      ) / Math.sqrt(255 * 255 * 3);
+      return Math.max(0, 1 - dist);
+    }
+
+    function hexToRgb(hex) {
+      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } 
+               : { r: 0, g: 0, b: 0 };
+    }
+
+    // ==================== Audit Score ====================
+    function updateAuditScore() {
+      if (gameState.phase !== "playing") return;
+
+      const colors = Object.values(gameState.equipped).filter(e => e).map(e => e.color);
+      if (colors.length === 0) {
+        gameState.auditScore = 0;
+      } else {
+        const harmony = calculateColorHarmony(colors);
+        const equippedCount = Object.values(gameState.equipped).filter(e => e).length;
+        gameState.auditScore = Math.floor((harmony * 40) + (equippedCount * 8) + 10);
+      }
+
+      document.getElementById("auditDisplay").textContent = 
+        `📝 審査評価: ${gameState.auditScore} 点`;
+    }
+
+    // ==================== UI Update ====================
+    function updateUI() {
+      document.getElementById("scoreDisplay").textContent = gameState.score;
+      const progress = Math.min(100, Math.floor(gameState.score / 1));
+      document.getElementById("progressFill").style.width = progress + "%";
+
+      const equippedCount = Object.values(gameState.equipped).filter(e => e).length;
+      document.getElementById("equippedCount").textContent = equippedCount;
+      document.getElementById("remainingCount").textContent = gameState.remaining;
+
+      const elapsed = Date.now() - gameState.startTime;
+      const remaining = Math.max(0, gameState.duration - elapsed);
+      const seconds = Math.ceil(remaining / 1000);
+      document.getElementById("timer").textContent = seconds + "秒";
+
+      if (remaining <= 0 && gameState.phase === "playing") {
+        endGame(false, "時間切れ");
+      } else if (gameState.score >= 80 && gameState.phase === "playing") {
+        endGame(true, "目標達成！");
+      }
+    }
+
+    // ==================== End Game ====================
+    function endGame(isWin, message) {
+      if (gameState.phase !== "playing") return;
+      gameState.phase = "ended";
+
+      const screen = document.getElementById("resultScreen");
+      const card = document.getElementById("resultCard");
+      const title = document.getElementById("resultTitle");
+      const score = document.getElementById("resultScore");
+      const text = document.getElementById("resultText");
+
+      score.textContent = gameState.score;
+
+      if (isWin) {
+        card.className = "resultCard win";
+        title.textContent = "🎉 勝利!";
+        text.textContent = message + "\n素晴らしいコーディネート！";
+      } else {
+        card.className = "resultCard fail";
+        title.textContent = "😢 失敗";
+        text.textContent = message + "\nもう一度挑戦してください";
+      }
+
+      screen.classList.add("show");
+    }
+
+    // ==================== Find Nearest Zone ====================
+    function findNearestZone(mx, my) {
+      let best = -1, minDist = THRESHOLD;
+      Object.entries(ZONES).forEach(([zId, zone]) => {
+        if (gameState.equipped[zId]) return;
+        const cx = zone.x + zone.width / 2;
+        const cy = zone.y + zone.height / 2;
+        const dist = Math.hypot(mx - cx, my - cy);
+        if (dist < minDist) {
+          minDist = dist;
+          best = parseInt(zId);
+        }
+      });
+      return best;
+    }
+
+    // ==================== Mouse Events ====================
+    document.addEventListener("mousedown", (e) => {
+      if (!e.target.classList.contains("outfit")) return;
+      if (e.target.classList.contains("equipped")) return;
+
+      gameState.draggedItem = {
+        id: e.target.id,
+        element: e.target,
+        startX: e.clientX,
+        startY: e.clientY
+      };
+      e.target.classList.add("dragging");
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!gameState.draggedItem) return;
+
+      const modelZone = document.getElementById("modelZone");
+      const rect = modelZone.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      
+      const nearest = findNearestZone(mx, my);
+      document.querySelectorAll(".wearZone").forEach((z, i) => {
+        z.classList.toggle("active", i === nearest);
+      });
+    });
+
+    document.addEventListener("mouseup", (e) => {
+      if (!gameState.draggedItem) return;
+
+      const modelZone = document.getElementById("modelZone");
+      const rect = modelZone.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      
+      const nearest = findNearestZone(mx, my);
+      document.querySelectorAll(".wearZone").forEach(z => z.classList.remove("active"));
+
+      if (nearest !== -1) {
+        equipOutfit(gameState.draggedItem.id, nearest);
+      }
+
+      gameState.draggedItem.element.classList.remove("dragging");
+      gameState.draggedItem = null;
+    });
+
+    // ==================== Game Loop ====================
+    function gameLoop() {
+      updateUI();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ==================== Audit Loop (500ms) ====================
+    setInterval(() => {
+      updateAuditScore();
+    }, 500);
+
+    // ==================== Startup ====================
+    initWardrobe();
+    updateDebug();
+    gameLoop();
+  </script>
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>神引き編成バトル</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            width: 1000px;
+            height: 800px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #titleScreen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            text-align: center;
+        }
+
+        #titleScreen h1 {
+            font-size: 64px;
+            margin-bottom: 20px;
+            color: #00ff88;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+
+        #titleScreen p {
+            font-size: 18px;
+            color: #aaa;
+            margin-bottom: 40px;
+        }
+
+        #startBtn {
+            padding: 20px 60px;
+            font-size: 24px;
+            background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        #startBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
+        }
+
+        #startBtn:active {
+            transform: scale(0.95);
+        }
+
+        #gameScreen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #gameHeader {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 15px;
+        }
+
+        #gameTitle {
+            font-size: 28px;
+            color: #00ff88;
+        }
+
+        .stat-box {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        #gameContent {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        #instructions {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: rgba(0, 255, 136, 0.1);
+            border-left: 3px solid #00ff88;
+        }
+
+        #ssrCollection {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .ssr-card {
+            aspect-ratio: 1;
+            background: linear-gradient(135deg, #ffb700 0%, #ff8500 100%);
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+            animation: cardAppear 0.4s ease-out;
+            box-shadow: 0 0 10px rgba(255, 183, 0, 0.5);
+            font-size: 12px;
+        }
+
+        @keyframes cardAppear {
+            from {
+                opacity: 0;
+                transform: scale(0.5) rotateZ(10deg);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) rotateZ(0deg);
+            }
+        }
+
+        #gachaButton {
+            width: 120px;
+            height: 80px;
+            background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+            border: 3px solid #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            color: #000;
+            font-weight: bold;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        #gachaButton:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0, 255, 136, 0.6);
+        }
+
+        #gachaButton:active {
+            transform: translateY(0px);
+        }
+
+        #winScreen, #failScreen {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            text-align: center;
+        }
+
+        .end-title {
+            font-size: 60px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .win-title {
+            color: #00ff88;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+        }
+
+        .fail-title {
+            color: #ff4444;
+            text-shadow: 0 0 30px rgba(255, 68, 68, 0.8);
+        }
+
+        .end-message {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #aaa;
+        }
+
+        .end-score {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #00ff88;
+        }
+
+        .end-score.fail {
+            color: #ff4444;
+        }
+
+        .replay-btn {
+            padding: 15px 50px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .replay-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
+        }
+
+        .replay-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tap-effect {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 255, 136, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: tapRipple 0.6s ease-out;
+        }
+
+        @keyframes tapRipple {
+            from {
+                width: 40px;
+                height: 40px;
+                opacity: 1;
+            }
+            to {
+                width: 120px;
+                height: 120px;
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- Title Screen -->
+        <div id="titleScreen">
+            <h1>神引き編成バトル</h1>
+            <p>SSRを3体集めて勝利を掴め！</p>
+            <button id="startBtn">ゲーム開始</button>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen">
+            <div id="gameHeader">
+                <div id="gameTitle">神引き編成バトル</div>
+                <div class="stat-box">
+                    <div class="stat-label">所持SSR</div>
+                    <div class="stat-value" id="ssrCount">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">残りガチャ</div>
+                    <div class="stat-value" id="remainingCount">10</div>
+                </div>
+            </div>
+
+            <div id="gameContent">
+                <div id="instructions">📢 ガチャボタンをタップして、SSRを3体集めよう！</div>
+                
+                <div id="ssrCollection"></div>
+
+                <button id="gachaButton">ガチャ！</button>
+            </div>
+        </div>
+
+        <!-- Win Screen -->
+        <div id="winScreen">
+            <div class="end-title win-title">🎉 勝利！</div>
+            <div class="end-message">SSR編成完了！最強パーティが完成した！</div>
+            <div class="end-score" id="winScore">0</div>
+            <button class="replay-btn" id="replayBtn">もう一度遊ぶ</button>
+        </div>
+
+        <!-- Fail Screen -->
+        <div id="failScreen">
+            <div class="end-title fail-title">🔥 失敗...</div>
+            <div class="end-message">ガチャ運が尽きた...今回は編成できなかった</div>
+            <div class="end-score fail" id="failScore">0</div>
+            <button class="replay-btn" id="replayBtn2">もう一度挑戦</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize game debug contract
+        window.__gameDebug = {
+            objects: [],
+            metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+            tapObject: function(id) {}
+        };
+
+        // Game state
+        const state = {
+            ownedSSRCount: 0,
+            remainingGacha: 10,
+            phase: "title",
+            ssrList: []
+        };
+
+        const DOM = {
+            container: document.getElementById('gameContainer'),
+            titleScreen: document.getElementById('titleScreen'),
+            gameScreen: document.getElementById('gameScreen'),
+            winScreen: document.getElementById('winScreen'),
+            failScreen: document.getElementById('failScreen'),
+            startBtn: document.getElementById('startBtn'),
+            gachaButton: document.getElementById('gachaButton'),
+            ssrCount: document.getElementById('ssrCount'),
+            remainingCount: document.getElementById('remainingCount'),
+            ssrCollection: document.getElementById('ssrCollection'),
+            winScore: document.getElementById('winScore'),
+            failScore: document.getElementById('failScore'),
+            replayBtn: document.getElementById('replayBtn'),
+            replayBtn2: document.getElementById('replayBtn2')
+        };
+
+        function updateDebug() {
+            if (state.phase === 'title') {
+                window.__gameDebug.objects = [{
+                    id: 'start',
+                    enabled: true,
+                    matchId: null
+                }];
+            } else {
+                window.__gameDebug.objects = [{
+                    id: 'gacha-btn',
+                    enabled: state.phase === 'playing',
+                    matchId: null,
+                    x: 800,
+                    y: 620,
+                    width: 120,
+                    height: 80
+                }];
+            }
+
+            window.__gameDebug.metrics = {
+                score: state.ownedSSRCount,
+                progress: state.ownedSSRCount / 3,
+                remaining: state.remainingGacha,
+                phase: state.phase
+            };
+        }
+
+        function performGacha() {
+            if (state.phase !== 'playing' || state.remainingGacha <= 0) return;
+
+            state.remainingGacha--;
+            const isSSR = Math.random() < 0.12;
+
+            if (isSSR) {
+                state.ownedSSRCount++;
+                state.ssrList.push(state.ownedSSRCount);
+                addSSRCard();
+            }
+
+            updateUI();
+
+            if (state.ownedSSRCount >= 3) {
+                transitionToWin();
+            } else if (state.remainingGacha <= 0) {
+                transitionToFail();
+            }
+
+            updateDebug();
+        }
+
+        function addSSRCard() {
+            const card = document.createElement('div');
+            card.className = 'ssr-card';
+            card.textContent = `SSR ${state.ownedSSRCount}`;
+            DOM.ssrCollection.appendChild(card);
+        }
+
+        function updateUI() {
+            DOM.ssrCount.textContent = state.ownedSSRCount;
+            DOM.remainingCount.textContent = state.remainingGacha;
+        }
+
+        function transitionToWin() {
+            state.phase = 'win';
+            DOM.gameScreen.style.display = 'none';
+            DOM.winScreen.style.display = 'flex';
+            DOM.winScore.textContent = `SSR: ${state.ownedSSRCount}体 / ガチャ回数: ${10 - state.remainingGacha}回`;
+            updateDebug();
+        }
+
+        function transitionToFail() {
+            state.phase = 'fail';
+            DOM.gameScreen.style.display = 'none';
+            DOM.failScreen.style.display = 'flex';
+            DOM.failScore.textContent = `SSR: ${state.ownedSSRCount}体 / ガチャ回数: ${10 - state.remainingGacha}回`;
+            updateDebug();
+        }
+
+        function startGame() {
+            state.phase = 'playing';
+            state.ownedSSRCount = 0;
+            state.remainingGacha = 10;
+            state.ssrList = [];
+
+            DOM.titleScreen.style.display = 'none';
+            DOM.gameScreen.style.display = 'flex';
+            DOM.winScreen.style.display = 'none';
+            DOM.failScreen.style.display = 'none';
+            DOM.ssrCollection.innerHTML = '';
+
+            updateUI();
+            updateDebug();
+        }
+
+        function replayGame() {
+            DOM.winScreen.style.display = 'none';
+            DOM.failScreen.style.display = 'none';
+            startGame();
+        }
+
+        window.__gameDebug.tapObject = function(id) {
+            if (id === 'start') {
+                startGame();
+                return;
+            }
+            if (id === 'gacha-btn' && state.phase === 'playing') {
+                performGacha();
+                showTapEffect(800, 620);
+                return;
+            }
+        };
+
+        function showTapEffect(x, y) {
+            const effect = document.createElement('div');
+            effect.className = 'tap-effect';
+            effect.style.left = (x - 20) + 'px';
+            effect.style.top = (y - 20) + 'px';
+            DOM.container.appendChild(effect);
+            setTimeout(() => effect.remove(), 600);
+        }
+
+        DOM.startBtn.addEventListener('click', startGame);
+        DOM.gachaButton.addEventListener('click', () => {
+            if (state.phase === 'playing') {
+                performGacha();
+                const rect = DOM.gachaButton.getBoundingClientRect();
+                const containerRect = DOM.container.getBoundingClientRect();
+                showTapEffect(rect.left - containerRect.left + 60, rect.top - containerRect.top + 40);
+            }
+        });
+        DOM.replayBtn.addEventListener('click', replayGame);
+        DOM.replayBtn2.addEventListener('click', replayGame);
+
+        document.addEventListener('mousedown', (e) => {
+            if (state.phase !== 'playing') return;
+            const rect = DOM.gachaButton.getBoundingClientRect();
+            const containerRect = DOM.container.getBoundingClientRect();
+            const x = e.clientX - containerRect.left;
+            const y = e.clientY - containerRect.top;
+            const btnLeft = rect.left - containerRect.left;
+            const btnTop = rect.top - containerRect.top;
+            const btnRight = rect.right - containerRect.left;
+            const btnBottom = rect.bottom - containerRect.top;
+
+            if (x >= btnLeft && x <= btnRight && y >= btnTop && y <= btnBottom) {
+                performGacha();
+                showTapEffect(x, y);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (state.phase === 'title') {
+                const rect = DOM.startBtn.getBoundingClientRect();
+                if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                    e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    // Already handled by addEventListener above
+                }
+            }
+        });
+
+        updateDebug();
+    </script>
+</body>
+</html>

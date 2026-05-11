@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鍵穴探偵</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: #2a2a3e;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        #uiContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        #instructionText {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #88ff88;
+            font-size: 13px;
+            line-height: 1.5;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(136, 255, 136, 0.5);
+        }
+        #timerDisplay {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffaa00;
+            text-shadow: 0 0 8px rgba(255, 170, 0, 0.5);
+        }
+        #scoreDisplay {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #88ffff;
+            text-shadow: 0 0 8px rgba(136, 255, 255, 0.5);
+        }
+        #timerWarning {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            font-size: 14px;
+            color: #ff6666;
+            display: none;
+            text-shadow: 0 0 8px rgba(255, 102, 102, 0.5);
+        }
+        #resultScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 1000;
+            pointer-events: all;
+        }
+        #resultScreen.show {
+            display: flex;
+        }
+        .result-content {
+            text-align: center;
+            animation: scaleIn 0.5s ease-out;
+        }
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        .result-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            animation: pulse 1s ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .result-stats {
+            font-size: 22px;
+            margin: 20px 0;
+            line-height: 2;
+            color: #88ff88;
+        }
+        .result-rank {
+            font-size: 44px;
+            font-weight: bold;
+            margin: 40px 0;
+            color: #ffaa00;
+            text-shadow: 0 0 20px rgba(255, 170, 0, 0.7);
+        }
+        .rank-s { color: #ffff00; text-shadow: 0 0 20px rgba(255, 255, 0, 0.7); }
+        .rank-a { color: #ff8800; text-shadow: 0 0 20px rgba(255, 136, 0, 0.7); }
+        .rank-b { color: #88ff88; text-shadow: 0 0 20px rgba(136, 255, 136, 0.7); }
+        .rank-c { color: #8888ff; text-shadow: 0 0 20px rgba(136, 136, 255, 0.7); }
+        .rank-e { color: #ff6666; text-shadow: 0 0 20px rgba(255, 102, 102, 0.7); }
+        .high-score-badge {
+            font-size: 18px;
+            color: #ffff00;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        .retry-button {
+            margin-top: 40px;
+            padding: 15px 50px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 2px solid #88ff88;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .retry-button:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            box-shadow: 0 0 15px rgba(136, 255, 136, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="uiContainer">
+            <div id="instructionText">
+                🔍 マウスを動かして隠れた鍵穴を探す<br>
+                見つかったら クリック！
+            </div>
+            <div id="timerDisplay">60秒</div>
+            <div id="scoreDisplay">発見: 0/5</div>
+            <div id="timerWarning">⚠️ 時間切れ間近！</div>
+            <div id="resultScreen">
+                <div class="result-content">
+                    <div class="result-title" id="resultTitle">🎉 クリア</div>
+                    <div class="result-stats">
+                        発見数: <span id="resultSolved">0</span>/5<br>
+                        クリア時間: <span id="resultTime">0</span>秒
+                    </div>
+                    <div class="result-rank" id="resultRank">C ランク</div>
+                    <div id="highScoreBadge"></div>
+                    <button class="retry-button" onclick="location.reload()">🔄 もう一度プレイ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('gameContainer');
+
+        // キャンバスサイズ設定
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // ゲーム状態
+        let gameState = {
+            solved: 0,
+            timer: 60,
+            gameRunning: true,
+            gameWon: false,
+            gameLost: false,
+            startTime: Date.now(),
+            lastClickTime: 0,
+            particles: [],
+            climaxActive: false
+        };
+
+        // スポット（鍵穴）クラス
+        class Keyhole {
+            constructor(x, y, size, id) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.id = id;
+                this.discovered = false;
+                this.hoverIntensity = 0;
+                this.revealProgress = 0;
+                this.baseHue = Math.random() * 360;
+            }
+
+            update(mouseX, mouseY) {
+                const dx = this.x - mouseX;
+                const dy = this.y - mouseY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const detectionRadius = this.size * 2.5;
+
+                if (distance < detectionRadius && !this.discovered) {
+                    this.hoverIntensity = Math.min(1, this.hoverIntensity + 0.08);
+                } else {
+                    this.hoverIntensity = Math.max(0, this.hoverIntensity - 0.05);
+                }
+
+                if (this.discovered) {
+                    this.revealProgress = Math.min(1, this.revealProgress + 0.06);
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+
+                if (!this.discovered) {
+                    // 未発見時：薄い、謎めいた表示
+                    const baseAlpha = 0.15 + this.hoverIntensity * 0.35;
+                    
+                    // 背景円
+                    ctx.fillStyle = `hsla(${this.baseHue}, 70%, 40%, ${baseAlpha})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // ホバー時のグロー
+                    if (this.hoverIntensity > 0.3) {
+                        ctx.shadowColor = `hsla(${this.baseHue}, 100%, 50%, ${this.hoverIntensity})`;
+                        ctx.shadowBlur = 15 * this.hoverIntensity;
+                        ctx.strokeStyle = `hsla(${this.baseHue}, 100%, 60%, ${this.hoverIntensity})`;
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.stroke();
+
+                        // 鍵穴のシルエット（ホバー時にのみ見える）
+                        const silhouetteAlpha = 0.4 * this.hoverIntensity;
+                        ctx.fillStyle = `rgba(0, 0, 0, ${silhouetteAlpha})`;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size * 0.7, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // 内側の光
+                        ctx.fillStyle = `hsla(${this.baseHue}, 100%, 70%, ${0.3 * this.hoverIntensity})`;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                } else {
+                    // 発見後：完全に見える、光が加わる
+                    ctx.fillStyle = `hsla(${this.baseHue}, 100%, 50%, ${0.8 + 0.2 * Math.sin(Date.now() * 0.005)})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.shadowColor = `hsla(${this.baseHue}, 100%, 50%, 0.8)`;
+                    ctx.shadowBlur = 25;
+                    ctx.strokeStyle = `hsl(${this.baseHue}, 100%, 70%)`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // 鍵穴の輪郭
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // チェックマーク
+                    const checkScale = 0.4;
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - this.size * checkScale, this.y);
+                    ctx.lineTo(this.x - this.size * checkScale * 0.3, this.y + this.size * checkScale * 0.5);
+                    ctx.lineTo(this.x + this.size * checkScale * 0.5, this.y - this.size * checkScale * 0.3);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+
+            isClicked(mouseX, mouseY) {
+                const dx = this.x - mouseX;
+                const dy = this.y - mouseY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < this.size && !this.discovered;
+            }
+        }
+
+        // パーティクルクラス
+        class Particle {
+            constructor(x, y, hue) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = (Math.random() - 0.5) * 10 - 3;
+                this.life = 1;
+                this.size = Math.random() * 6 + 3;
+                this.hue = hue;
+                this.rotation = Math.random() * Math.PI * 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.3;
+                this.life -= 0.015;
+                this.rotation += 0.1;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = `hsl(${this.hue}, 100%, 50%)`;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 鍵穴を生成
+        const keyholes = [];
+        const positions = [
+            { x: 200, y: 150, size: 32 },
+            { x: 650, y: 200, size: 38 },
+            { x: 400, y: 380, size: 28 },
+            { x: 150, y: 480, size: 35 },
+            { x: 700, y: 450, size: 33 }
+        ];
+
+        for (let i = 0; i < positions.length; i++) {
+            const pos = positions[i];
+            keyholes.push(new Keyhole(pos.x, pos.y, pos.size, i));
+        }
+
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // マウスイベント
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            mouseX = -9999;
+            mouseY = -9999;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.gameRunning || gameState.climaxActive) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            for (let keyhole of keyholes) {
+                if (keyhole.isClicked(clickX, clickY)) {
+                    keyhole.discovered = true;
+                    gameState.solved++;
+                    gameState.lastClickTime = Date.now();
+
+                    // パーティクル生成
+                    for (let i = 0; i < 16; i++) {
+                        gameState.particles.push(new Particle(keyhole.x, keyhole.y, keyhole.baseHue));
+                    }
+
+                    // 5個発見でクリア
+                    if (gameState.solved === 5) {
+                        gameState.gameRunning = false;
+                        gameState.gameWon = true;
+                        gameState.climaxActive = true;
+                    }
+                    break;
+                }
+            }
+        });
+
+        // 結果画面表示関数
+        function showResultScreen() {
+            const resultScreen = document.getElementById('resultScreen');
+            const timeTaken = 60 - gameState.timer;
+            let rank = 'E';
+            let rankClass = 'rank-e';
+
+            document.getElementById('resultSolved').textContent = gameState.solved;
+            document.getElementById('resultTime').textContent = timeTaken;
+
+            if (gameState.gameWon) {
+                document.getElementById('resultTitle').textContent = '🎉 全て発見！';
+                
+                if (timeTaken < 30) {
+                    rank = 'S';
+                    rankClass = 'rank-s';
+                } else if (timeTaken < 40) {
+                    rank = 'A';
+                    rankClass = 'rank-a';
+                } else if (timeTaken < 50) {
+                    rank = 'B';
+                    rankClass = 'rank-b';
+                } else {
+                    rank = 'C';
+                    rankClass = 'rank-c';
+                }
+            } else {
+                document.getElementById('resultTitle').textContent = '⏰ 時間切れ';
+            }
+
+            const resultRankEl = document.getElementById('resultRank');
+            resultRankEl.textContent = rank + ' ランク';
+            resultRankEl.className = 'result-rank ' + rankClass;
+
+            // ハイスコア判定
+            const prevBest = parseInt(localStorage.getItem('keyhole_best_time') || '9999');
+            const badgeEl = document.getElementById('highScoreBadge');
+            badgeEl.textContent = '';
+
+            if (gameState.gameWon && timeTaken < prevBest) {
+                badgeEl.textContent = '✨ 新記録！';
+                localStorage.setItem('keyhole_best_time', timeTaken);
+            } else if (gameState.gameWon) {
+                badgeEl.textContent = `前回最速: ${prevBest}秒`;
+            }
+
+            resultScreen.classList.add('show');
+        }
+
+        // ゲームループ
+        function gameLoop() {
+            // 時間更新
+            if (gameState.gameRunning) {
+                gameState.timer = Math.max(0, 60 - Math.floor((Date.now() - gameState.startTime) / 1000));
+
+                if (gameState.timer === 0 && gameState.solved < 5) {
+                    gameState.gameRunning = false;
+                    gameState.gameLost = true;
+                }
+
+                // 時間切れ警告
+                document.getElementById('timerWarning').style.display = gameState.timer < 10 ? 'block' : 'none';
+            }
+
+            // キャンバスクリア
+            ctx.fillStyle = '#2a2a3e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 背景パターン（探索感を演出）
+            ctx.strokeStyle = 'rgba(100, 100, 150, 0.08)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // 鍵穴更新と描画
+            for (let keyhole of keyholes) {
+                keyhole.update(mouseX, mouseY);
+                keyhole.draw(ctx);
+            }
+
+            // パーティクル更新と描画
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                gameState.particles[i].update();
+                gameState.particles[i].draw(ctx);
+                if (gameState.particles[i].life <= 0) {
+                    gameState.particles.splice(i, 1);
+                }
+            }
+
+            // クライマックス演出（5個発見時）
+            if (gameState.climaxActive && gameState.solved === 5) {
+                const timeSinceWin = Date.now() - gameState.lastClickTime;
+                const climaxDuration = 2000;
+
+                if (timeSinceWin < climaxDuration) {
+                    const progress = timeSinceWin / climaxDuration;
+                    
+                    // フラッシュエフェクト
+                    const flashAlpha = Math.max(0, Math.sin(progress * Math.PI * 3) * 0.6);
+                    ctx.fillStyle = `rgba(255, 215, 0, ${flashAlpha})`;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // クライマックステキスト
+                    const textAlpha = Math.sin(progress * Math.PI) * 0.9;
+                    ctx.save();
+                    ctx.globalAlpha = textAlpha;
+                    ctx.fillStyle = '#ffff00';
+                    ctx.font = 'bold 70px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+                    ctx.shadowBlur = 30;
+                    ctx.fillText('🔓', canvas.width / 2, canvas.height / 2 - 40);
+                    ctx.font = 'bold 40px Arial';
+                    ctx.fillText('全ての鍵穴を発見した！', canvas.width / 2, canvas.height / 2 + 60);
+                    ctx.restore();
+
+                    // 大量パーティクル追加
+                    if (timeSinceWin % 30 < 3) {
+                        for (let i = 0; i < 8; i++) {
+                            gameState.particles.push(
+                                new Particle(
+                                    Math.random() * canvas.width,
+                                    Math.random() * canvas.height,
+                                    Math.random() * 360
+                                )
+                            );
+                        }
+                    }
+                } else {
+                    gameState.climaxActive = false;
+                    showResultScreen();
+                }
+            }
+
+            // ゲームオーバー処理
+            if (gameState.gameLost && !gameState.climaxActive) {
+                setTimeout(() => showResultScreen(), 200);
+                gameState.gameLost = false;
+            }
+
+            // UI更新
+            document.getElementById('timerDisplay').textContent = gameState.timer + '秒';
+            document.getElementById('scoreDisplay').textContent = `発見: ${gameState.solved}/5`;
+
+            if (gameState.gameRunning || gameState.climaxActive) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // ゲーム開始
+        gameLoop();
+    </script>
+</body>
+</html>

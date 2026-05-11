@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>こもり師</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+    
+    .game-container {
+      width: 375px;
+      height: 812px;
+      background: linear-gradient(180deg, #1a1f2e 0%, #0f1419 100%);
+      border-radius: 40px;
+      border: 10px solid #000;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    }
+    
+    .game-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      color: #fff;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #a78bfa;
+      margin-bottom: 8px;
+    }
+    
+    .goal {
+      font-size: 11px;
+      color: #999;
+      opacity: 0.8;
+    }
+    
+    .meter-section {
+      margin-bottom: 15px;
+    }
+    
+    .meter-label {
+      font-size: 12px;
+      color: #a78bfa;
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .meter-bar {
+      width: 100%;
+      height: 24px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #a78bfa;
+    }
+    
+    .meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #a78bfa 0%, #c4b5fd 100%);
+      transition: width 0.1s linear;
+      border-radius: 12px;
+    }
+    
+    .noise-meter {
+      border-color: #f87171;
+    }
+    
+    .noise-fill {
+      background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+    }
+    
+    .timer {
+      text-align: center;
+      font-size: 14px;
+      color: #fbbf24;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    
+    .status-box {
+      background: rgba(0,0,0,0.4);
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 15px;
+      font-size: 12px;
+      color: #ddd;
+      border: 1px solid rgba(167,139,250,0.3);
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .status-success {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #86efac;
+    }
+    
+    .status-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
+    }
+    
+    .sound-icons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .sound-btn {
+      aspect-ratio: 1;
+      background: rgba(167,139,250,0.2);
+      border: 2px solid #a78bfa;
+      border-radius: 12px;
+      color: #ddd;
+      font-size: 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    
+    .sound-btn:hover {
+      background: rgba(167,139,250,0.3);
+      transform: scale(1.05);
+    }
+    
+    .sound-btn.active {
+      background: rgba(167,139,250,0.8);
+      border-color: #e9d5ff;
+      box-shadow: 0 0 10px rgba(167,139,250,0.6);
+    }
+    
+    .sound-btn.active::after {
+      content: '';
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: #fff;
+      border-radius: 50%;
+      bottom: 4px;
+      left: 4px;
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    
+    .slider-section {
+      margin-bottom: 15px;
+    }
+    
+    .slider-label {
+      font-size: 12px;
+      color: #fbbf24;
+      margin-bottom: 5px;
+    }
+    
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      outline: none;
+      border: 1px solid #fbbf24;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fbbf24;
+      cursor: pointer;
+    }
+    
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fbbf24;
+      cursor: pointer;
+      border: none;
+    }
+    
+    .current-sound {
+      text-align: center;
+      font-size: 11px;
+      color: #999;
+      padding: 8px;
+      background: rgba(0,0,0,0.4);
+      border-radius: 6px;
+      margin-bottom: 10px;
+      min-height: 20px;
+    }
+    
+    .ending-screen {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(180deg, rgba(15,20,25,0.95) 0%, rgba(10,10,15,0.95) 100%);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 100;
+    }
+    
+    .ending-screen.show {
+      display: flex;
+    }
+    
+    .ending-title {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    
+    .ending-title.win {
+      color: #86efac;
+    }
+    
+    .ending-title.lose {
+      color: #fca5a5;
+    }
+    
+    .ending-emoji {
+      font-size: 60px;
+      margin-bottom: 15px;
+    }
+    
+    .score-card {
+      background: rgba(167,139,250,0.1);
+      border: 1px solid #a78bfa;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      text-align: center;
+      width: 100%;
+    }
+    
+    .score-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 12px;
+      color: #ddd;
+      border-bottom: 1px solid rgba(167,139,250,0.2);
+    }
+    
+    .score-item:last-child {
+      border-bottom: none;
+    }
+    
+    .score-value {
+      font-weight: bold;
+      color: #c4b5fd;
+    }
+    
+    .retry-btn {
+      background: linear-gradient(135deg, #a78bfa 0%, #c4b5fd 100%);
+      border: none;
+      color: #000;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      max-width: 250px;
+    }
+    
+    .retry-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(167,139,250,0.5);
+    }
+    
+    .deco-client {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      font-size: 40px;
+      opacity: 0.3;
+      transition: opacity 0.3s;
+    }
+    
+    .deco-client.sleeping {
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="game-screen" id="gameScreen">
+      <div class="header">
+        <div class="title">こもり師</div>
+        <div class="goal">目標: 依頼人を深く眠らせる（メーター≥80を30秒維持）</div>
+      </div>
+      
+      <div class="meter-section">
+        <div class="meter-label">
+          <span>眠りメーター</span>
+          <span id="meterValue">0</span>
+        </div>
+        <div class="meter-bar">
+          <div class="meter-fill" id="meterFill"></div>
+        </div>
+      </div>
+      
+      <div class="meter-section">
+        <div class="meter-label">
+          <span>ノイズ値</span>
+          <span id="noiseValue">0</span>
+        </div>
+        <div class="meter-bar noise-meter">
+          <div class="meter-fill noise-fill" id="noiseFill"></div>
+        </div>
+      </div>
+      
+      <div class="timer" id="timer">経過時間: 0秒</div>
+      
+      <div class="status-box" id="statusBox">音を選択してください</div>
+      
+      <div class="current-sound" id="currentSound">選択音: なし</div>
+      
+      <div class="sound-icons" id="soundIcons"></div>
+      
+      <div class="slider-section">
+        <div class="slider-label">音量: <span id="volumeValue">100</span>%</div>
+        <input type="range" id="volumeSlider" min="0" max="100" value="100">
+      </div>
+      
+      <div class="deco-client" id="decoClient">😴</div>
+      
+      <div class="ending-screen" id="endingScreen">
+        <div class="ending-emoji" id="endingEmoji">🎉</div>
+        <div class="ending-title" id="endingTitle">ミッション完了</div>
+        <div class="score-card">
+          <div class="score-item">
+            <span>最高眠りメーター</span>
+            <span class="score-value" id="finalMaxMeter">0</span>
+          </div>
+          <div class="score-item">
+            <span>30秒維持達成</span>
+            <span class="score-value" id="finalMaintainTime">未達成</span>
+          </div>
+          <div class="score-item">
+            <span>総プレイ時間</span>
+            <span class="score-value" id="finalPlayTime">0秒</span>
+          </div>
+          <div class="score-item">
+            <span>使用音数</span>
+            <span class="score-value" id="finalSoundCount">0</span>
+          </div>
+        </div>
+        <button class="retry-btn" id="retryBtn">もう一度挑戦</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ゲーム状態
+    const gameState = {
+      meterValue: 0,
+      noiseValue: 0,
+      elapsedTime: 0,
+      gameActive: true,
+      selectedSound: null,
+      volume: 100,
+      maintained30sCount: 0,
+      maxMeter: 0,
+      usedSounds: new Set(),
+      lastFrameTime: Date.now()
+    };
+
+    // 活性音定義（相性値付き）
+    const sounds = [
+      { id: 'rain', name: '雨音', emoji: '🌧️', affinity: 0.8 },
+      { id: 'waves', name: '波音', emoji: '🌊', affinity: 0.85 },
+      { id: 'forest', name: '森音', emoji: '🌲', affinity: 0.75 },
+      { id: 'wind', name: '風音', emoji: '💨', affinity: 0.7 },
+      { id: 'stream', name: '川音', emoji: '💧', affinity: 0.8 },
+      { id: 'bonfire', name: '焚火音', emoji: '🔥', affinity: 0.72 }
+    ];
+
+    // オシレータと音声コンテキスト
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    let currentOscillator = null;
+    let currentGain = null;
+
+    // UI要素
+    const meterFill = document.getElementById('meterFill');
+    const meterValue = document.getElementById('meterValue');
+    const noiseFill = document.getElementById('noiseFill');
+    const noiseValue = document.getElementById('noiseValue');
+    const timerEl = document.getElementById('timer');
+    const statusBox = document.getElementById('statusBox');
+    const currentSoundEl = document.getElementById('currentSound');
+    const soundIcons = document.getElementById('soundIcons');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeValue = document.getElementById('volumeValue');
+    const endingScreen = document.getElementById('endingScreen');
+    const decoClient = document.getElementById('decoClient');
+    const retryBtn = document.getElementById('retryBtn');
+
+    // 音声初期化
+    function initializeSoundButtons() {
+      soundIcons.innerHTML = '';
+      sounds.forEach(sound => {
+        const btn = document.createElement('button');
+        btn.className = 'sound-btn';
+        btn.textContent = sound.emoji;
+        btn.onclick = () => selectSound(sound);
+        btn.id = `btn-${sound.id}`;
+        soundIcons.appendChild(btn);
+      });
+    }
+
+    // 音選択
+    function selectSound(sound) {
+      if (!gameState.gameActive) return;
+
+      // 前の音を停止
+      if (currentOscillator) {
+        currentOscillator.stop();
+        currentGain.disconnect();
+      }
+
+      // 新しい音を再生
+      gameState.selectedSound = sound;
+      gameState.usedSounds.add(sound.id);
+
+      // 簡易的な音声生成（周波数の変動でそれぞれ異なる音を表現）
+      const now = audioContext.currentTime;
+      currentOscillator = audioContext.createOscillator();
+      currentGain = audioContext.createGain();
+
+      const freq = { rain: 120, waves: 150, forest: 100, wind: 80, stream: 140, bonfire: 110 }[sound.id];
+      currentOscillator.frequency.value = freq;
+      currentOscillator.type = 'sine';
+
+      // 音量制御
+      const volumeRatio = gameState.volume / 100;
+      currentGain.gain.value = 0.05 * volumeRatio;
+
+      currentOscillator.connect(currentGain);
+      currentGain.connect(audioContext.destination);
+      currentOscillator.start();
+
+      // UI更新
+      updateSoundButtonUI();
+      currentSoundEl.textContent = `選択音: ${sound.name} (相性: ${(sound.affinity * 100).toFixed(0)}%)`;
+    }
+
+    // サウンドボタンUI更新
+    function updateSoundButtonUI() {
+      sounds.forEach(sound => {
+        const btn = document.getElementById(`btn-${sound.id}`);
+        btn.classList.toggle('active', gameState.selectedSound?.id === sound.id);
+      });
+    }
+
+    // ボリュームコントロール
+    volumeSlider.addEventListener('input', (e) => {
+      gameState.volume = parseInt(e.target.value);
+      volumeValue.textContent = gameState.volume;
+
+      if (currentGain) {
+        const volumeRatio = gameState.volume / 100;
+        currentGain.gain.value = 0.05 * volumeRatio;
+      }
+    });
+
+    // メイン更新ループ
+    function update() {
+      if (!gameState.gameActive) return;
+
+      const now = Date.now();
+      const deltaTime = (now - gameState.lastFrameTime) / 1000;
+      gameState.lastFrameTime = now;
+
+      gameState.elapsedTime += deltaTime;
+
+      // ノイズ値自然減衰
+      gameState.noiseValue = Math.max(0, gameState.noiseValue - deltaTime * 8);
+
+      // メーター計算
+      let meterChange = 0;
+      if (gameState.selectedSound) {
+        const affinity = gameState.selectedSound.affinity;
+        const volumeBoost = gameState.volume / 100;
+        meterChange = affinity * volumeBoost * 8 * deltaTime; // 相性値×音量×増減係数
+      }
+
+      const noisePenalty = (gameState.noiseValue / 100) * 5 * deltaTime;
+      gameState.meterValue += meterChange - noisePenalty;
+      gameState.meterValue = Math.max(0, Math.min(100, gameState.meterValue));
+
+      // 最高メーター記録
+      gameState.maxMeter = Math.max(gameState.maxMeter, gameState.meterValue);
+
+      // 30秒維持カウント
+      if (gameState.meterValue >= 80) {
+        gameState.maintained30sCount += deltaTime;
+      } else {
+        gameState.maintained30sCount = 0;
+      }
+
+      // 敗北判定: ノイズ>50
+      if (gameState.noiseValue > 50) {
+        endGame(false);
+        return;
+      }
+
+      // 勝利判定: 30秒維持
+      if (gameState.maintained30sCount >= 30) {
+        endGame(true);
+        return;
+      }
+
+      // UI更新
+      updateUI();
+
+      requestAnimationFrame(update);
+    }
+
+    // UI更新
+    function updateUI() {
+      meterValue.textContent = Math.floor(gameState.meterValue);
+      meterFill.style.width = `${gameState.meterValue}%`;
+
+      noiseValue.textContent = Math.floor(gameState.noiseValue);
+      noiseFill.style.width = `${gameState.noiseValue}%`;
+
+      timerEl.textContent = `経過時間: ${Math.floor(gameState.elapsedTime)}秒`;
+
+      // ステータス更新
+      if (gameState.maintained30sCount > 0) {
+        statusBox.className = 'status-box status-success';
+        statusBox.textContent = `深い眠り継続中: ${gameState.maintained30sCount.toFixed(1)}秒 / 30秒`;
+      } else if (gameState.noiseValue > 40) {
+        statusBox.className = 'status-box status-danger';
+        statusBox.textContent = `ノイズが高い! (${Math.floor(gameState.noiseValue)})`;
+      } else if (gameState.meterValue < 40) {
+        statusBox.className = 'status-box';
+        statusBox.textContent = 'メーターをもっと上げてください';
+      } else {
+        statusBox.className = 'status-box status-success';
+        statusBox.textContent = '良好な状態です';
+      }
+
+      // クライアントデコレーション
+      if (gameState.meterValue >= 60) {
+        decoClient.textContent = '😴';
+        decoClient.classList.add('sleeping');
+      } else if (gameState.meterValue >= 40) {
+        decoClient.textContent = '😐';
+        decoClient.classList.remove('sleeping');
+      } else {
+        decoClient.textContent = '👀';
+        decoClient.classList.remove('sleeping');
+      }
+    }
+
+    // ゲーム終了
+    function endGame(isWin) {
+      gameState.gameActive = false;
+      if (currentOscillator) {
+        currentOscillator.stop();
+        currentGain.disconnect();
+      }
+
+      // エンディング表示
+      const endingTitle = document.getElementById('endingTitle');
+      const endingEmoji = document.getElementById('endingEmoji');
+
+      if (isWin) {
+        endingTitle.className = 'ending-title win';
+        endingTitle.textContent = '深く眠った。依頼完了';
+        endingEmoji.textContent = '😴';
+      } else {
+        endingTitle.className = 'ending-title lose';
+        endingTitle.textContent = '依頼人が目を覚ました。ミッション失敗';
+        endingEmoji.textContent = '😵';
+      }
+
+      // スコアカード更新
+      document.getElementById('finalMaxMeter').textContent = Math.floor(gameState.maxMeter);
+      document.getElementById('finalMaintainTime').textContent = isWin ? `${gameState.maintained30sCount.toFixed(1)}秒` : '未達成';
+      document.getElementById('finalPlayTime').textContent = `${Math.floor(gameState.elapsedTime)}秒`;
+      document.getElementById('finalSoundCount').textContent = gameState.usedSounds.size;
+
+      endingScreen.classList.add('show');
+    }
+
+    // リトライ
+    retryBtn.onclick = () => {
+      // 状態リセット
+      gameState.meterValue = 0;
+      gameState.noiseValue = 0;
+      gameState.elapsedTime = 0;
+      gameState.gameActive = true;
+      gameState.selectedSound = null;
+      gameState.maintained30sCount = 0;
+      gameState.maxMeter = 0;
+      gameState.usedSounds.clear();
+      gameState.lastFrameTime = Date.now();
+
+      endingScreen.classList.remove('show');
+      updateSoundButtonUI();
+      currentSoundEl.textContent = '選択音: なし';
+      statusBox.className = 'status-box';
+      statusBox.textContent = '音を選択してください';
+
+      update();
+    };
+
+    // debug contract
+    window.__gameDebug = {
+      metrics: { meterValue: 0, noiseValue: 0, elapsedTime: 0, phase: 'playing' },
+      advanceTime: function(seconds) {
+        if (!gameState.gameActive) return;
+
+        for (let i = 0; i < seconds * 60; i++) {
+          // ノイズ減衰
+          gameState.noiseValue = Math.max(0, gameState.noiseValue - (1/60) * 8);
+
+          // メーター計算
+          let meterChange = 0;
+          if (gameState.selectedSound) {
+            const affinity = gameState.selectedSound.affinity;
+            const volumeBoost = gameState.volume / 100;
+            meterChange = affinity * volumeBoost * 8 * (1/60);
+          }
+
+          const noisePenalty = (gameState.noiseValue / 100) * 5 * (1/60);
+          gameState.meterValue += meterChange - noisePenalty;
+          gameState.meterValue = Math.max(0, Math.min(100, gameState.meterValue));
+
+          gameState.maxMeter = Math.max(gameState.maxMeter, gameState.meterValue);
+
+          if (gameState.meterValue >= 80) {
+            gameState.maintained30sCount += 1/60;
+          } else {
+            gameState.maintained30sCount = 0;
+          }
+
+          gameState.elapsedTime += 1/60;
+
+          if (gameState.noiseValue > 50 || gameState.maintained30sCount >= 30) {
+            break;
+          }
+        }
+
+        updateDebug();
+      }
+    };
+
+    function updateDebug() {
+      window.__gameDebug.metrics = {
+        meterValue: Math.floor(gameState.meterValue),
+        noiseValue: Math.floor(gameState.noiseValue),
+        elapsedTime: Math.floor(gameState.elapsedTime),
+        maintained30sCount: Math.floor(gameState.maintained30sCount),
+        phase: gameState.gameActive ? 'playing' : 'ended'
+      };
+    }
+
+    // 初期化
+    initializeSoundButtons();
+    update();
+  </script>
+</body>
+</html>

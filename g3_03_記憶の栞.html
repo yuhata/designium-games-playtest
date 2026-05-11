@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>記憶の栞</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Georgia', serif;
+            overflow: hidden;
+        }
+        
+        #gameContainer {
+            width: 100%;
+            height: 100vh;
+            max-width: 375px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            color: #2d3436;
+            transition: background 0.8s ease;
+            position: relative;
+        }
+        
+        .screen {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .screen.active {
+            display: flex;
+        }
+        
+        .titleScreen {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .titleScreen h1 {
+            font-size: 36px;
+            margin-bottom: 30px;
+        }
+        
+        .goalText {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            line-height: 1.8;
+            font-size: 14px;
+        }
+        
+        .startBtn {
+            padding: 15px 40px;
+            background: #6c5ce7;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Georgia', serif;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .startBtn:hover {
+            background: #5f3dc4;
+            transform: scale(1.05);
+        }
+        
+        .gameScreen {
+            justify-content: flex-start;
+            overflow-y: auto;
+            gap: 15px;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .characterArea {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 120px;
+            height: 140px;
+            transition: transform 0.2s, opacity 0.4s;
+            margin-bottom: 10px;
+        }
+        
+        .characterArea.shake {
+            animation: shake 0.3s;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+        
+        .statusBar {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .affectionLabel {
+            font-size: 12px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .affectionBar {
+            width: 100%;
+            height: 18px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 9px;
+            overflow: hidden;
+            border: 1px solid #2d3436;
+        }
+        
+        .affectionFill {
+            height: 100%;
+            background: linear-gradient(90deg, #e17055, #fdcb6e);
+            width: 50%;
+            transition: width 0.4s ease;
+        }
+        
+        .turnCounter {
+            font-size: 11px;
+            text-align: center;
+            color: #636e72;
+            margin-top: 6px;
+        }
+        
+        .storyPanel {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 16px;
+            border-radius: 10px;
+            min-height: 100px;
+            line-height: 1.7;
+            font-size: 14px;
+            text-align: center;
+            border-left: 4px solid #e17055;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            flex-shrink: 0;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .choicesContainer {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: auto;
+        }
+        
+        .choiceBtn {
+            padding: 13px 16px;
+            background: rgba(255, 255, 255, 0.85);
+            border: 2px solid #2d3436;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Georgia', serif;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            color: #2d3436;
+            font-weight: 500;
+            text-align: left;
+        }
+        
+        .choiceBtn:hover {
+            background: rgba(255, 255, 255, 0.7);
+            border-color: #e17055;
+        }
+        
+        .choiceBtn:active {
+            transform: scale(0.98);
+        }
+        
+        .endingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(45, 52, 54, 0.98);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease;
+            z-index: 999;
+        }
+        
+        .endingScreen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .endingContent {
+            text-align: center;
+            color: white;
+        }
+        
+        .endingCharacter {
+            font-size: 140px;
+            margin-bottom: 25px;
+            animation: pop 0.6s ease-out;
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .endingText {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+        }
+        
+        .good-ending .endingText {
+            color: #fdcb6e;
+        }
+        
+        .bad-ending .endingText {
+            color: #74b9ff;
+        }
+        
+        .endingMessage {
+            font-size: 16px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .endingScore {
+            font-size: 18px;
+            margin-bottom: 30px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            display: inline-block;
+        }
+        
+        .restartBtn {
+            padding: 14px 40px;
+            background: #6c5ce7;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Georgia', serif;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            font-weight: bold;
+        }
+        
+        .restartBtn:hover {
+            background: #a29bfe;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- タイトル画面 -->
+        <div class="screen titleScreen active" id="titleScreen">
+            <h1>記憶の栞</h1>
+            <div class="goalText">
+                <strong>ゴール</strong><br>
+                懐かしい友人「栞」との再会で、好感度を高めよう！<br><br>
+                <strong>勝利条件</strong><br>
+                好感度を80以上にすれば<strong>GOOD ENDING</strong>へ！<br><br>
+                <strong>敗北条件</strong><br>
+                好感度が20未満に下がると<strong>BAD ENDING</strong>...<br><br>
+                選択肢をタップしてストーリーを進める。
+            </div>
+            <button class="startBtn" onclick="startGame()">ゲーム開始</button>
+        </div>
+        
+        <!-- ゲーム画面 -->
+        <div class="screen gameScreen" id="gameScreen">
+            <div class="title">記憶の栞</div>
+            <div class="characterArea" id="character">🧑</div>
+            <div class="statusBar">
+                <div class="affectionLabel">
+                    <span>好感度</span>
+                    <span id="affectionValue">50</span>
+                </div>
+                <div class="affectionBar">
+                    <div class="affectionFill" id="affectionFill"></div>
+                </div>
+                <div class="turnCounter">
+                    <span id="turnCount">1</span> / 8
+                </div>
+            </div>
+            <div class="storyPanel" id="storyText"></div>
+            <div class="choicesContainer" id="choicesContainer"></div>
+        </div>
+    </div>
+    
+    <div class="endingScreen" id="endingScreen">
+        <div class="endingContent">
+            <div class="endingCharacter" id="endingCharacter"></div>
+            <div class="endingText" id="endingText"></div>
+            <div class="endingMessage" id="endingMessage"></div>
+            <div class="endingScore" id="endingScore"></div>
+            <button class="restartBtn" onclick="location.reload()">もう一度プレイ</button>
+        </div>
+    </div>
+
+    <script>
+        const gameState = {
+            affection: 50,
+            turn: 0,
+            maxTurns: 8
+        };
+        
+        const scenes = {
+            start: {
+                text: "ふっと目を開くと、懐かしい図書館の景色が映った。<br>あなたの前に立つのは、かつての友人・栞。<br>「久しぶりだね。覚えてた？」",
+                character: "🧑‍🦰",
+                choices: [
+                    { text: "「勿論だよ。毎日思い出してた」と笑顔で返す", affectionDelta: 15, nextScene: "scene1a" },
+                    { text: "「あ、ああ...」と曖昧に答える", affectionDelta: 0, nextScene: "scene1b" },
+                    { text: "「誰だったっけ」と素知らぬ顔をする", affectionDelta: -20, nextScene: "scene1c" }
+                ]
+            },
+            scene1a: {
+                text: "栞の表情が明るくなった。<br>「そっか。あの日のことを覚えていてくれるなんて...」<br>その瞳に嬉しさが映っている。",
+                character: "😊",
+                choices: [
+                    { text: "「あの時の約束、覚えてる？」と聞く", affectionDelta: 18, nextScene: "scene2a" },
+                    { text: "「その時のことはまた今度にしようか」と話題を変える", affectionDelta: -10, nextScene: "scene2b" }
+                ]
+            },
+            scene1b: {
+                text: "栞が少し寂しそうに笑った。<br>「そっか。まあ、色々あったもんね。」<br>一瞬、何かを諦めたような表情が浮かぶ。",
+                character: "😌",
+                choices: [
+                    { text: "「ごめん、実は毎日思い出してた」と本当のことを言う", affectionDelta: 15, nextScene: "scene2a" },
+                    { text: "「この図書館、どうなった？」と図書館について聞く", affectionDelta: 5, nextScene: "scene2b" }
+                ]
+            },
+            scene1c: {
+                text: "栞の目が曇った。<br>「...そっか。もう、何もかも忘れてるんだ。」<br>その表情には深い悲しみがある。",
+                character: "😢",
+                choices: [
+                    { text: "「ごめん、冗談だった。本当は覚えてる」と急いで謝る", affectionDelta: 12, nextScene: "scene2a" },
+                    { text: "「どうでもいいじゃん」と言い放つ", affectionDelta: -18, nextScene: "scene2b" }
+                ]
+            },
+            scene2a: {
+                text: "二人は図書館の奥へ歩いていった。<br>「あの時の本、まだ持ってるんだ」と栞は懐かしい顔で話す。<br>「君への気持ち、変わってないんだ」",
+                character: "📚",
+                choices: [
+                    { text: "「僕もだ。ずっと君のことを...」と言いかける", affectionDelta: 20, nextScene: "ending" },
+                    { text: "「今度は一緒に読もう」と提案する", affectionDelta: 18, nextScene: "ending" }
+                ]
+            },
+            scene2b: {
+                text: "図書館は変わっていなかった。あの本棚も、あの机も。<br>栞は窓の外を見つめている。<br>「昔のままで良かった」と栞が呟く。",
+                character: "🪟",
+                choices: [
+                    { text: "「昔のままで良かった」と共感する", affectionDelta: 10, nextScene: "ending" },
+                    { text: "「でも、俺たちは変わった」と言う", affectionDelta: -5, nextScene: "ending" }
+                ]
+            },
+            ending: {
+                text: "",
+                character: "",
+                choices: []
+            }
+        };
+        
+        function startGame() {
+            document.getElementById('titleScreen').classList.remove('active');
+            document.getElementById('gameScreen').classList.add('active');
+            showScene('start');
+        }
+        
+        function updateAffection(delta) {
+            gameState.affection = Math.max(0, Math.min(100, gameState.affection + delta));
+            
+            const percentage = gameState.affection;
+            document.getElementById('affectionFill').style.width = percentage + '%';
+            document.getElementById('affectionValue').textContent = gameState.affection;
+            
+            // 背景色を好感度で変更
+            const container = document.getElementById('gameContainer');
+            if (gameState.affection >= 80) {
+                container.style.background = 'linear-gradient(135deg, #ff7675 0%, #fab1a0 100%)';
+            } else if (gameState.affection >= 50) {
+                container.style.background = 'linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%)';
+            } else if (gameState.affection >= 20) {
+                container.style.background = 'linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%)';
+            } else {
+                container.style.background = 'linear-gradient(135deg, #0984e3 0%, #6c5ce7 100%)';
+            }
+            
+            // キャラを揺らす
+            const charEl = document.getElementById('character');
+            charEl.classList.remove('shake');
+            void charEl.offsetWidth;
+            charEl.classList.add('shake');
+        }
+        
+        function showScene(sceneKey) {
+            gameState.turn++;
+            const scene = scenes[sceneKey];
+            
+            document.getElementById('character').textContent = scene.character;
+            document.getElementById('storyText').innerHTML = scene.text;
+            document.getElementById('turnCount').textContent = gameState.turn;
+            
+            const choicesContainer = document.getElementById('choicesContainer');
+            choicesContainer.innerHTML = '';
+            
+            scene.choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'choiceBtn';
+                btn.innerHTML = '💬 ' + choice.text;
+                btn.onclick = () => {
+                    updateAffection(choice.affectionDelta);
+                    
+                    if (gameState.affection >= 80) {
+                        showEnding('good');
+                    } else if (gameState.affection < 20) {
+                        showEnding('bad');
+                    } else if (gameState.turn >= gameState.maxTurns) {
+                        if (gameState.affection >= 50) {
+                            showEnding('good');
+                        } else {
+                            showEnding('bad');
+                        }
+                    } else {
+                        showScene(choice.nextScene);
+                    }
+                };
+                choicesContainer.appendChild(btn);
+            });
+        }
+        
+        function showEnding(type) {
+            const endingScreen = document.getElementById('endingScreen');
+            endingScreen.classList.add('active');
+            
+            if (type === 'good') {
+                endingScreen.className = 'endingScreen active good-ending';
+                document.getElementById('endingCharacter').textContent = '😊';
+                document.getElementById('endingText').textContent = 'GOOD ENDING';
+                document.getElementById('endingMessage').textContent = '「ずっと君のことを想ってた」';
+            } else {
+                endingScreen.className = 'endingScreen active bad-ending';
+                document.getElementById('endingCharacter').textContent = '🚶';
+                document.getElementById('endingText').textContent = 'BAD ENDING';
+                document.getElementById('endingMessage').textContent = '栞は静かに去っていった...';
+            }
+            
+            document.getElementById('endingScore').textContent = '好感度: ' + gameState.affection + ' / 100';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>駿馬伝説GI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Arial', sans-serif; 
+      background: #1a3a2e; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    canvas { 
+      border: 2px solid #fff; 
+      background: #2c5f4f;
+      display: block;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    // ===== γ-1 デバッグコントラクト初期化 =====
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+      tapObject: function(id) {} // 実装は下記
+    };
+
+    // ===== ゲーム状態管理 =====
+    const gameState = {
+      // 5つの能力値（0-100）
+      abilities: {
+        speed: 50,
+        endurance: 50,
+        burst: 50,
+        wisdom: 50,
+        health: 50
+      },
+      fatigue: 0,        // 疲労度（0-100）
+      weeks: 0,          // 経過週数
+      giWins: 0,         // GI勝利数
+      phase: "playing",  // playing | win | fail
+      selectedThisWeek: null
+    };
+
+    // ===== 特訓オプション定義 =====
+    const trainings = [
+      { id: "train_speed", name: "速力", key: "speed", x: 20, y: 580, w: 130, h: 70 },
+      { id: "train_endurance", name: "持久力", key: "endurance", x: 160, y: 580, w: 130, h: 70 },
+      { id: "train_burst", name: "瞬発力", key: "burst", x: 300, y: 580, w: 130, h: 70 },
+      { id: "train_wisdom", name: "賢さ", key: "wisdom", x: 440, y: 580, w: 130, h: 70 },
+      { id: "train_health", name: "健康", key: "health", x: 580, y: 580, w: 130, h: 70 },
+      { id: "train_rest", name: "休息", key: "rest", x: 720, y: 580, w: 130, h: 70 }
+    ];
+
+    // ===== Canvas設定 =====
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = 900;
+    canvas.height = 680;
+
+    // ===== デバッグ更新関数 =====
+    function updateDebug() {
+      window.__gameDebug.objects = trainings.map(train => {
+        const enabled = gameState.phase === "playing";
+        return {
+          id: train.id,
+          enabled: enabled,
+          matchId: null,
+          x: train.x,
+          y: train.y,
+          w: train.w,
+          h: train.h
+        };
+      });
+
+      window.__gameDebug.metrics = {
+        score: gameState.giWins,
+        progress: Math.min(1.0, gameState.weeks / 156),
+        remaining: Math.max(0, 8 - gameState.giWins),
+        phase: gameState.phase
+      };
+    }
+
+    // ===== 馬の描画（evolve欲求：見た目が段階的に変わる） =====
+    function drawHorse(centerX, centerY) {
+      const avgAbility = (gameState.abilities.speed + gameState.abilities.endurance + gameState.abilities.burst + gameState.abilities.wisdom + gameState.abilities.health) / 5;
+      const growthStage = Math.floor(avgAbility / 20); // 0～5
+      const scale = 0.8 + (growthStage * 0.1);
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.scale(scale, scale);
+
+      // 疲労で色相が変わる（黄→褐色）
+      const hue = 40 - (gameState.fatigue / 100) * 20;
+      const saturation = 70 - (gameState.fatigue / 100) * 20;
+
+      // 体
+      ctx.fillStyle = `hsl(${hue}, ${saturation}%, 55%)`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 70 + growthStage * 5, 45 + growthStage * 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 首
+      ctx.fillStyle = `hsl(${hue}, ${saturation}%, 52%)`;
+      ctx.beginPath();
+      ctx.ellipse(50, -25, 20 + growthStage * 2, 40, Math.PI / 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 頭
+      ctx.fillStyle = `hsl(${hue}, ${saturation}%, 50%)`;
+      ctx.beginPath();
+      ctx.ellipse(70, -65, 22 + growthStage * 2, 28, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 成長に応じた毛の立ち具合（たてがみ）
+      if (growthStage >= 1) {
+        ctx.fillStyle = `hsl(${hue}, ${saturation}%, 45%)`;
+        for (let i = 0; i < growthStage; i++) {
+          ctx.beginPath();
+          ctx.arc(60 + i * 5, -75 + i * 3, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 眼
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(76, -62, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(77, -61, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 耳
+      ctx.fillStyle = `hsl(${hue}, ${saturation}%, 45%)`;
+      ctx.beginPath();
+      ctx.ellipse(62, -85, 7, 18, -Math.PI / 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(78, -85, 7, 18, Math.PI / 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 足（成長すると長くなる）
+      ctx.strokeStyle = `hsl(${hue}, ${saturation}%, 40%)`;
+      ctx.lineWidth = 8 + growthStage;
+      const legLength = 70 + growthStage * 5;
+      ctx.beginPath();
+      ctx.moveTo(-35, 45);
+      ctx.lineTo(-35, 45 + legLength);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-10, 45);
+      ctx.lineTo(-10, 45 + legLength);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(15, 45);
+      ctx.lineTo(15, 45 + legLength);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(40, 45);
+      ctx.lineTo(40, 45 + legLength);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // ===== 特訓ボタン描画 =====
+    function drawTrainingButtons() {
+      trainings.forEach(train => {
+        const isSelected = gameState.selectedThisWeek === train.key;
+        
+        // ボタン背景
+        ctx.fillStyle = isSelected ? "#4a9d6f" : "#3d7a52";
+        ctx.fillRect(train.x, train.y, train.w, train.h);
+
+        // ボタン枠
+        ctx.strokeStyle = isSelected ? "#ffd700" : "#fff";
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.strokeRect(train.x, train.y, train.w, train.h);
+
+        // テキスト
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 14px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(train.name, train.x + train.w / 2, train.y + train.h / 2);
+
+        if (isSelected) {
+          ctx.fillStyle = "#ffd700";
+          ctx.font = "12px Arial";
+          ctx.fillText("✓ 選択中", train.x + train.w / 2, train.y + train.h / 2 + 18);
+        }
+      });
+    }
+
+    // ===== 能力値バー描画 =====
+    function drawAbilityBars() {
+      const startX = 50;
+      const startY = 280;
+      const barWidth = 200;
+      const barHeight = 18;
+      const lineHeight = 30;
+
+      const abilityLabels = [
+        { label: "速力", key: "speed", color: "#ff6b6b" },
+        { label: "持久力", key: "endurance", color: "#4ecdc4" },
+        { label: "瞬発力", key: "burst", color: "#ffd93d" },
+        { label: "賢さ", key: "wisdom", color: "#a8e6cf" },
+        { label: "健康", key: "health", color: "#ffafcc" }
+      ];
+
+      abilityLabels.forEach((ability, index) => {
+        const y = startY + index * lineHeight;
+        const value = gameState.abilities[ability.key];
+
+        // ラベル
+        ctx.fillStyle = "#fff";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "right";
+        ctx.fillText(ability.label, startX + 70, y + 10);
+
+        // バー背景
+        ctx.fillStyle = "#333";
+        ctx.fillRect(startX + 80, y, barWidth, barHeight);
+
+        // バー本体
+        ctx.fillStyle = ability.color;
+        ctx.fillRect(startX + 80, y, (value / 100) * barWidth, barHeight);
+
+        // バー枠
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(startX + 80, y, barWidth, barHeight);
+
+        // 数値
+        ctx.fillStyle = "#fff";
+        ctx.font = "11px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText(`${Math.round(value)}`, startX + 80 + barWidth + 10, y + 10);
+      });
+
+      // 疲労度
+      const fatigueY = startY + 5 * lineHeight + 10;
+      ctx.fillStyle = "#fff";
+      ctx.font = "12px Arial";
+      ctx.textAlign = "right";
+      ctx.fillText("疲労", startX + 70, fatigueY + 10);
+
+      ctx.fillStyle = "#333";
+      ctx.fillRect(startX + 80, fatigueY, barWidth, barHeight);
+
+      ctx.fillStyle = "#e74c3c";
+      ctx.fillRect(startX + 80, fatigueY, (gameState.fatigue / 100) * barWidth, barHeight);
+
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(startX + 80, fatigueY, barWidth, barHeight);
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "11px Arial";
+      ctx.textAlign = "left";
+      ctx.fillText(`${Math.round(gameState.fatigue)}`, startX + 80 + barWidth + 10, fatigueY + 10);
+    }
+
+    // ===== 情報パネル描画 =====
+    function drawInfoPanel() {
+      const rightX = 550;
+      const topY = 280;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 14px Arial";
+      ctx.textAlign = "left";
+
+      // GI勝利数
+      ctx.fillText(`GI勝利: ${gameState.giWins}/8`, rightX, topY);
+      
+      // プログレスバー
+      const progX = rightX;
+      const progY = topY + 25;
+      ctx.fillStyle = "#333";
+      ctx.fillRect(progX, progY, 250, 15);
+      ctx.fillStyle = "#ffd700";
+      ctx.fillRect(progX, progY, (gameState.giWins / 8) * 250, 15);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(progX, progY, 250, 15);
+
+      // 週数・年齢
+      ctx.fillStyle = "#fff";
+      ctx.font = "13px Arial";
+      const years = Math.floor(gameState.weeks / 52);
+      const weeks = gameState.weeks % 52;
+      ctx.fillText(`育成期間: ${years}年 ${weeks}週 / 3年(156週)`, rightX, topY + 60);
+
+      // プログレスバー2
+      const progX2 = rightX;
+      const progY2 = topY + 75;
+      const progress = Math.min(1.0, gameState.weeks / 156);
+      ctx.fillStyle = "#333";
+      ctx.fillRect(progX2, progY2, 250, 15);
+      ctx.fillStyle = progress >= 1.0 ? "#ff6b6b" : "#4ecdc4";
+      ctx.fillRect(progX2, progY2, progress * 250, 15);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(progX2, progY2, 250, 15);
+    }
+
+    // ===== メイン描画関数 =====
+    function render() {
+      // 背景
+      ctx.fillStyle = "#2c5f4f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState.phase === "playing") {
+        // タイトル
+        ctx.fillStyle = "#ffd700";
+        ctx.font = "bold 32px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("駿馬伝説 GI", canvas.width / 2, 40);
+
+        // 操作説明
+        ctx.fillStyle = "#ccc";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("下部の特訓ボタンをタップして馬を育成。GI勝利を8回達成しよう！", canvas.width / 2, 65);
+
+        // 馬の描画
+        drawHorse(canvas.width / 2, 180);
+
+        // 能力値バー
+        drawAbilityBars();
+
+        // 情報パネル
+        drawInfoPanel();
+
+        // 特訓ボタン
+        drawTrainingButtons();
+
+      } else if (gameState.phase === "win") {
+        // Win演出
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, "rgba(255, 215, 0, 0.3)");
+        gradient.addColorStop(1, "rgba(255, 215, 0, 0.1)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 中央の装飾
+        const pulse = Math.sin(Date.now() / 200) * 10;
+        ctx.fillStyle = "rgba(255, 215, 0, 0.2)";
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2 - 50, 100 + pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // タイトル
+        ctx.fillStyle = "#ffd700";
+        ctx.font = "bold 48px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("🏆 勝利! 🏆", canvas.width / 2, canvas.height / 2 - 80);
+
+        // 結果
+        ctx.fillStyle = "#fff";
+        ctx.font = "24px Arial";
+        ctx.fillText("GI伝説誕生！", canvas.width / 2, canvas.height / 2);
+
+        ctx.font = "16px Arial";
+        ctx.fillStyle = "#ccc";
+        ctx.fillText(`${gameState.weeks}週の育成で`, canvas.width / 2, canvas.height / 2 + 50);
+        ctx.fillText(`${gameState.giWins}回のGI勝利を達成！`, canvas.width / 2, canvas.height / 2 + 75);
+
+        ctx.fillStyle = "#888";
+        ctx.font = "12px Arial";
+        ctx.fillText("（クリックでリプレイ）", canvas.width / 2, canvas.height - 40);
+
+      } else if (gameState.phase === "fail") {
+        // Fail演出
+        const darkness = 0.8;
+        ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#e74c3c";
+        ctx.font = "bold 48px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("失敗...", canvas.width / 2, canvas.height / 2 - 80);
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "22px Arial";
+        ctx.fillText("時間切れ", canvas.width / 2, canvas.height / 2);
+
+        ctx.font = "14px Arial";
+        ctx.fillStyle = "#ccc";
+        ctx.fillText(`${gameState.weeks}週間で${gameState.giWins}回のGI勝利`, canvas.width / 2, canvas.height / 2 + 50);
+
+        ctx.fillStyle = "#888";
+        ctx.font = "12px Arial";
+        ctx.fillText("（クリックでリトライ）", canvas.width / 2, canvas.height - 40);
+      }
+
+      updateDebug();
+    }
+
+    // ===== 特訓選択処理 =====
+    function selectTraining(trainingKey) {
+      if (gameState.phase !== "playing") return;
+
+      gameState.selectedThisWeek = trainingKey;
+      const abilities = ["speed", "endurance", "burst", "wisdom", "health"];
+
+      // 選択した特訓に+3
+      gameState.abilities[trainingKey] = Math.min(100, gameState.abilities[trainingKey] + 3);
+
+      // 他の4つに+1
+      abilities.forEach(ability => {
+        if (ability !== trainingKey && trainingKey !== "rest") {
+          gameState.abilities[ability] = Math.min(100, gameState.abilities[ability] + 1);
+        }
+      });
+
+      // 疲労が高いほど倍率アップ
+      if (gameState.fatigue >= 50) {
+        gameState.abilities[trainingKey] = Math.min(100, gameState.abilities[trainingKey] + 1.5);
+      }
+
+      // 体力減少
+      if (trainingKey === "rest") {
+        gameState.fatigue = Math.max(0, gameState.fatigue - 30);
+      } else {
+        const fatigueCost = 15 + Math.random() * 25;
+        gameState.fatigue = Math.min(100, gameState.fatigue + fatigueCost);
+      }
+
+      // 週進行
+      gameState.weeks++;
+
+      // GI判定（総合スコア）
+      const totalScore = Object.values(gameState.abilities).reduce((a, b) => a + b, 0) - gameState.fatigue * 0.5;
+      if (totalScore > 340) {
+        gameState.giWins++;
+      }
+
+      // 終了判定
+      if (gameState.giWins >= 8) {
+        gameState.phase = "win";
+      } else if (gameState.weeks > 156) {
+        gameState.phase = "fail";
+      }
+
+      updateDebug();
+    }
+
+    // ===== デバッグコントラクト実装 =====
+    window.__gameDebug.tapObject = function(id) {
+      const training = trainings.find(t => t.id === id);
+      if (training) {
+        selectTraining(training.key);
+      }
+    };
+
+    // ===== マウスイベント =====
+    canvas.addEventListener("mousedown", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      trainings.forEach(train => {
+        if (x >= train.x && x <= train.x + train.w && y >= train.y && y <= train.y + train.h) {
+          selectTraining(train.key);
+        }
+      });
+    });
+
+    canvas.addEventListener("mousemove", () => {
+      canvas.style.cursor = "pointer";
+    });
+
+    canvas.addEventListener("mouseup", () => {});
+
+    canvas.addEventListener("click", (e) => {
+      if (gameState.phase !== "playing") {
+        // リセット
+        gameState.abilities = { speed: 50, endurance: 50, burst: 50, wisdom: 50, health: 50 };
+        gameState.fatigue = 0;
+        gameState.weeks = 0;
+        gameState.giWins = 0;
+        gameState.phase = "playing";
+        gameState.selectedThisWeek = null;
+        updateDebug();
+      }
+    });
+
+    // ===== アニメーションループ開始 =====
+    function animate() {
+      render();
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

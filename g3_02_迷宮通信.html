@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迷宮通信</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            width: 375px;
+            height: 812px;
+            overflow: hidden;
+            background-image: 
+                linear-gradient(0deg, transparent 24%, rgba(255,255,255,.05) 25%, rgba(255,255,255,.05) 26%, transparent 27%, transparent 74%, rgba(255,255,255,.05) 75%, rgba(255,255,255,.05) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(255,255,255,.05) 25%, rgba(255,255,255,.05) 26%, transparent 27%, transparent 74%, rgba(255,255,255,.05) 75%, rgba(255,255,255,.05) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            animation: scroll 40s infinite linear;
+        }
+
+        @keyframes scroll {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+
+        #gameContainer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        #titleScreen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 26, 46, 0.95);
+            z-index: 100;
+            padding: 20px;
+        }
+
+        .title-content {
+            text-align: center;
+        }
+
+        .title-content h1 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #00d4ff;
+            text-shadow: 0 0 10px #00d4ff;
+        }
+
+        .rules-box {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #00d4ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            text-align: left;
+            max-width: 320px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .rules-box h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .rules-box p {
+            color: #ccc;
+            margin-bottom: 6px;
+        }
+
+        #startBtn {
+            background: linear-gradient(135deg, #00d4ff, #00a8cc);
+            color: #000;
+            border: none;
+            padding: 12px 35px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        #startBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #00d4ff;
+        }
+
+        #gameScreen {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            padding: 8px;
+        }
+
+        .status-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+
+        .status-item {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid #00d4ff;
+            padding: 6px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .status-label {
+            color: #00d4ff;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .status-value {
+            color: #fff;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .status-value.danger {
+            color: #ff4444;
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { color: #ff4444; }
+            51%, 100% { color: #ffaaaa; }
+        }
+
+        .theme-text {
+            text-align: center;
+            color: #00d4ff;
+            font-size: 12px;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+
+        #logWindow {
+            flex: 1;
+            background: #000;
+            border: 2px solid #00d4ff;
+            border-radius: 4px;
+            padding: 8px;
+            overflow-y: auto;
+            margin-bottom: 8px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            position: relative;
+        }
+
+        .log-entry {
+            margin-bottom: 6px;
+            animation: slideIn 0.4s ease-in-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .log-entry.clue-flash {
+            background-color: gold;
+            color: #000;
+            padding: 3px;
+            border-radius: 2px;
+            animation: flashClue 1.2s ease-in-out;
+        }
+
+        @keyframes flashClue {
+            0%, 100% { background-color: transparent; color: #0f0; }
+            50% { background-color: gold; color: #000; }
+        }
+
+        .clue-notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: gold;
+            color: #000;
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 12px;
+            animation: clueFloat 1.5s ease-out forwards;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        @keyframes clueFloat {
+            0% {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -150%);
+            }
+        }
+
+        .input-area {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        #commandInput {
+            flex: 1;
+            background: #2a2a3e;
+            border: 1px solid #00d4ff;
+            color: #0f0;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+
+        #commandInput::placeholder {
+            color: #666;
+        }
+
+        #commandInput.shake {
+            animation: shake 0.3s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        #commandInput.error {
+            background-color: #ff4444;
+            animation: errorFlash 0.3s;
+        }
+
+        @keyframes errorFlash {
+            0% { background-color: #ff4444; }
+            100% { background-color: #2a2a3e; }
+        }
+
+        #sendBtn {
+            background: linear-gradient(135deg, #00d4ff, #00a8cc);
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 11px;
+            transition: transform 0.1s;
+        }
+
+        #sendBtn:active {
+            transform: scale(0.95);
+        }
+
+        #resultScreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .result-box {
+            background: #1a1a2e;
+            border: 3px solid #00d4ff;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 300px;
+            max-height: 550px;
+            overflow-y: auto;
+        }
+
+        .result-box h2 {
+            font-size: 22px;
+            margin-bottom: 15px;
+            color: #00d4ff;
+        }
+
+        .result-box.win h2 {
+            color: #ffaa00;
+            text-shadow: 0 0 10px #ffaa00;
+        }
+
+        .result-box.lose h2 {
+            color: #ff4444;
+        }
+
+        .result-stats {
+            background: rgba(0, 212, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: left;
+            font-size: 12px;
+        }
+
+        .result-stats p {
+            margin-bottom: 6px;
+            color: #ccc;
+        }
+
+        .result-stats strong {
+            color: #00d4ff;
+        }
+
+        .clues-obtained {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: left;
+            font-size: 11px;
+        }
+
+        .clues-obtained h4 {
+            color: #ffaa00;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .clues-list {
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            line-height: 1.5;
+        }
+
+        .clues-list li {
+            margin-left: 15px;
+        }
+
+        .result-btn {
+            background: linear-gradient(135deg, #00d4ff, #00a8cc);
+            color: #000;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            transition: transform 0.2s;
+        }
+
+        .result-btn:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="titleScreen">
+            <div class="title-content">
+                <h1>迷宮通信</h1>
+                <div class="rules-box">
+                    <h3>🎮 ゲームルール</h3>
+                    <p><strong>ゴール:</strong> 迷宮の謎を解く</p>
+                    <p><strong>手がかり:</strong> 5個集める</p>
+                    <p><strong>コマンド:</strong></p>
+                    <p>ask [NPC名] / observe [場所] / move [方向]</p>
+                    <p><strong>勝利条件:</strong></p>
+                    <p>手がかり≥5 + 正解回答</p>
+                    <p><strong>失敗条件:</strong></p>
+                    <p>誤答3回 or 300秒経過</p>
+                </div>
+                <button id="startBtn">ゲーム開始</button>
+            </div>
+        </div>
+
+        <div id="gameScreen">
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-label">手がかり</div>
+                    <div class="status-value"><span id="clueCount">0</span>/5</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">誤答</div>
+                    <div class="status-value"><span id="errorCount">0</span>/3</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">時間</div>
+                    <div class="status-value"><span id="timerValue">300</span>秒</div>
+                </div>
+            </div>
+
+            <div class="theme-text" id="themeText">この迷宮の中心には、何がある？</div>
+
+            <div id="logWindow"></div>
+
+            <div class="input-area">
+                <input type="text" id="commandInput" placeholder="ask [NPC名] / observe [場所] / move [方向]">
+                <button id="sendBtn">送信</button>
+            </div>
+        </div>
+
+        <div id="resultScreen">
+            <div class="result-box" id="resultBox">
+                <h2 id="resultTitle"></h2>
+                <div class="result-stats" id="resultStats"></div>
+                <div class="clues-obtained">
+                    <h4>✦ 獲得した手がかり</h4>
+                    <ul class="clues-list" id="cluesList"></ul>
+                </div>
+                <button class="result-btn" id="restartBtn">もう一度遊ぶ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const gameState = {
+            clues: 0,
+            errors: 0,
+            timeLeft: 300,
+            currentCluesList: [],
+            gameActive: false,
+            timerInterval: null,
+            theme: 'この迷宮の中心には、何がある？',
+            correctAnswer: 'クリスタル'
+        };
+
+        const database = {
+            npcs: {
+                '老賢者': [
+                    '古い書物によれば、かつてこの迷宮の中心には輝く物があったという...',
+                    '多くの者がそれを求めて迷宮に入ったが、戻ってきた者はいない...'
+                ],
+                '狐娘': [
+                    'クスクス...あなたはそのイロハもご存知ないのね。',
+                    '光と闇が交わる場所...そこに答えはあるわよ。'
+                ],
+                'ドラゴン': [
+                    'フルルル...そなたは勇敢だな。迷宮の秘密を知りたいのか。',
+                    '中心には、かつての栄光の象徴が眠っている。'
+                ],
+                '幽霊': [
+                    'ウーウー...俺たちもかつてそれを求めていた...',
+                    '輝く...そう、輝く物だ。それが欲しくて迷い続けている...'
+                ],
+                '謎の商人': [
+                    'ほほう、珍しい客だ。何か欲しい物でもあるのか？',
+                    'クリスタル...ああ、その言葉を口にする者は少ないな。'
+                ]
+            },
+            places: {
+                '入口': '薄暗い石造りの入口。迷宮への道が奥へ続いている...',
+                '中央の広場': '周囲の壁には奇妙な模様が刻まれている。何かが中心にあった痕跡がある...',
+                '北の回廊': '冷たい風が吹く。壁には光の跡が残されている...',
+                '南の塔': '高い塔の中。星々が見える...かつてはここから何かが輝いていたのだろう。',
+                '地下室': '古びた階段の下。かすかに金色の光が見える...'
+            },
+            directions: {
+                '北': '北へ進むと、より迷宮の奥へ進むことになる。光がわずかに見えた...',
+                '南': '南へ進むと、古い塔へたどり着く。何かの痕跡がある...',
+                '東': '東へ進むと、隠された部屋へたどり着く。奇妙な輝きが...',
+                '西': '西へ進むと、人の声が聞こえる。他の冒険者がいるのかもしれない...'
+            }
+        };
+
+        const ui = {
+            titleScreen: document.getElementById('titleScreen'),
+            gameScreen: document.getElementById('gameScreen'),
+            resultScreen: document.getElementById('resultScreen'),
+            startBtn: document.getElementById('startBtn'),
+            commandInput: document.getElementById('commandInput'),
+            sendBtn: document.getElementById('sendBtn'),
+            logWindow: document.getElementById('logWindow'),
+            clueCount: document.getElementById('clueCount'),
+            errorCount: document.getElementById('errorCount'),
+            timerValue: document.getElementById('timerValue'),
+            themeText: document.getElementById('themeText'),
+            resultBox: document.getElementById('resultBox'),
+            resultTitle: document.getElementById('resultTitle'),
+            resultStats: document.getElementById('resultStats'),
+            cluesList: document.getElementById('cluesList'),
+            restartBtn: document.getElementById('restartBtn')
+        };
+
+        function initGame() {
+            gameState.clues = 0;
+            gameState.errors = 0;
+            gameState.timeLeft = 300;
+            gameState.currentCluesList = [];
+            gameState.gameActive = true;
+
+            ui.titleScreen.style.display = 'none';
+            ui.gameScreen.style.display = 'flex';
+            ui.resultScreen.style.display = 'none';
+            ui.logWindow.innerHTML = '';
+            ui.commandInput.value = '';
+            ui.themeText.textContent = gameState.theme;
+
+            updateUI();
+            startTimer();
+            addLog('迷宮通信システムが起動しました...');
+            addLog('あなたは古い迷宮に立ち入った。');
+        }
+
+        function updateUI() {
+            ui.clueCount.textContent = gameState.clues;
+            ui.errorCount.textContent = gameState.errors;
+            
+            if (gameState.timeLeft <= 10) {
+                ui.timerValue.classList.add('danger');
+            } else {
+                ui.timerValue.classList.remove('danger');
+            }
+            ui.timerValue.textContent = gameState.timeLeft;
+
+            if (gameState.gameActive && gameState.errors >= 3) {
+                setTimeout(() => endGame(false), 500);
+            }
+        }
+
+        function startTimer() {
+            clearInterval(gameState.timerInterval);
+            gameState.timerInterval = setInterval(() => {
+                gameState.timeLeft--;
+                updateUI();
+                if (gameState.timeLeft <= 0) {
+                    endGame(false, 'timeout');
+                }
+            }, 1000);
+        }
+
+        function addLog(text, isClue = false) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            if (isClue) {
+                entry.classList.add('clue-flash');
+            }
+            entry.textContent = text;
+            ui.logWindow.appendChild(entry);
+            ui.logWindow.scrollTop = ui.logWindow.scrollHeight;
+
+            if (isClue) {
+                const notification = document.createElement('div');
+                notification.className = 'clue-notification';
+                notification.textContent = '✦ 手がかり獲得！';
+                ui.logWindow.appendChild(notification);
+            }
+        }
+
+        function processCommand(input) {
+            const trimmed = input.trim().toLowerCase();
+
+            const askMatch = trimmed.match(/^ask\s+(.+)$/);
+            if (askMatch) {
+                const npcName = askMatch[1].trim();
+                const npcKey = Object.keys(database.npcs).find(
+                    key => key.toLowerCase().includes(npcName) || npcName.includes(key.toLowerCase())
+                );
+                if (npcKey && database.npcs[npcKey]) {
+                    const responses = database.npcs[npcKey];
+                    const response = responses[gameState.clues % responses.length];
+                    addLog(`【${npcKey}】: ${response}`, true);
+                    gameState.clues++;
+                    gameState.currentCluesList.push(`・${npcKey}の話を聞いた`);
+                    updateUI();
+                    return;
+                } else {
+                    addLog('その人物は見つかりませんでした...');
+                    gameState.errors++;
+                    shakeInput();
+                    updateUI();
+                    return;
+                }
+            }
+
+            const observeMatch = trimmed.match(/^observe\s+(.+)$/);
+            if (observeMatch) {
+                const placeName = observeMatch[1].trim();
+                const placeKey = Object.keys(database.places).find(
+                    key => key.toLowerCase().includes(placeName) || placeName.includes(key.toLowerCase())
+                );
+                if (placeKey && database.places[placeKey]) {
+                    const description = database.places[placeKey];
+                    addLog(`【${placeKey}】: ${description}`, true);
+                    gameState.clues++;
+                    gameState.currentCluesList.push(`・${placeKey}を観察した`);
+                    updateUI();
+                    return;
+                } else {
+                    addLog('その場所は見つかりませんでした...');
+                    gameState.errors++;
+                    shakeInput();
+                    updateUI();
+                    return;
+                }
+            }
+
+            const moveMatch = trimmed.match(/^move\s+(.+)$/);
+            if (moveMatch) {
+                const direction = moveMatch[1].trim();
+                const directionKey = Object.keys(database.directions).find(
+                    key => key.toLowerCase() === direction.toLowerCase()
+                );
+                if (directionKey && database.directions[directionKey]) {
+                    const description = database.directions[directionKey];
+                    addLog(`${description}`, true);
+                    gameState.clues++;
+                    gameState.currentCluesList.push(`・${directionKey}へ移動した`);
+                    updateUI();
+                    return;
+                } else {
+                    addLog('その方向は有効ではありません...');
+                    gameState.errors++;
+                    shakeInput();
+                    updateUI();
+                    return;
+                }
+            }
+
+            if (trimmed === gameState.correctAnswer.toLowerCase()) {
+                if (gameState.clues >= 5) {
+                    endGame(true);
+                    return;
+                } else {
+                    addLog('謎は解けていない...もっと手がかりを集めよう。');
+                    gameState.errors++;
+                    shakeInput();
+                    updateUI();
+                    return;
+                }
+            }
+
+            addLog('コマンド形式が正しくありません。');
+            gameState.errors++;
+            shakeInput();
+            updateUI();
+        }
+
+        function shakeInput() {
+            ui.commandInput.classList.add('error');
+            ui.commandInput.classList.add('shake');
+            setTimeout(() => {
+                ui.commandInput.classList.remove('error', 'shake');
+            }, 300);
+        }
+
+        function endGame(won, reason = null) {
+            gameState.gameActive = false;
+            clearInterval(gameState.timerInterval);
+
+            ui.resultBox.classList.remove('win', 'lose');
+            
+            if (won) {
+                ui.resultBox.classList.add('win');
+                ui.resultTitle.textContent = '迷宮の謎、解き明かした！';
+            } else {
+                ui.resultBox.classList.add('lose');
+                if (reason === 'timeout') {
+                    ui.resultTitle.textContent = '迷宮に閉じ込められた...（時間切れ）';
+                } else {
+                    ui.resultTitle.textContent = '迷宮に閉じ込められた...（誤答3回）';
+                }
+            }
+
+            const elapsed = 300 - gameState.timeLeft;
+            ui.resultStats.innerHTML = `
+                <p>獲得手がかり: <strong>${gameState.clues}/5</strong></p>
+                <p>誤答数: <strong>${gameState.errors}/3</strong></p>
+                <p>経過時間: <strong>${elapsed}秒</strong></p>
+            `;
+
+            ui.cluesList.innerHTML = gameState.currentCluesList
+                .map(clue => `<li>${clue}</li>`)
+                .join('') || '<li>手がかりなし</li>';
+
+            ui.gameScreen.style.display = 'none';
+            ui.resultScreen.style.display = 'flex';
+        }
+
+        ui.startBtn.addEventListener('click', initGame);
+
+        ui.sendBtn.addEventListener('click', () => {
+            if (!gameState.gameActive) return;
+            const input = ui.commandInput.value.trim();
+            if (!input) return;
+            processCommand(input);
+            ui.commandInput.value = '';
+        });
+
+        ui.commandInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && gameState.gameActive) {
+                const input = ui.commandInput.value.trim();
+                if (!input) return;
+                processCommand(input);
+                ui.commandInput.value = '';
+            }
+        });
+
+        ui.restartBtn.addEventListener('click', () => {
+            ui.resultScreen.style.display = 'none';
+            ui.titleScreen.style.display = 'flex';
+        });
+
+        ui.titleScreen.style.display = 'flex';
+    </script>
+</body>
+</html>
