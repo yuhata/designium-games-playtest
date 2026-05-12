@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>頂上ドラッグ</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 3px solid #333;
+            cursor: grab;
+            display: block;
+            background: white;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // グローバルデバッグコントラクト（必須）
+        window.__gameDebug = {
+            drags: [],
+            objects: [],
+            metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+            dragObject: function(id) {}
+        };
+
+        // ゲーム状態
+        const game = {
+            phase: 'playing',  // playing, win, fail
+            score: 0,
+            mistakes: 0,
+            maxMistakes: 3,
+            gears: [],
+            mountain: null,
+            draggingGear: null,
+            dragOffsetX: 0,
+            dragOffsetY: 0,
+            startTime: Date.now()
+        };
+
+        // ギアクラス
+        class Gear {
+            constructor(id, x, y, radius, color) {
+                this.id = id;
+                this.x = x;
+                this.y = y;
+                this.baseX = x;
+                this.baseY = y;
+                this.radius = radius;
+                this.color = color;
+                this.placed = false;
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // ギアの歯
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 8; i++) {
+                    const angle = (Math.PI * 2 / 8) * i;
+                    const startX = this.x + Math.cos(angle) * this.radius;
+                    const startY = this.y + Math.sin(angle) * this.radius;
+                    const endX = this.x + Math.cos(angle) * (this.radius + 8);
+                    const endY = this.y + Math.sin(angle) * (this.radius + 8);
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                }
+
+                // 中心穴
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 配置済みマーク
+                if (this.placed) {
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            contains(px, py) {
+                const dx = px - this.x;
+                const dy = py - this.y;
+                return Math.sqrt(dx * dx + dy * dy) <= this.radius + 10;
+            }
+        }
+
+        // 山クラス
+        class Mountain {
+            constructor(x, y, width, height) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.peakX = x + width / 2;
+                this.peakY = y;
+            }
+
+            draw(ctx) {
+                // 山の本体
+                ctx.fillStyle = '#8B7355';
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y + this.height);
+                ctx.lineTo(this.peakX, this.peakY);
+                ctx.lineTo(this.x + this.width, this.y + this.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // 山の輪郭
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 頂上エリア（ドロップターゲット）
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+                ctx.beginPath();
+                ctx.arc(this.peakX, this.peakY - 30, 35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // テキスト
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('頂上', this.peakX, this.peakY - 60);
+            }
+
+            isInPeak(x, y) {
+                const dx = x - this.peakX;
+                const dy = y - (this.peakY - 30);
+                return Math.sqrt(dx * dx + dy * dy) <= 40;
+            }
+        }
+
+        // 初期化
+        function initGame() {
+            game.phase = 'playing';
+            game.score = 0;
+            game.mistakes = 0;
+            game.draggingGear = null;
+            game.gears = [];
+            game.startTime = Date.now();
+
+            game.mountain = new Mountain(120, 200, 280, 180);
+
+            const gearConfigs = [
+                { id: 'gear_red', x: 540, y: 280, radius: 20, color: '#FF6B6B' },
+                { id: 'gear_cyan', x: 630, y: 320, radius: 18, color: '#4ECDC4' },
+                { id: 'gear_yellow', x: 710, y: 280, radius: 19, color: '#FFE66D' }
+            ];
+
+            gearConfigs.forEach(cfg => {
+                game.gears.push(new Gear(cfg.id, cfg.x, cfg.y, cfg.radius, cfg.color));
+            });
+
+            updateDebug();
+        }
+
+        // デバッグ情報更新（必須）
+        function updateDebug() {
+            window.__gameDebug.drags = game.gears
+                .filter(g => !g.placed)
+                .map(g => ({
+                    id: g.id,
+                    type: 'gear',
+                    enabled: game.phase === 'playing' && !g.placed,
+                    x: Math.round(g.x),
+                    y: Math.round(g.y)
+                }));
+
+            window.__gameDebug.objects = game.gears.map(g => ({
+                id: g.id,
+                x: Math.round(g.x),
+                y: Math.round(g.y),
+                placed: g.placed
+            }));
+
+            window.__gameDebug.metrics = {
+                score: game.score,
+                progress: game.score / Math.max(1, game.gears.length),
+                remaining: Math.max(0, game.gears.length - game.score),
+                phase: game.phase
+            };
+        }
+
+        // dragObject実装（デバッグコントラクト・本実装）
+        window.__gameDebug.dragObject = function(id) {
+            const gear = game.gears.find(g => g.id === id);
+            if (!gear || gear.placed || game.phase !== 'playing') return;
+
+            // 自動配置
+            gear.x = game.mountain.peakX;
+            gear.y = game.mountain.peakY - 30;
+            gear.placed = true;
+            game.score++;
+            updateDebug();
+            checkWinCondition();
+        };
+
+        // マウスイベント（P2座標正規化、P1 mousemove/mouseupでgameover禁止）
+        canvas.addEventListener('mousedown', (e) => {
+            if (game.phase !== 'playing') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            // 後ろのギアから順に（Z-order）
+            for (let i = game.gears.length - 1; i >= 0; i--) {
+                const gear = game.gears[i];
+                if (!gear.placed && gear.contains(mx, my)) {
+                    game.draggingGear = gear;
+                    game.dragOffsetX = mx - gear.x;
+                    game.dragOffsetY = my - gear.y;
+                    break;
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            // mousemoveではgameover判定をしない（P1）
+            if (!game.draggingGear || game.phase !== 'playing') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            game.draggingGear.x = mx - game.dragOffsetX;
+            game.draggingGear.y = my - game.dragOffsetY;
+
+            // canvas範囲内に留める（P5）
+            const r = game.draggingGear.radius;
+            game.draggingGear.x = Math.max(r, Math.min(canvas.width - r, game.draggingGear.x));
+            game.draggingGear.y = Math.max(r, Math.min(canvas.height - r, game.draggingGear.y));
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            // mouseupでのみ配置判定（P1）
+            if (!game.draggingGear || game.phase !== 'playing') return;
+
+            const gear = game.draggingGear;
+
+            if (game.mountain.isInPeak(gear.x, gear.y)) {
+                gear.placed = true;
+                game.score++;
+            } else {
+                // 間違い
+                game.mistakes++;
+                gear.x = gear.baseX;
+                gear.y = gear.baseY;
+
+                if (game.mistakes >= game.maxMistakes) {
+                    game.phase = 'fail';
+                }
+            }
+
+            game.draggingGear = null;
+            updateDebug();
+            checkWinCondition();  // P3: 状態変更後の必須チェック
+        });
+
+        // クリックでリスタート（P10）
+        canvas.addEventListener('click', (e) => {
+            if ((game.phase === 'win' || game.phase === 'fail') && e.button === 0) {
+                initGame();
+                draw();
+            }
+        });
+
+        // 勝利条件チェック（P3）
+        function checkWinCondition() {
+            if (game.score >= game.gears.length) {
+                game.phase = 'win';
+            }
+        }
+
+        // 描画
+        function draw() {
+            // 背景
+            ctx.fillStyle = '#E8F4F8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 山
+            game.mountain.draw(ctx);
+
+            // ギア
+            game.gears.forEach(gear => gear.draw(ctx));
+
+            // UI: スコア・操作説明（P11: インタラクティブ性維持）
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('頂上ドラッグ', 20, 20);
+
+            ctx.font = '16px Arial';
+            ctx.fillText(`配置: ${game.score} / ${game.gears.length}`, 20, 50);
+            ctx.fillText(`ミス: ${game.mistakes} / ${game.maxMistakes}`, 20, 75);
+
+            ctx.fillStyle = '#666';
+            ctx.font = '13px Arial';
+            ctx.fillText('ギアをドラッグして山頂に配置してください', 20, 105);
+
+            // FAIL画面
+            if (game.phase === 'fail') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#FF6B6B';
+                ctx.font = 'bold 44px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - 60);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '18px Arial';
+                ctx.fillText(`配置できたギア: ${game.score} / ${game.gears.length}`, canvas.width / 2, canvas.height / 2);
+                ctx.fillText('ミス上限に達しました', canvas.width / 2, canvas.height / 2 + 35);
+
+                ctx.font = '16px Arial';
+                ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+            }
+
+            // WIN画面
+            if (game.phase === 'win') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 44px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('頂上到達！', canvas.width / 2, canvas.height / 2 - 60);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '18px Arial';
+                ctx.fillText(`全${game.score}個のギアを配置`, canvas.width / 2, canvas.height / 2);
+                ctx.fillText(`ミス: ${game.mistakes}`, canvas.width / 2, canvas.height / 2 + 35);
+
+                ctx.font = '16px Arial';
+                ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+            }
+        }
+
+        // ゲームループ
+        function gameLoop() {
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ゲーム開始（2秒以内）
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>荒野の王</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #8B4513 0%, #D2691E 100%);
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 3px solid #654321;
+      background: linear-gradient(180deg, #87CEEB 0%, #E0B875 100%);
+      cursor: crosshair;
+      display: block;
+    }
+    #gameContainer {
+      background: #2c1810;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // =========== DEBUG INTERFACE (γ-1) ===========
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+      tapObject: function(id) {}
+    };
+
+    // =========== GAME STATE ===========
+    let gameState = {
+      phase: 'initializing',
+      score: 0,
+      mistakes: 0,
+      mistakeLimit: 3,
+      enemiesDefeated: 0,
+      enemiesRequired: 10,
+      enemies: []
+    };
+
+    // =========== ENEMY CLASS ===========
+    class Enemy {
+      constructor(id) {
+        this.id = id;
+        this.x = Math.random() * (canvas.width - 60) + 30;
+        this.y = Math.random() * (canvas.height - 100) + 50;
+        this.radius = 25;
+        this.enabled = true;
+      }
+
+      draw(ctx) {
+        if (!this.enabled) return;
+        ctx.fillStyle = '#CC0000';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.arc(this.x - 8, this.y - 5, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + 8, this.y - 5, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(this.x - 8, this.y - 5, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + 8, this.y - 5, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      containsPoint(px, py) {
+        const dist = Math.sqrt((px - this.x) ** 2 + (py - this.y) ** 2);
+        return dist <= this.radius && this.enabled;
+      }
+
+      getDebugObject() {
+        return {
+          id: this.id,
+          enabled: this.enabled,
+          matchId: null,
+          x: Math.round(this.x),
+          y: Math.round(this.y)
+        };
+      }
+    }
+
+    // =========== GAME FUNCTIONS ===========
+    function spawnEnemies() {
+      gameState.enemies = [];
+      for (let i = 0; i < 3; i++) {
+        gameState.enemies.push(new Enemy(`enemy_${i}`));
+      }
+      updateDebug();
+    }
+
+    function handleEnemyTap(enemy) {
+      if (!enemy || !enemy.enabled) return;
+      enemy.enabled = false;
+      gameState.enemiesDefeated++;
+      gameState.score += 10;
+      spawnEnemies();
+      checkWinCondition();
+    }
+
+    function handleMiss() {
+      gameState.mistakes++;
+      if (gameState.mistakes >= gameState.mistakeLimit) {
+        endGame('fail');
+      }
+      updateDebug();
+    }
+
+    function checkWinCondition() {
+      if (gameState.enemiesDefeated >= gameState.enemiesRequired) {
+        endGame('win');
+      }
+    }
+
+    function endGame(result) {
+      if (gameState.phase === 'win' || gameState.phase === 'fail') return;
+      gameState.phase = result === 'win' ? 'win' : 'fail';
+      updateDebug();
+    }
+
+    function resetGame() {
+      gameState.phase = 'playing';
+      gameState.score = 0;
+      gameState.mistakes = 0;
+      gameState.enemiesDefeated = 0;
+      spawnEnemies();
+    }
+
+    function updateDebug() {
+      window.__gameDebug.objects = gameState.enemies.map(e => e.getDebugObject());
+      if (gameState.phase === 'initializing') {
+        window.__gameDebug.objects.push({
+          id: 'start',
+          enabled: true,
+          matchId: null,
+          x: canvas.width / 2,
+          y: canvas.height / 2
+        });
+      }
+      if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        window.__gameDebug.objects.push({
+          id: 'restart',
+          enabled: true,
+          matchId: null,
+          x: canvas.width / 2,
+          y: canvas.height - 100
+        });
+      }
+      window.__gameDebug.metrics = {
+        score: gameState.score,
+        progress: gameState.enemiesDefeated / gameState.enemiesRequired,
+        remaining: gameState.mistakeLimit - gameState.mistakes,
+        phase: gameState.phase
+      };
+    }
+
+    // =========== TAPOBJECT IMPLEMENTATION ===========
+    window.__gameDebug.tapObject = function(id) {
+      if (id === 'start') {
+        gameState.phase = 'playing';
+        spawnEnemies();
+        return;
+      }
+      if (id === 'restart') {
+        resetGame();
+        return;
+      }
+      if (id.startsWith('enemy_')) {
+        const enemy = gameState.enemies.find(e => e.id === id);
+        if (enemy && enemy.enabled) {
+          handleEnemyTap(enemy);
+        }
+      }
+    };
+
+    // =========== EVENT HANDLERS ===========
+    canvas.addEventListener('click', function(e) {
+      if (gameState.phase !== 'playing') {
+        if (gameState.phase === 'initializing') {
+          window.__gameDebug.tapObject('start');
+        } else if (gameState.phase === 'win' || gameState.phase === 'fail') {
+          window.__gameDebug.tapObject('restart');
+        }
+        return;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      let hit = false;
+      for (let enemy of gameState.enemies) {
+        if (enemy.containsPoint(clickX, clickY)) {
+          handleEnemyTap(enemy);
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) {
+        handleMiss();
+      }
+    });
+
+    // =========== RENDERING ===========
+    function drawUI() {
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText(`Score: ${gameState.score}`, 20, 30);
+      ctx.fillText(`Enemies: ${gameState.enemiesDefeated}/${gameState.enemiesRequired}`, 20, 60);
+      ctx.fillText(`Mistakes: ${gameState.mistakes}/${gameState.mistakeLimit}`, 20, 90);
+
+      if (gameState.phase === 'playing') {
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#333';
+        ctx.fillText('Click to defeat enemies! Avoid empty space.', 20, canvas.height - 20);
+      }
+
+      if (gameState.phase === 'win') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('YOU WIN!', canvas.width / 2, 150);
+        ctx.fillStyle = '#FFF';
+        ctx.font = '30px Arial';
+        ctx.fillText(`Score: ${gameState.score}`, canvas.width / 2, 250);
+        ctx.font = '20px Arial';
+        ctx.fillText('Click to restart', canvas.width / 2, 450);
+        ctx.textAlign = 'left';
+      }
+
+      if (gameState.phase === 'fail') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#FF4444';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width / 2, 150);
+        ctx.fillStyle = '#FFF';
+        ctx.font = '30px Arial';
+        ctx.fillText(`Score: ${gameState.score}`, canvas.width / 2, 250);
+        ctx.font = '20px Arial';
+        ctx.fillText('Click to restart', canvas.width / 2, 450);
+        ctx.textAlign = 'left';
+      }
+
+      if (gameState.phase === 'initializing') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('荒野の王', canvas.width / 2, 150);
+        ctx.fillStyle = '#FFF';
+        ctx.font = '24px Arial';
+        ctx.fillText('Defeat enemies by clicking!', canvas.width / 2, 250);
+        ctx.fillText(`Goal: ${gameState.enemiesRequired} enemies`, canvas.width / 2, 300);
+        ctx.fillText(`Limit: ${gameState.mistakeLimit} mistakes`, canvas.width / 2, 350);
+        ctx.font = '20px Arial';
+        ctx.fillText('Click to start', canvas.width / 2, 500);
+        ctx.textAlign = 'left';
+      }
+    }
+
+    function gameLoop() {
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#87CEEB');
+      gradient.addColorStop(1, '#E0B875');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState.phase === 'playing') {
+        for (let enemy of gameState.enemies) {
+          enemy.draw(ctx);
+        }
+      }
+
+      drawUI();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // =========== INITIALIZATION ===========
+    window.addEventListener('load', function() {
+      gameState.phase = 'initializing';
+      updateDebug();
+      setTimeout(() => {
+        if (gameState.phase === 'initializing') {
+          window.__gameDebug.tapObject('start');
+        }
+      }, 2000);
+      gameLoop();
+    });
+  </script>
+</body>
+</html>

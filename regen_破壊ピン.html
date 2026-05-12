@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>破壊ピン</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: "Arial", sans-serif;
+        }
+        canvas {
+            border: 4px solid #fff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <script>
+        // ========== Debug Contract ==========
+        window.__gameDebug = {
+            objects: [],
+            metrics: { score: 0, progress: 0.0, remaining: 9, phase: "playing" },
+            tapObject: function(id) {}
+        };
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // ========== Game State ==========
+        const gameState = {
+            phase: "playing",  // "playing", "win", "fail"
+            pins: [],
+            score: 0,
+            mistakes: 0,
+            mistakeLimit: 3,
+            destroyedCount: 0,
+            startTime: 0,
+            showInstructions: true,
+            instructionsTimer: 5000  // Show for 5 seconds
+        };
+
+        // ========== Particle System ==========
+        const particles = [];
+
+        class Particle {
+            constructor(x, y, vx, vy, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.color = color;
+                this.life = 1.0;
+                this.radius = Math.random() * 3 + 2;
+            }
+
+            update(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.vy += 200 * dt;  // gravity
+                this.life -= dt * 2;
+            }
+
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.life;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+
+            isAlive() {
+                return this.life > 0;
+            }
+        }
+
+        // ========== Pin Class ==========
+        class Pin {
+            constructor(id, x, y) {
+                this.id = id;
+                this.x = x;
+                this.y = y;
+                this.radius = 40;
+                this.hitRadius = 40;
+                this.destroyed = false;
+                this.destroyScale = 1.0;
+                this.rotationAngle = 0;
+                this.color = this.randomColor();
+                this.hitArea = { x, y, r: this.hitRadius };
+            }
+
+            randomColor() {
+                const colors = [
+                    "#FF6B6B", "#4ECDC4", "#45B7D1",
+                    "#FFA07A", "#98D8C8", "#F7DC6F",
+                    "#BB8FCE", "#85C1E2", "#F8B88B"
+                ];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            isPointInside(px, py) {
+                if (this.destroyed) return false;
+                const dx = px - this.x;
+                const dy = py - this.y;
+                return Math.sqrt(dx * dx + dy * dy) < this.hitRadius;
+            }
+
+            destroy() {
+                this.destroyed = true;
+                for (let i = 0; i < 12; i++) {
+                    const angle = (i / 12) * Math.PI * 2;
+                    const speed = 150 + Math.random() * 150;
+                    const vx = Math.cos(angle) * speed;
+                    const vy = Math.sin(angle) * speed;
+                    particles.push(new Particle(this.x, this.y, vx, vy, this.color));
+                }
+            }
+
+            update(dt) {
+                if (this.destroyed && this.destroyScale > 0) {
+                    this.destroyScale -= dt * 3.5;  // 300ms scale animation
+                    if (this.destroyScale < 0) this.destroyScale = 0;
+                }
+                this.rotationAngle += dt * 2;
+            }
+
+            draw(ctx) {
+                if (this.destroyed && this.destroyScale <= 0) return;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotationAngle);
+
+                const scale = this.destroyed ? this.destroyScale : 1.0;
+                ctx.globalAlpha = this.destroyed ? 0.8 * this.destroyScale : 1.0;
+
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * scale, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Inner shine
+                ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+                ctx.beginPath();
+                ctx.arc(-this.radius * scale * 0.3, -this.radius * scale * 0.3, this.radius * scale * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        // ========== Game Functions ==========
+        function initGame() {
+            gameState.phase = "playing";
+            gameState.pins = [];
+            gameState.score = 0;
+            gameState.mistakes = 0;
+            gameState.destroyedCount = 0;
+            gameState.showInstructions = true;
+            particles.length = 0;
+
+            // Create 3x3 grid of pins
+            const startX = canvas.width / 2 - 160;
+            const startY = canvas.height / 2 - 160;
+            const pitch = 80;
+
+            let pinId = 0;
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const x = startX + col * pitch;
+                    const y = startY + row * pitch;
+                    gameState.pins.push(new Pin(`pin_${pinId}`, x, y));
+                    pinId++;
+                }
+            }
+
+            gameState.startTime = Date.now();
+            updateDebug();
+        }
+
+        function handleTap(px, py) {
+            if (gameState.phase !== "playing") return;
+
+            // Normalize coordinates
+            const rect = canvas.getBoundingClientRect();
+            const x = px - rect.left;
+            const y = py - rect.top;
+
+            // Find which pin was hit
+            let hitPin = null;
+            for (let pin of gameState.pins) {
+                if (pin.isPointInside(x, y)) {
+                    hitPin = pin;
+                    break;
+                }
+            }
+
+            if (hitPin) {
+                hitPin.destroy();
+                gameState.destroyedCount++;
+                gameState.score += 10;
+            } else {
+                gameState.mistakes++;
+            }
+
+            // Check win condition
+            if (gameState.destroyedCount === gameState.pins.length) {
+                gameState.phase = "win";
+            }
+
+            // Check fail condition
+            if (gameState.mistakes >= gameState.mistakeLimit) {
+                gameState.phase = "fail";
+            }
+
+            updateDebug();
+        }
+
+        function updateDebug() {
+            // Build objects array - only non-destroyed pins
+            window.__gameDebug.objects = gameState.pins
+                .filter(pin => !pin.destroyed)
+                .map(pin => ({
+                    id: pin.id,
+                    enabled: !pin.destroyed,
+                    matchId: null,
+                    x: pin.x,
+                    y: pin.y,
+                    radius: pin.hitRadius
+                }));
+
+            // Update metrics
+            const remaining = gameState.pins.length - gameState.destroyedCount;
+            window.__gameDebug.metrics = {
+                score: gameState.score,
+                progress: gameState.destroyedCount / gameState.pins.length,
+                remaining: remaining,
+                phase: gameState.phase
+            };
+        }
+
+        // ========== Draw Functions ==========
+        function drawUI() {
+            // Instruction text
+            if (gameState.showInstructions && Date.now() - gameState.startTime < gameState.instructionsTimer) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+                ctx.fillRect(0, 0, canvas.width, 60);
+
+                ctx.fillStyle = "#FFFF00";
+                ctx.font = "bold 18px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("タップしてピンを破壊してください！", canvas.width / 2, 38);
+            }
+
+            // Score & Status (top right)
+            ctx.fillStyle = "#00FF00";
+            ctx.font = "bold 20px Arial";
+            ctx.textAlign = "right";
+            ctx.fillText(`スコア: ${gameState.score}`, canvas.width - 20, 30);
+
+            // Remaining pins (top left)
+            const remaining = gameState.pins.length - gameState.destroyedCount;
+            ctx.fillStyle = "#00FFFF";
+            ctx.fillText(`残り: ${remaining}`, 20, 30);
+
+            // Mistakes (bottom left)
+            ctx.fillStyle = remaining > 0 ? "#FF6B6B" : "#00FF00";
+            ctx.fillText(`ミス: ${gameState.mistakes}/${gameState.mistakeLimit}`, 20, canvas.height - 20);
+
+            // Win screen
+            if (gameState.phase === "win") {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Fireworks effect
+                ctx.fillStyle = "#FFD700";
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i / 5) * Math.PI * 2;
+                    const x = canvas.width / 2 + Math.cos(angle) * 100;
+                    const y = canvas.height / 2 - 100 + Math.sin(angle) * 100;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 15, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.fillStyle = "#00FF00";
+                ctx.font = "bold 60px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("YOU WIN!", canvas.width / 2, canvas.height / 2);
+
+                ctx.fillStyle = "#FFFF00";
+                ctx.font = "bold 24px Arial";
+                ctx.fillText(`最終スコア: ${gameState.score}`, canvas.width / 2, canvas.height / 2 + 60);
+
+                ctx.fillStyle = "#FFFFFF";
+                ctx.font = "18px Arial";
+                ctx.fillText("クリックでリスタート", canvas.width / 2, canvas.height / 2 + 100);
+            }
+
+            // Fail screen
+            if (gameState.phase === "fail") {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // X marks
+                ctx.strokeStyle = "#FF0000";
+                ctx.lineWidth = 8;
+                const xSize = 80;
+                const cx = canvas.width / 2;
+                const cy = canvas.height / 2 - 50;
+                ctx.beginPath();
+                ctx.moveTo(cx - xSize, cy - xSize);
+                ctx.lineTo(cx + xSize, cy + xSize);
+                ctx.moveTo(cx + xSize, cy - xSize);
+                ctx.lineTo(cx - xSize, cy + xSize);
+                ctx.stroke();
+
+                ctx.fillStyle = "#FF6B6B";
+                ctx.font = "bold 60px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 + 50);
+
+                ctx.fillStyle = "#FFFFFF";
+                ctx.font = "18px Arial";
+                ctx.fillText("クリックでリスタート", canvas.width / 2, canvas.height / 2 + 100);
+            }
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = "rgba(26, 26, 46, 0.95)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid background
+            ctx.strokeStyle = "rgba(100, 150, 200, 0.1)";
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // Draw pins
+            for (let pin of gameState.pins) {
+                pin.draw(ctx);
+            }
+
+            // Draw particles
+            for (let particle of particles) {
+                particle.draw(ctx);
+            }
+
+            // Draw UI
+            drawUI();
+        }
+
+        // ========== Update Loop ==========
+        let lastTime = Date.now();
+
+        function update(currentTime) {
+            const dt = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            if (dt > 0.05) {
+                return;  // Skip frame if delta too large
+            }
+
+            // Update pins
+            for (let pin of gameState.pins) {
+                pin.update(dt);
+            }
+
+            // Update particles
+            particles = particles.filter(p => {
+                p.update(dt);
+                return p.isAlive();
+            });
+
+            // Hide instructions after timeout
+            if (Date.now() - gameState.startTime > gameState.instructionsTimer) {
+                gameState.showInstructions = false;
+            }
+
+            draw();
+            updateDebug();
+
+            requestAnimationFrame(update);
+        }
+
+        // ========== Event Handlers ==========
+        canvas.addEventListener("click", (e) => {
+            if (gameState.phase === "playing") {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                handleTap(x, y);
+            } else {
+                // Restart on click
+                initGame();
+            }
+        });
+
+        canvas.addEventListener("mousedown", (e) => {
+            if (gameState.phase === "playing") {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                handleTap(x, y);
+            }
+        });
+
+        // ========== Debug tapObject Implementation ==========
+        window.__gameDebug.tapObject = function(id) {
+            // Extract pin index from id like "pin_0"
+            const pinIndex = parseInt(id.split('_').pop(), 10);
+            if (pinIndex >= 0 && pinIndex < gameState.pins.length) {
+                const pin = gameState.pins[pinIndex];
+                // Call the same game logic as actual tap
+                if (gameState.phase === "playing" && !pin.destroyed) {
+                    pin.destroy();
+                    gameState.destroyedCount++;
+                    gameState.score += 10;
+
+                    // Check win condition
+                    if (gameState.destroyedCount === gameState.pins.length) {
+                        gameState.phase = "win";
+                    }
+
+                    // Check fail condition (no mistakes from tapObject)
+                    if (gameState.mistakes >= gameState.mistakeLimit) {
+                        gameState.phase = "fail";
+                    }
+
+                    updateDebug();
+                }
+            }
+        };
+
+        // ========== Initialize Game ==========
+        initGame();
+        lastTime = Date.now();
+        requestAnimationFrame(update);
+    </script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アヤカシ狩</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #1a0033 0%, #330066 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    #gameContainer {
+      position: relative;
+      background: #0a0015;
+      border: 3px solid #6600cc;
+      border-radius: 10px;
+      box-shadow: 0 0 30px rgba(102, 0, 204, 0.6);
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 18px;
+      color: #ffcc00;
+      font-weight: bold;
+      z-index: 10;
+      text-shadow: 0 0 5px rgba(255, 204, 0, 0.8);
+    }
+    #score {
+      margin-bottom: 5px;
+    }
+    #remaining {
+      margin-bottom: 5px;
+    }
+    #instructions {
+      position: absolute;
+      bottom: 15px;
+      left: 15px;
+      font-size: 16px;
+      color: #99ff00;
+      text-shadow: 0 0 5px rgba(153, 255, 0, 0.6);
+    }
+    .phase-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 100;
+      cursor: pointer;
+      font-size: 28px;
+      color: white;
+      text-align: center;
+    }
+    .phase-overlay h1 {
+      margin-bottom: 20px;
+      font-size: 48px;
+    }
+    .phase-overlay p {
+      margin: 10px 0;
+      font-size: 20px;
+    }
+    .win {
+      background: rgba(0, 150, 0, 0.8) !important;
+    }
+    .win h1 {
+      color: #00ff00;
+    }
+    .fail {
+      background: rgba(150, 0, 0, 0.8) !important;
+    }
+    .fail h1 {
+      color: #ff4444;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="ui">
+      <div id="score">スコア: 0</div>
+      <div id="remaining">妖怪残数: 0</div>
+      <div id="missCount">ミス: 0/3</div>
+    </div>
+    <div id="instructions">妖怪をクリック/タップして捕獲！</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // デバッグコントラクト初期化
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+      tapObject: function(id) {}
+    };
+
+    // ゲーム状態
+    let gameState = {
+      phase: "playing",
+      score: 0,
+      missCount: 0,
+      maxMisses: 3,
+      enemies: [],
+      totalEnemies: 8,
+      capturedCount: 0,
+      particles: [],
+      gameStartTime: null
+    };
+
+    class Enemy {
+      constructor(id) {
+        this.id = id;
+        this.alive = true;
+        this.randomize();
+        this.captured = false;
+      }
+
+      randomize() {
+        this.radius = 25 + Math.random() * 15;
+        this.x = this.radius + Math.random() * (canvas.width - 2 * this.radius);
+        this.y = this.radius + 80 + Math.random() * (canvas.height - 200 - 2 * this.radius);
+        this.hue = 240 + Math.random() * 60;
+        this.pulse = 0;
+        this.pulseSpeed = 0.02 + Math.random() * 0.03;
+      }
+
+      update() {
+        if (this.alive) {
+          this.pulse += this.pulseSpeed;
+          if (this.pulse > 2 * Math.PI) {
+            this.pulse -= 2 * Math.PI;
+          }
+        }
+      }
+
+      draw() {
+        if (!this.alive) return;
+
+        const pulseEffect = 1 + 0.2 * Math.sin(this.pulse);
+        const drawRadius = this.radius * pulseEffect;
+
+        // 妖怪本体（グラデーション）
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, drawRadius);
+        gradient.addColorStop(0, `hsl(${this.hue}, 100%, 60%)`);
+        gradient.addColorStop(1, `hsl(${this.hue}, 100%, 30%)`);
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, drawRadius, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // 外枠
+        ctx.strokeStyle = `hsl(${this.hue}, 100%, 70%)`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 目
+        const eyeOffset = drawRadius * 0.3;
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(this.x - eyeOffset, this.y - eyeOffset * 0.5, drawRadius * 0.15, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + eyeOffset, this.y - eyeOffset * 0.5, drawRadius * 0.15, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // 瞳
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(this.x - eyeOffset + 2, this.y - eyeOffset * 0.5 + 1, drawRadius * 0.07, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + eyeOffset + 2, this.y - eyeOffset * 0.5 + 1, drawRadius * 0.07, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+
+      isClicked(x, y) {
+        if (!this.alive) return false;
+        const dist = Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
+        return dist <= this.radius * 1.2;
+      }
+    }
+
+    class Particle {
+      constructor(x, y, vx, vy, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.color = color;
+        this.life = 1;
+        this.decay = 0.02;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.1;
+        this.life -= this.decay;
+      }
+
+      draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    function initGame() {
+      gameState.phase = "playing";
+      gameState.score = 0;
+      gameState.missCount = 0;
+      gameState.capturedCount = 0;
+      gameState.enemies = [];
+      gameState.particles = [];
+      gameState.gameStartTime = Date.now();
+
+      for (let i = 0; i < gameState.totalEnemies; i++) {
+        gameState.enemies.push(new Enemy(i));
+      }
+
+      updateDebug();
+    }
+
+    function captureEnemy(index) {
+      if (gameState.phase !== "playing" || index < 0 || index >= gameState.enemies.length) return;
+      
+      const enemy = gameState.enemies[index];
+      if (!enemy.alive) return;
+
+      enemy.alive = false;
+      enemy.captured = true;
+      gameState.score += 100;
+      gameState.capturedCount++;
+
+      // パーティクル生成
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * 2 * Math.PI;
+        const speed = 3 + Math.random() * 4;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        const color = `hsl(${enemy.hue}, 100%, 50%)`;
+        gameState.particles.push(new Particle(enemy.x, enemy.y, vx, vy, color));
+      }
+
+      // ゲーム終了判定
+      if (gameState.capturedCount === gameState.totalEnemies) {
+        gameState.phase = "win";
+      }
+
+      updateDebug();
+    }
+
+    function handleMiss() {
+      if (gameState.phase !== "playing") return;
+      gameState.missCount++;
+
+      if (gameState.missCount >= gameState.maxMisses) {
+        gameState.phase = "fail";
+      }
+
+      updateDebug();
+    }
+
+    function handleCanvasClick(event) {
+      if (gameState.phase !== "playing") return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      let hit = false;
+      for (let i = 0; i < gameState.enemies.length; i++) {
+        if (gameState.enemies[i].isClicked(x, y)) {
+          captureEnemy(i);
+          hit = true;
+          break;
+        }
+      }
+
+      if (!hit) {
+        handleMiss();
+      }
+    }
+
+    function updateDebug() {
+      window.__gameDebug.objects = gameState.enemies.map((e, i) => ({
+        id: `enemy_${i}`,
+        enabled: e.alive,
+        matchId: null,
+        x: Math.round(e.x),
+        y: Math.round(e.y),
+        w: e.radius * 2,
+        h: e.radius * 2
+      }));
+
+      window.__gameDebug.metrics = {
+        score: gameState.score,
+        progress: gameState.capturedCount / gameState.totalEnemies,
+        remaining: gameState.enemies.filter(e => e.alive).length,
+        phase: gameState.phase
+      };
+    }
+
+    window.__gameDebug.tapObject = function(id) {
+      const idx = parseInt(id.split('_').pop(), 10);
+      if (!isNaN(idx) && idx >= 0 && idx < gameState.enemies.length) {
+        captureEnemy(idx);
+      }
+    };
+
+    function updateUI() {
+      document.getElementById('score').textContent = `スコア: ${gameState.score}`;
+      document.getElementById('remaining').textContent = `妖怪残数: ${gameState.enemies.filter(e => e.alive).length}`;
+      document.getElementById('missCount').textContent = `ミス: ${gameState.missCount}/${gameState.maxMisses}`;
+    }
+
+    function drawGameOver() {
+      const overlay = document.createElement('div');
+      overlay.className = 'phase-overlay';
+      if (gameState.phase === "win") {
+        overlay.classList.add('win');
+        overlay.innerHTML = `
+          <h1>🎉 全妖怪を捕獲！ 🎉</h1>
+          <p>スコア: ${gameState.score}</p>
+          <p style="margin-top: 20px; font-size: 18px;">クリックでリスタート</p>
+        `;
+      } else {
+        overlay.classList.add('fail');
+        overlay.innerHTML = `
+          <h1>❌ ゲームオーバー ❌</h1>
+          <p>ミス数上限に達しました</p>
+          <p>最終スコア: ${gameState.score}</p>
+          <p style="margin-top: 20px; font-size: 18px;">クリックでリスタート</p>
+        `;
+      }
+      
+      const container = document.getElementById('gameContainer');
+      const existingOverlay = container.querySelector('.phase-overlay');
+      if (existingOverlay) existingOverlay.remove();
+      container.appendChild(overlay);
+
+      overlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        overlay.remove();
+        initGame();
+      });
+    }
+
+    function gameLoop() {
+      // 背景描画
+      ctx.fillStyle = '#0a0015';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // グリッド背景
+      ctx.strokeStyle = 'rgba(102, 0, 204, 0.1)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= canvas.width; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+      for (let i = 0; i <= canvas.height; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+      }
+
+      // 敵の更新・描画
+      gameState.enemies.forEach(enemy => {
+        enemy.update();
+        enemy.draw();
+      });
+
+      // パーティクルの更新・描画
+      for (let i = gameState.particles.length - 1; i >= 0; i--) {
+        gameState.particles[i].update();
+        gameState.particles[i].draw();
+        if (gameState.particles[i].life <= 0) {
+          gameState.particles.splice(i, 1);
+        }
+      }
+
+      updateUI();
+
+      if (gameState.phase === "win" || gameState.phase === "fail") {
+        drawGameOver();
+        return;
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener('click', handleCanvasClick);
+
+    // マウスイベント全て処理（P2対策）
+    canvas.addEventListener('mousedown', () => {});
+    canvas.addEventListener('mousemove', () => {});
+    canvas.addEventListener('mouseup', () => {});
+
+    // ゲーム開始
+    setTimeout(() => {
+      initGame();
+      gameLoop();
+    }, 500);
+  </script>
+</body>
+</html>

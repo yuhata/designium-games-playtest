@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ドタバタシェフ</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+        }
+        #gameContainer {
+            text-align: center;
+        }
+        canvas {
+            border: 4px solid #333;
+            background: linear-gradient(135deg, #fff9e6 0%, #ffe8cc 100%);
+            cursor: grab;
+            display: block;
+            margin-bottom: 10px;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+</div>
+
+<script>
+// ===========================
+// Game Debug Contract
+// ===========================
+window.__gameDebug = {
+    objects: [],
+    drags: [],
+    metrics: { score: 0, progress: 0.0, remaining: 0, phase: "loading" },
+    tapObject: function(id) {},
+    dragObject: function(id) {}
+};
+
+// ===========================
+// Canvas Setup
+// ===========================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ===========================
+// Game State
+// ===========================
+let gameState = {
+    phase: 'loading',
+    score: 0,
+    progress: 0.0,
+    remaining: 5,
+    mistakes: 0,
+    mistakeLimit: 5,
+    ingredients: [],
+    cookware: [],
+    draggingId: null,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    totalRecipes: 5,
+    completedCount: 0
+};
+
+// ===========================
+// Initialize Game
+// ===========================
+function initGame() {
+    gameState.phase = 'playing';
+    gameState.score = 0;
+    gameState.progress = 0.0;
+    gameState.mistakes = 0;
+    gameState.remaining = gameState.totalRecipes;
+    gameState.draggingId = null;
+    gameState.completedCount = 0;
+    
+    // Create ingredients with random positions
+    const ingredientTypes = [
+        { name: 'tomato', icon: '🍅', pair: 'pan_0' },
+        { name: 'egg', icon: '🥚', pair: 'pan_1' },
+        { name: 'pasta', icon: '🍝', pair: 'pan_0' },
+        { name: 'cheese', icon: '🧀', pair: 'pan_2' },
+        { name: 'pepper', icon: '🌶️', pair: 'pan_1' }
+    ];
+    
+    gameState.ingredients = ingredientTypes.map((ing, idx) => ({
+        id: 'ing_' + idx,
+        type: ing.name,
+        icon: ing.icon,
+        x: Math.random() * (canvas.width - 100) + 50,
+        y: Math.random() * 150 + 40,
+        width: 50,
+        height: 50,
+        active: false,
+        recipePair: ing.pair,
+        completed: false
+    }));
+    
+    // Create cookware
+    gameState.cookware = [
+        { id: 'pan_0', name: '鍋', icon: '🍲', x: 150, y: 420, radius: 55 },
+        { id: 'pan_1', name: 'フライパン', icon: '🍳', x: 400, y: 420, radius: 55 },
+        { id: 'pan_2', name: '玉子焼き', icon: '🥞', x: 650, y: 420, radius: 55 }
+    ];
+    
+    updateDebug();
+}
+
+// ===========================
+// Update Debug Contract
+// ===========================
+function updateDebug() {
+    window.__gameDebug.objects = gameState.ingredients.map(ing => ({
+        id: ing.id,
+        type: ing.type,
+        x: Math.round(ing.x),
+        y: Math.round(ing.y),
+        width: ing.width,
+        height: ing.height,
+        active: ing.active,
+        completed: ing.completed
+    }));
+    
+    window.__gameDebug.drags = gameState.ingredients
+        .filter(ing => !ing.completed)
+        .map(ing => ({
+            id: ing.id,
+            type: 'ingredient',
+            enabled: gameState.phase === 'playing'
+        }));
+    
+    window.__gameDebug.metrics = {
+        score: gameState.score,
+        progress: parseFloat((gameState.progress).toFixed(2)),
+        remaining: gameState.remaining,
+        phase: gameState.phase
+    };
+}
+
+// ===========================
+// tapObject Implementation
+// ===========================
+window.__gameDebug.tapObject = function(id) {
+    if (gameState.phase !== 'playing') return;
+    const ing = gameState.ingredients.find(i => i.id === id);
+    if (!ing || ing.completed) return;
+    tapIngredient(ing);
+};
+
+// ===========================
+// dragObject Implementation
+// ===========================
+window.__gameDebug.dragObject = function(id) {
+    if (gameState.phase !== 'playing') return;
+    const ing = gameState.ingredients.find(i => i.id === id);
+    if (!ing || ing.completed) return;
+    
+    const target = gameState.cookware.find(c => c.id === ing.recipePair);
+    if (target) {
+        dropIngredientOnCookware(ing, target);
+    }
+};
+
+// ===========================
+// Tap Logic
+// ===========================
+function tapIngredient(ing) {
+    if (!ing || ing.completed || gameState.phase !== 'playing') return;
+    
+    ing.active = true;
+    gameState.score += 10;
+    gameState.progress += 0.2;
+    
+    updateDebug();
+    checkWinCondition();
+}
+
+// ===========================
+// Drag & Drop Logic
+// ===========================
+function dropIngredientOnCookware(ing, cookware) {
+    if (!ing || !cookware || ing.completed || gameState.phase !== 'playing') return;
+    
+    const isCorrect = ing.recipePair === cookware.id;
+    
+    if (isCorrect) {
+        ing.completed = true;
+        ing.x = cookware.x;
+        ing.y = cookware.y;
+        ing.active = false;
+        gameState.completedCount++;
+        gameState.remaining = gameState.totalRecipes - gameState.completedCount;
+        gameState.score += 50;
+        gameState.progress += 1.0;
+    } else {
+        gameState.mistakes++;
+        gameState.score = Math.max(0, gameState.score - 5);
+    }
+    
+    updateDebug();
+    checkWinCondition();
+    checkFailCondition();
+}
+
+// ===========================
+// Win Condition
+// ===========================
+function checkWinCondition() {
+    if (gameState.remaining <= 0 && gameState.phase === 'playing') {
+        gameState.phase = 'win';
+        updateDebug();
+    }
+}
+
+// ===========================
+// Fail Condition
+// ===========================
+function checkFailCondition() {
+    if (gameState.mistakes >= gameState.mistakeLimit && gameState.phase === 'playing') {
+        gameState.phase = 'failed';
+        updateDebug();
+    }
+}
+
+// ===========================
+// Restart
+// ===========================
+function restart() {
+    initGame();
+}
+
+// ===========================
+// Mouse Event Handler
+// ===========================
+function getMousePos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+    };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+    if (gameState.phase !== 'playing') return;
+    
+    const pos = getMousePos(e);
+    const ing = gameState.ingredients.find(i => 
+        !i.completed &&
+        pos.x >= i.x && pos.x <= i.x + i.width &&
+        pos.y >= i.y && pos.y <= i.y + i.height
+    );
+    
+    if (ing) {
+        gameState.draggingId = ing.id;
+        gameState.dragOffsetX = pos.x - ing.x;
+        gameState.dragOffsetY = pos.y - ing.y;
+    }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (!gameState.draggingId || gameState.phase !== 'playing') return;
+    
+    const pos = getMousePos(e);
+    const ing = gameState.ingredients.find(i => i.id === gameState.draggingId);
+    if (ing && !ing.completed) {
+        ing.x = Math.max(0, Math.min(canvas.width - ing.width, pos.x - gameState.dragOffsetX));
+        ing.y = Math.max(0, Math.min(canvas.height - ing.height, pos.y - gameState.dragOffsetY));
+    }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+    if (!gameState.draggingId || gameState.phase !== 'playing') return;
+    
+    const ing = gameState.ingredients.find(i => i.id === gameState.draggingId);
+    if (!ing || ing.completed) {
+        gameState.draggingId = null;
+        return;
+    }
+    
+    // Check collision with cookware
+    const target = gameState.cookware.find(c => {
+        const dx = ing.x + ing.width / 2 - c.x;
+        const dy = ing.y + ing.height / 2 - c.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        return dist < c.radius + 25;
+    });
+    
+    if (target) {
+        dropIngredientOnCookware(ing, target);
+    }
+    
+    gameState.draggingId = null;
+    updateDebug();
+});
+
+canvas.addEventListener('click', (e) => {
+    if (gameState.phase === 'playing') {
+        const pos = getMousePos(e);
+        const ing = gameState.ingredients.find(i =>
+            !i.completed &&
+            pos.x >= i.x && pos.x <= i.x + i.width &&
+            pos.y >= i.y && pos.y <= i.y + i.height
+        );
+        if (ing) {
+            tapIngredient(ing);
+        }
+    } else if (gameState.phase === 'win' || gameState.phase === 'failed') {
+        restart();
+    }
+});
+
+// ===========================
+// Draw Functions
+// ===========================
+function drawIngredient(ing) {
+    ctx.save();
+    
+    if (ing.completed) {
+        ctx.fillStyle = '#D3D3D3';
+        ctx.globalAlpha = 0.5;
+    } else if (ing.active) {
+        ctx.fillStyle = '#FFD700';
+        ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+        ctx.shadowBlur = 15;
+    } else if (ing.id === gameState.draggingId) {
+        ctx.fillStyle = '#FF6B6B';
+        ctx.shadowColor = 'rgba(255, 107, 107, 0.8)';
+        ctx.shadowBlur = 15;
+    } else {
+        ctx.fillStyle = '#90EE90';
+    }
+    
+    ctx.fillRect(ing.x, ing.y, ing.width, ing.height);
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(ing.x, ing.y, ing.width, ing.height);
+    
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ing.icon, ing.x + ing.width / 2, ing.y + ing.height / 2);
+    
+    ctx.restore();
+}
+
+function drawCookware(cookware) {
+    ctx.save();
+    ctx.fillStyle = '#8B4513';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(cookware.x, cookware.y, cookware.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cookware.icon, cookware.x, cookware.y);
+    
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText(cookware.name, cookware.x, cookware.y + cookware.radius + 15);
+    
+    ctx.restore();
+}
+
+function drawUI() {
+    ctx.save();
+    
+    // Title
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('ドタバタシェフ', 15, 32);
+    
+    // Stats
+    ctx.font = 'bold 18px Arial';
+    ctx.fillStyle = '#555';
+    ctx.fillText(`スコア: ${gameState.score}`, 15, 65);
+    ctx.fillText(`完成: ${gameState.completedCount}/${gameState.totalRecipes}`, 15, 90);
+    ctx.fillText(`ミス: ${gameState.mistakes}/${gameState.mistakeLimit}`, 15, 115);
+    
+    // Instructions
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓ 食材を正しい調理道具にドラッグ or タップして完成させよう！', canvas.width / 2, canvas.height - 15);
+    
+    ctx.restore();
+}
+
+function drawWin() {
+    ctx.save();
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#FFD700';
+    ctx.font = 'bold 64px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎉 完成！ 🎉', canvas.width / 2, canvas.height / 2 - 80);
+    
+    ctx.fillStyle = '#FFF';
+    ctx.font = '32px Arial';
+    ctx.fillText(`最終スコア: ${gameState.score}`, canvas.width / 2, canvas.height / 2 + 20);
+    
+    ctx.font = 'bold 20px Arial';
+    ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+    
+    ctx.restore();
+}
+
+function drawFailed() {
+    ctx.save();
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#FF6B6B';
+    ctx.font = 'bold 64px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💥 失敗 💥', canvas.width / 2, canvas.height / 2 - 80);
+    
+    ctx.fillStyle = '#FFF';
+    ctx.font = '32px Arial';
+    ctx.fillText(`スコア: ${gameState.score}`, canvas.width / 2, canvas.height / 2 + 20);
+    
+    ctx.font = 'bold 20px Arial';
+    ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+    
+    ctx.restore();
+}
+
+// ===========================
+// Main Game Loop
+// ===========================
+function gameLoop() {
+    // Clear canvas
+    ctx.fillStyle = '#fff9e6';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw based on phase
+    if (gameState.phase === 'playing' || gameState.phase === 'win' || gameState.phase === 'failed') {
+        gameState.cookware.forEach(drawCookware);
+        gameState.ingredients.forEach(drawIngredient);
+        drawUI();
+        
+        if (gameState.phase === 'win') {
+            drawWin();
+        } else if (gameState.phase === 'failed') {
+            drawFailed();
+        }
+    }
+    
+    updateDebug();
+    requestAnimationFrame(gameLoop);
+}
+
+// ===========================
+// Start Game
+// ===========================
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        initGame();
+        gameLoop();
+    }, 100);
+});
+</script>
+</body>
+</html>

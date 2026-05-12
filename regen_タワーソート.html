@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タワーソート</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 3px solid white;
+            background: #f9f9f9;
+            display: block;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+// ========== グローバルデバッグ初期化 ==========
+window.__gameDebug = {
+    drags: [],
+    objects: [],
+    metrics: {
+        score: 0,
+        progress: 0.0,
+        remaining: 0,
+        phase: "playing"
+    },
+    dragObject: function(id) {
+        // 実装される
+    },
+    tapObject: function(id) {
+        // 実装される
+    }
+};
+
+// ========== ゲーム状態管理 ==========
+const game = {
+    canvas: null,
+    ctx: null,
+    phase: "playing", // playing, win, fail
+    score: 0,
+    mistakes: 0,
+    mistakeLimit: 3,
+    remaining: 0,
+    selectedCardId: null,
+    draggedCard: null,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    cards: [],
+    towers: [],
+    startTime: 0
+};
+
+// ========== ゲーム初期化 ==========
+function init() {
+    game.canvas = document.getElementById('gameCanvas');
+    game.ctx = game.canvas.getContext('2d');
+    game.startTime = Date.now();
+    
+    // タワー初期化（4色）
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'];
+    const colorNames = ['Red', 'Blue', 'Green', 'Orange'];
+    
+    for (let i = 0; i < 4; i++) {
+        game.towers.push({
+            id: `tower_${i}`,
+            x: 100 + i * 170,
+            y: 450,
+            width: 120,
+            height: 120,
+            color: colors[i],
+            colorName: colorNames[i],
+            slots: [],
+            capacity: 3
+        });
+    }
+    
+    // カード初期化
+    let cardId = 0;
+    for (let tower = 0; tower < 4; tower++) {
+        for (let num = 0; num < 3; num++) {
+            game.cards.push({
+                id: `card_${cardId}`,
+                tower: tower,
+                number: num,
+                color: game.towers[tower].color,
+                colorName: game.towers[tower].colorName,
+                x: 50 + Math.random() * 600,
+                y: 50 + Math.random() * 200,
+                width: 80,
+                height: 100,
+                placed: false,
+                selected: false
+            });
+            cardId++;
+        }
+    }
+    
+    // カードをシャッフル
+    for (let i = 0; i < game.cards.length; i++) {
+        const j = Math.floor(Math.random() * game.cards.length);
+        [game.cards[i], game.cards[j]] = [game.cards[j], game.cards[i]];
+    }
+    
+    game.remaining = game.cards.length;
+    updateDebug();
+    
+    // イベントリスナー登録
+    game.canvas.addEventListener('mousedown', onMouseDown);
+    game.canvas.addEventListener('mousemove', onMouseMove);
+    game.canvas.addEventListener('mouseup', onMouseUp);
+    game.canvas.addEventListener('click', onClick);
+    
+    game.phase = 'playing';
+    gameLoop();
+}
+
+// ========== マウスイベント処理 ==========
+function onMouseDown(e) {
+    if (game.phase !== 'playing') return;
+    
+    const rect = game.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const clickedCard = game.cards.find(card => 
+        !card.placed &&
+        x >= card.x && x <= card.x + card.width &&
+        y >= card.y && y <= card.y + card.height
+    );
+    
+    if (clickedCard) {
+        game.selectedCardId = clickedCard.id;
+        clickedCard.selected = true;
+        game.draggedCard = clickedCard;
+        game.dragOffsetX = x - clickedCard.x;
+        game.dragOffsetY = y - clickedCard.y;
+        updateDebug();
+    }
+}
+
+function onMouseMove(e) {
+    if (!game.draggedCard || game.phase !== 'playing') return;
+    
+    const rect = game.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    game.draggedCard.x = Math.max(0, Math.min(game.canvas.width - game.draggedCard.width, x - game.dragOffsetX));
+    game.draggedCard.y = Math.max(0, Math.min(game.canvas.height - game.draggedCard.height, y - game.dragOffsetY));
+}
+
+function onMouseUp(e) {
+    if (!game.draggedCard || game.phase !== 'playing') return;
+    
+    const card = game.draggedCard;
+    card.selected = false;
+    game.draggedCard = null;
+    game.selectedCardId = null;
+    
+    // タワーとの衝突判定
+    for (let tower of game.towers) {
+        if (isCardInTower(card, tower)) {
+            placeCard(card, tower);
+            return;
+        }
+    }
+    
+    updateDebug();
+}
+
+function onClick(e) {
+    if (game.phase === 'win' || game.phase === 'fail') {
+        location.reload();
+    }
+}
+
+// ========== ゲーム処理関数 ==========
+function isCardInTower(card, tower) {
+    const cardCenterX = card.x + card.width / 2;
+    const cardCenterY = card.y + card.height / 2;
+    
+    return cardCenterX >= tower.x && 
+           cardCenterX <= tower.x + tower.width &&
+           cardCenterY >= tower.y && 
+           cardCenterY <= tower.y + tower.height;
+}
+
+function placeCard(card, tower) {
+    const correctTower = game.towers[card.tower];
+    
+    if (tower.id !== correctTower.id) {
+        // ミス：違う色のタワー
+        game.mistakes++;
+        game.remaining--;
+        
+        // 戻す
+        card.x = 50 + Math.random() * 600;
+        card.y = 50 + Math.random() * 200;
+        
+        if (game.mistakes >= game.mistakeLimit) {
+            game.phase = 'fail';
+        }
+    } else {
+        // 正解：カードを配置
+        tower.slots.push(card);
+        card.placed = true;
+        card.x = tower.x + 20;
+        card.y = tower.y - 110 - (tower.slots.length - 1) * 5;
+        
+        game.score++;
+        game.remaining--;
+        
+        if (game.remaining === 0) {
+            game.phase = 'win';
+        }
+    }
+    
+    updateDebug();
+}
+
+// ========== dragObject実装 ==========
+window.__gameDebug.dragObject = function(id) {
+    const card = game.cards.find(c => c.id === id);
+    if (!card || card.placed) return;
+    
+    // dragObject は選択状態をセットして、次のマウスイベントで移動・配置が実行される
+    game.selectedCardId = id;
+    card.selected = true;
+    game.draggedCard = card;
+    
+    // マウスオフセットは(0,0)に設定
+    game.dragOffsetX = 0;
+    game.dragOffsetY = 0;
+    
+    // カードを正しいタワーへ移動
+    const correctTower = game.towers[card.tower];
+    game.draggedCard.x = correctTower.x + 20;
+    game.draggedCard.y = correctTower.y - 50;
+    
+    // 配置完了
+    placeCard(card, correctTower);
+    
+    game.draggedCard = null;
+    card.selected = false;
+    game.selectedCardId = null;
+};
+
+// ========== tapObject実装 ==========
+window.__gameDebug.tapObject = function(id) {
+    window.__gameDebug.dragObject(id);
+};
+
+// ========== デバッグ情報更新 ==========
+function updateDebug() {
+    window.__gameDebug.drags = game.cards
+        .filter(c => !c.placed)
+        .map(c => ({
+            id: c.id,
+            type: 'card',
+            enabled: !c.placed,
+            x: Math.round(c.x),
+            y: Math.round(c.y)
+        }));
+    
+    window.__gameDebug.objects = game.cards.map(c => ({
+        id: c.id,
+        x: Math.round(c.x),
+        y: Math.round(c.y),
+        width: c.width,
+        height: c.height,
+        placed: c.placed,
+        selected: c.selected,
+        tower: c.tower
+    }));
+    
+    window.__gameDebug.metrics = {
+        score: game.score,
+        progress: game.cards.length > 0 ? (game.cards.filter(c => c.placed).length / game.cards.length) : 0,
+        remaining: game.remaining,
+        phase: game.phase
+    };
+}
+
+// ========== 描画 ==========
+function draw() {
+    const ctx = game.ctx;
+    
+    // 背景
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, game.canvas.width, game.canvas.height);
+    
+    // タイトル
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 28px Arial';
+    ctx.fillText('🏗️ タワーソート', 20, 35);
+    
+    // 説明文
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#666';
+    ctx.fillText('同じ色のカードを対応するタワーにドラッグして配置してください', 20, 60);
+    
+    // UI表示（スコア、ミス、残り）
+    ctx.font = 'bold 16px Arial';
+    ctx.fillStyle = '#333';
+    ctx.fillText(`スコア: ${game.score}`, 20, 90);
+    ctx.fillText(`ミス: ${game.mistakes}/${game.mistakeLimit}`, 220, 90);
+    ctx.fillText(`残り: ${game.remaining}`, 500, 90);
+    
+    // プログレスバー
+    const progressY = 110;
+    ctx.fillStyle = '#ddd';
+    ctx.fillRect(20, progressY, 760, 15);
+    ctx.fillStyle = '#667eea';
+    ctx.fillRect(20, progressY, 760 * window.__gameDebug.metrics.progress, 15);
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(20, progressY, 760, 15);
+    
+    // タワー描画
+    for (let tower of game.towers) {
+        // タワーベース背景
+        ctx.fillStyle = tower.color;
+        ctx.globalAlpha = 0.2;
+        ctx.fillRect(tower.x, tower.y, tower.width, tower.height);
+        ctx.globalAlpha = 1.0;
+        
+        // タワー枠
+        ctx.strokeStyle = tower.color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(tower.x, tower.y, tower.width, tower.height);
+        
+        // タワーラベル
+        ctx.fillStyle = tower.color;
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(tower.colorName, tower.x + tower.width / 2, tower.y + tower.height + 25);
+        ctx.textAlign = 'left';
+    }
+    
+    // カード描画
+    for (let card of game.cards) {
+        if (card.placed) continue; // 配置済みは描画しない（タワー内）
+        
+        ctx.fillStyle = card.color;
+        
+        if (card.selected) {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 8;
+            ctx.shadowOffsetY = 8;
+        }
+        
+        ctx.fillRect(card.x, card.y, card.width, card.height);
+        
+        // カード枠
+        ctx.strokeStyle = card.selected ? '#000' : '#ccc';
+        ctx.lineWidth = card.selected ? 4 : 2;
+        ctx.strokeRect(card.x, card.y, card.width, card.height);
+        
+        ctx.shadowColor = 'transparent';
+        
+        // カード番号表示
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(card.number + 1), card.x + card.width / 2, card.y + card.height / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+    }
+    
+    // win/fail演出
+    if (game.phase === 'win') {
+        drawWinScreen();
+    } else if (game.phase === 'fail') {
+        drawFailScreen();
+    }
+}
+
+function drawWinScreen() {
+    const ctx = game.ctx;
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, game.canvas.width, game.canvas.height);
+    
+    ctx.fillStyle = '#FFD700';
+    ctx.font = 'bold 80px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('🎉', game.canvas.width / 2, game.canvas.height / 2 - 80);
+    ctx.fillText('WIN!', game.canvas.width / 2, game.canvas.height / 2 - 10);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 28px Arial';
+    ctx.fillText(`最終スコア: ${game.score}点`, game.canvas.width / 2, game.canvas.height / 2 + 60);
+    
+    ctx.font = '18px Arial';
+    ctx.fillText('クリックでリスタート', game.canvas.width / 2, game.canvas.height / 2 + 110);
+    
+    ctx.textAlign = 'left';
+}
+
+function drawFailScreen() {
+    const ctx = game.ctx;
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, game.canvas.width, game.canvas.height);
+    
+    ctx.fillStyle = '#FF6B6B';
+    ctx.font = 'bold 80px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('💥', game.canvas.width / 2, game.canvas.height / 2 - 80);
+    ctx.fillText('FAIL!', game.canvas.width / 2, game.canvas.height / 2 - 10);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 28px Arial';
+    ctx.fillText(`最終スコア: ${game.score}点`, game.canvas.width / 2, game.canvas.height / 2 + 60);
+    
+    ctx.font = '18px Arial';
+    ctx.fillText('クリックでリスタート', game.canvas.width / 2, game.canvas.height / 2 + 110);
+    
+    ctx.textAlign = 'left';
+}
+
+// ========== ゲームループ ==========
+function gameLoop() {
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+// ========== 初期化実行 ==========
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        init();
+    }, 100);
+});
+</script>
+</body>
+</html>

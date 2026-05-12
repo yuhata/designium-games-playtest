@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>幻画合わせ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+    }
+    canvas { 
+      background: #f0f0f0;
+      border: 3px solid #333;
+      cursor: pointer;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+// ===== デバッグコントラクト初期化 =====
+window.__gameDebug = {
+  objects: [],
+  metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+  tapObject: function(id) {}
+};
+
+// ===== ゲーム状態 =====
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+const CARD_W = 80;
+const CARD_H = 100;
+const COLS = 4;
+const ROWS = 4;
+const TOTAL_CARDS = COLS * ROWS;
+const EMOJIS = ['🌸', '🌺', '🌻', '🌷', '🌹', '🏵️', '💐', '🌼'];
+
+let gameState = {
+  phase: "playing",
+  cards: [],
+  selected: [],
+  matched: 0,
+  mistakes: 0,
+  maxMistakes: 4,
+  score: 0,
+  animatingCards: new Set()
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ===== ゲーム初期化 =====
+function initGame() {
+  gameState.phase = "playing";
+  gameState.cards = [];
+  gameState.selected = [];
+  gameState.matched = 0;
+  gameState.mistakes = 0;
+  gameState.score = 0;
+  gameState.animatingCards.clear();
+
+  // ペア生成: 8種類 x 2枚 = 16枚（シャッフル）
+  const cardData = [];
+  for (let i = 0; i < EMOJIS.length; i++) {
+    cardData.push({ emoji: EMOJIS[i], pairId: i });
+    cardData.push({ emoji: EMOJIS[i], pairId: i });
+  }
+  // シャッフル (Fisher-Yates)
+  for (let i = cardData.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cardData[i], cardData[j]] = [cardData[j], cardData[i]];
+  }
+
+  // カードオブジェクト作成
+  for (let idx = 0; idx < TOTAL_CARDS; idx++) {
+    const row = Math.floor(idx / COLS);
+    const col = idx % COLS;
+    const x = 100 + col * (CARD_W + 20);
+    const y = 80 + row * (CARD_H + 20);
+
+    gameState.cards.push({
+      id: `card_${idx}`,
+      idx: idx,
+      emoji: cardData[idx].emoji,
+      pairId: cardData[idx].pairId,
+      revealed: false,
+      matched: false,
+      x: x,
+      y: y,
+      scale: 1.0
+    });
+  }
+
+  updateDebug();
+}
+
+// ===== デバッグ状態更新 =====
+function updateDebug() {
+  const remaining = TOTAL_CARDS - gameState.matched * 2;
+  const progress = gameState.matched / EMOJIS.length;
+
+  window.__gameDebug.objects = gameState.cards.map(card => ({
+    id: card.id,
+    enabled: !card.matched && gameState.selected.length < 2,
+    matchId: card.pairId.toString(),
+    x: card.x,
+    y: card.y,
+    w: CARD_W,
+    h: CARD_H
+  }));
+
+  window.__gameDebug.metrics = {
+    score: gameState.score,
+    progress: progress,
+    remaining: remaining,
+    phase: gameState.phase
+  };
+}
+
+// ===== デバッグ tapObject 実装 =====
+window.__gameDebug.tapObject = function(id) {
+  const card = gameState.cards.find(c => c.id === id);
+  if (card && !card.matched && gameState.selected.length < 2) {
+    handleCardTap(card);
+  }
+};
+
+// ===== カードタップ処理 =====
+function handleCardTap(card) {
+  if (card.matched || gameState.selected.includes(card) || gameState.animatingCards.has(card.idx)) {
+    return;
+  }
+
+  if (gameState.selected.length >= 2) {
+    return;
+  }
+
+  card.revealed = true;
+  gameState.selected.push(card);
+  gameState.animatingCards.add(card.idx);
+
+  updateDebug();
+
+  if (gameState.selected.length === 2) {
+    setTimeout(checkMatch, 800);
+  }
+}
+
+// ===== マッチ判定 =====
+function checkMatch() {
+  const [card1, card2] = gameState.selected;
+  const isMatch = card1.pairId === card2.pairId;
+
+  if (isMatch) {
+    // マッチ成功
+    card1.matched = true;
+    card2.matched = true;
+    gameState.score += 10;
+    gameState.matched++;
+    gameState.selected = [];
+    gameState.animatingCards.clear();
+
+    updateDebug();
+    checkWinCondition();
+  } else {
+    // ミス
+    gameState.mistakes++;
+    gameState.selected = [];
+
+    setTimeout(() => {
+      card1.revealed = false;
+      card2.revealed = false;
+      gameState.animatingCards.clear();
+      updateDebug();
+      checkFailCondition();
+    }, 600);
+  }
+}
+
+// ===== 勝利条件チェック（P3: win判定タイミング） =====
+function checkWinCondition() {
+  if (gameState.matched === EMOJIS.length) {
+    gameState.phase = "win";
+    gameState.score += (gameState.maxMistakes - gameState.mistakes) * 5;
+    updateDebug();
+  }
+}
+
+// ===== 敗北条件チェック =====
+function checkFailCondition() {
+  if (gameState.mistakes >= gameState.maxMistakes) {
+    gameState.phase = "fail";
+    updateDebug();
+  }
+}
+
+// ===== マウス座標正規化（P2） =====
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  return { x, y };
+}
+
+// ===== マウスイベント処理 =====
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase !== "playing") {
+    handleGameOverClick(e);
+    return;
+  }
+  const { x, y } = getMousePos(e);
+  const card = gameState.cards.find(
+    c => x >= c.x && x < c.x + CARD_W && y >= c.y && y < c.y + CARD_H
+  );
+  if (card) {
+    handleCardTap(card);
+  }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  // P9: ドラッグ開始の区別のためmousedownは単独で処理
+  if (gameState.phase === "playing") {
+    const { x, y } = getMousePos(e);
+    // ドラッグ検出用（本ゲームではスキップ可能）
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  // P1: mousemove内でゲーム終了判定を行わない（既にcheckFailConditionは別関数）
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  // P1: mouseup内でゲーム終了判定を行わない
+});
+
+// ===== ゲームオーバー画面クリック処理（P10: リスタート） =====
+function handleGameOverClick(e) {
+  const { x, y } = getMousePos(e);
+  const centerX = CANVAS_W / 2;
+  const centerY = CANVAS_H - 80;
+  const btnW = 200;
+  const btnH = 50;
+  
+  if (x >= centerX - btnW / 2 && x < centerX + btnW / 2 &&
+      y >= centerY - btnH / 2 && y < centerY + btnH / 2) {
+    initGame();
+  }
+}
+
+// ===== 描画関数 =====
+function drawCard(card) {
+  const { x, y, scale } = card;
+  const scaledW = CARD_W * scale;
+  const scaledH = CARD_H * scale;
+  const offsetX = (CARD_W - scaledW) / 2;
+  const offsetY = (CARD_H - scaledH) / 2;
+
+  if (card.matched) {
+    // マッチ済みカードはフェードアウト
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#ddd';
+    ctx.fillRect(x + offsetX, y + offsetY, scaledW, scaledH);
+    ctx.globalAlpha = 1.0;
+  } else {
+    // カード背景
+    ctx.fillStyle = card.revealed ? '#fff' : '#667eea';
+    ctx.fillRect(x + offsetX, y + offsetY, scaledW, scaledH);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + offsetX, y + offsetY, scaledW, scaledH);
+
+    // 絵柄または背面
+    if (card.revealed && card.emoji) {
+      ctx.font = '48px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(card.emoji, x + CARD_W / 2, y + CARD_H / 2);
+    } else if (!card.revealed) {
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('?', x + CARD_W / 2, y + CARD_H / 2);
+    }
+  }
+}
+
+function drawUI() {
+  // 操作説明（P11: インタラクティブ性維持）
+  ctx.font = '18px Arial';
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('📌 同じ絵柄のペアを見つけてクリック！', 20, 20);
+
+  // スコア表示
+  ctx.font = 'bold 20px Arial';
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'right';
+  ctx.fillText(`スコア: ${gameState.score}`, CANVAS_W - 20, 20);
+
+  // ミス数表示
+  ctx.font = 'bold 18px Arial';
+  ctx.fillStyle = gameState.mistakes >= gameState.maxMistakes - 1 ? '#ff0000' : '#333';
+  ctx.textAlign = 'right';
+  ctx.fillText(`ミス: ${gameState.mistakes}/${gameState.maxMistakes}`, CANVAS_W - 20, 50);
+
+  // ペア数表示
+  ctx.font = '16px Arial';
+  ctx.fillStyle = '#555';
+  ctx.textAlign = 'left';
+  ctx.fillText(`見つけたペア: ${gameState.matched}/${EMOJIS.length}`, 20, CANVAS_H - 30);
+}
+
+function drawWinScreen() {
+  // セミトランスペアレント背景
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // タイトル（固有の演出: 星とキラキラ）
+  ctx.font = 'bold 60px Arial';
+  ctx.fillStyle = '#ffd700';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🎉 完成！ 🎉', CANVAS_W / 2, CANVAS_H / 2 - 80);
+
+  // スコア表示
+  ctx.font = '32px Arial';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`スコア: ${gameState.score}`, CANVAS_W / 2, CANVAS_H / 2 - 10);
+
+  // ランク表示
+  let rank = 'S';
+  if (gameState.mistakes === 0) rank = 'S';
+  else if (gameState.mistakes === 1) rank = 'A';
+  else if (gameState.mistakes <= 2) rank = 'B';
+  else rank = 'C';
+
+  ctx.font = '28px Arial';
+  ctx.fillStyle = '#ffd700';
+  ctx.fillText(`ランク: ${rank}`, CANVAS_W / 2, CANVAS_H / 2 + 40);
+
+  // リスタートボタン（P10）
+  const btnX = CANVAS_W / 2;
+  const btnY = CANVAS_H - 80;
+  ctx.fillStyle = '#4CAF50';
+  ctx.fillRect(btnX - 100, btnY - 25, 200, 50);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(btnX - 100, btnY - 25, 200, 50);
+
+  ctx.font = 'bold 18px Arial';
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('クリックでリスタート', btnX, btnY);
+}
+
+function drawFailScreen() {
+  // セミトランスペアレント背景
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // タイトル（固有の演出: 崩壊アニメ）
+  ctx.font = 'bold 60px Arial';
+  ctx.fillStyle = '#ff6b6b';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('💥 ゲームオーバー 💥', CANVAS_W / 2, CANVAS_H / 2 - 80);
+
+  // スコア表示
+  ctx.font = '32px Arial';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`スコア: ${gameState.score}`, CANVAS_W / 2, CANVAS_H / 2 - 10);
+
+  // リスタートボタン（P10）
+  const btnX = CANVAS_W / 2;
+  const btnY = CANVAS_H - 80;
+  ctx.fillStyle = '#ff6b6b';
+  ctx.fillRect(btnX - 100, btnY - 25, 200, 50);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(btnX - 100, btnY - 25, 200, 50);
+
+  ctx.font = 'bold 18px Arial';
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('クリックでリスタート', btnX, btnY);
+}
+
+// ===== メインループ =====
+function gameLoop() {
+  // 背景クリア
+  ctx.fillStyle = '#f0f0f0';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // 全カード描画
+  gameState.cards.forEach(card => {
+    drawCard(card);
+  });
+
+  // UI描画
+  drawUI();
+
+  // ゲームオーバー画面描画
+  if (gameState.phase === "win") {
+    drawWinScreen();
+  } else if (gameState.phase === "fail") {
+    drawFailScreen();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== ゲーム開始（P11: ページロード後2秒以内） =====
+setTimeout(() => {
+  initGame();
+  gameLoop();
+}, 500);
+</script>
+</body>
+</html>

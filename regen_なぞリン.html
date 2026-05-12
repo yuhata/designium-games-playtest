@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>なぞリン</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+    }
+    .container {
+      text-align: center;
+    }
+    h1 {
+      color: white;
+      margin-bottom: 10px;
+      font-size: 2.5em;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    .instruction {
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 20px;
+      font-size: 1.1em;
+    }
+    #gameCanvas {
+      border: 3px solid white;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      display: block;
+      cursor: crosshair;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .ui-panel {
+      margin-top: 20px;
+      color: white;
+      font-size: 1.2em;
+      display: flex;
+      gap: 40px;
+      justify-content: center;
+    }
+    .ui-item {
+      background: rgba(255,255,255,0.1);
+      padding: 10px 20px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+    }
+    .ui-label {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+    .ui-value {
+      font-size: 1.5em;
+      font-weight: bold;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>なぞリン</h1>
+    <div class="instruction" id="instruction">白い線をなぞってください</div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="ui-panel">
+      <div class="ui-item">
+        <div class="ui-label">残りゾーン</div>
+        <div class="ui-value" id="uiRemaining">-</div>
+      </div>
+      <div class="ui-item">
+        <div class="ui-label">ミス数</div>
+        <div class="ui-value" id="uiMistakes">0 / 3</div>
+      </div>
+      <div class="ui-item">
+        <div class="ui-label">状態</div>
+        <div class="ui-value" id="uiPhase">準備中</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // グローバルデバッグコントラクト初期化
+    window.__gameDebug = {
+      dragTargets: [],
+      objects: [],
+      metrics: {
+        rate: 0.0,
+        strokes: 0,
+        phase: "playing"
+      },
+      dragFill: function(id) {
+        dragFill(id);
+      },
+      tapObject: function(id) {
+        tapObject(id);
+      }
+    };
+
+    // ゲーム定数
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 600;
+    const BRUSH_SIZE = 35;
+    const FILL_THRESHOLD = 0.5;
+    const MISTAKE_LIMIT = 3;
+    const ZONE_COUNT = 4;
+
+    // ゲーム状態
+    let gameState = {
+      phase: "loading",
+      zones: [],
+      completedCount: 0,
+      mistakeCount: 0,
+      currentStroke: [],
+      isDrawing: false
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ===== ゾーン生成 =====
+    function generateZones() {
+      const zones = [];
+      const basePositions = [
+        { x: 150, y: 200 },
+        { x: 650, y: 200 },
+        { x: 150, y: 450 },
+        { x: 650, y: 450 }
+      ];
+
+      basePositions.forEach((start, idx) => {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 80 + Math.random() * 60;
+        let x2 = start.x + Math.cos(angle) * distance;
+        let y2 = start.y + Math.sin(angle) * distance;
+        
+        x2 = Math.max(50, Math.min(CANVAS_WIDTH - 50, x2));
+        y2 = Math.max(50, Math.min(CANVAS_HEIGHT - 50, y2));
+
+        zones.push({
+          id: `zone_${idx}`,
+          x1: start.x,
+          y1: start.y,
+          x2: x2,
+          y2: y2,
+          completed: false,
+          color: `hsl(${idx * 90}, 70%, 60%)`
+        });
+      });
+
+      return zones;
+    }
+
+    // ===== 軌跡判定 =====
+    function checkStrokeMatch(stroke, zone) {
+      if (!stroke || stroke.length < 5) return false;
+
+      const strokeStart = stroke[0];
+      const strokeEnd = stroke[stroke.length - 1];
+
+      if (!strokeStart || !strokeEnd) return false;
+
+      const zoneStart = { x: zone.x1, y: zone.y1 };
+      const zoneEnd = { x: zone.x2, y: zone.y2 };
+
+      const distStart = Math.hypot(strokeStart.x - zoneStart.x, strokeStart.y - zoneStart.y);
+      const distEnd = Math.hypot(strokeEnd.x - zoneEnd.x, strokeEnd.y - zoneEnd.y);
+      const tolerance = 50;
+
+      return (distStart < tolerance && distEnd < tolerance) || 
+             (distStart < tolerance && distEnd < tolerance);
+    }
+
+    // ===== dragFill(id) 実装 =====
+    function dragFill(id) {
+      const zone = gameState.zones.find(z => z && z.id === id);
+      if (zone && !zone.completed && gameState.phase === 'playing') {
+        zone.completed = true;
+        gameState.completedCount++;
+        window.__gameDebug.metrics.strokes++;
+        window.__gameDebug.metrics.rate = gameState.completedCount / gameState.zones.length;
+
+        zone.color = `hsl(120, 100%, 45%)`;
+
+        if (window.__gameDebug.metrics.rate >= 1.0) {
+          window.__gameDebug.metrics.phase = "win";
+          gameState.phase = "win";
+        }
+
+        updateDebug();
+      }
+    }
+
+    // ===== tapObject(id) 実装 =====
+    function tapObject(id) {
+      const zone = gameState.zones.find(z => z && z.id === id);
+      if (zone && !zone.completed && gameState.phase === 'playing') {
+        dragFill(id);
+      }
+    }
+
+    // デバッグ状態更新
+    function updateDebug() {
+      window.__gameDebug.dragTargets = gameState.zones
+        .filter(z => z && !z.completed)
+        .map((z) => ({
+          id: z.id,
+          enabled: true
+        }));
+
+      window.__gameDebug.objects = gameState.zones.map(z => {
+        if (!z) return null;
+        return {
+          id: z.id,
+          x: z.x1,
+          y: z.y1,
+          x1: z.x1,
+          y1: z.y1,
+          x2: z.x2,
+          y2: z.y2,
+          completed: z.completed
+        };
+      }).filter(o => o !== null);
+
+      window.__gameDebug.metrics = {
+        rate: window.__gameDebug.metrics.rate,
+        strokes: window.__gameDebug.metrics.strokes,
+        phase: gameState.phase
+      };
+    }
+
+    // ===== 描画関数 =====
+    function drawZones() {
+      gameState.zones.forEach(zone => {
+        if (!zone) return;
+
+        const opacity = zone.completed ? 0.2 : 0.8;
+        ctx.strokeStyle = zone.color;
+        ctx.globalAlpha = opacity;
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(zone.x1, zone.y1);
+        ctx.lineTo(zone.x2, zone.y2);
+        ctx.stroke();
+
+        ctx.fillStyle = zone.color;
+        ctx.globalAlpha = opacity * 1.2;
+        ctx.beginPath();
+        ctx.arc(zone.x1, zone.y1, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(zone.x2, zone.y2, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = 1.0;
+      });
+    }
+
+    function drawStroke(stroke) {
+      if (!stroke || stroke.length < 2) return;
+
+      ctx.strokeStyle = '#3498db';
+      ctx.lineWidth = BRUSH_SIZE;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = 0.85;
+
+      ctx.beginPath();
+      ctx.moveTo(stroke[0].x, stroke[0].y);
+      for (let i = 1; i < stroke.length; i++) {
+        if (stroke[i]) {
+          ctx.lineTo(stroke[i].x, stroke[i].y);
+        }
+      }
+      ctx.stroke();
+
+      ctx.globalAlpha = 1.0;
+    }
+
+    function drawGameOver() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (gameState.phase === 'win') {
+        ctx.fillText('完成！', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
+        ctx.font = '20px Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fillText('クリックでリスタート', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 80);
+      } else if (gameState.phase === 'fail') {
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 48px Arial';
+        ctx.fillText('失敗...', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
+        ctx.font = '20px Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fillText('クリックでリスタート', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 80);
+      }
+    }
+
+    function drawFrame() {
+      ctx.fillStyle = 'rgba(245, 247, 250, 1)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      if (gameState.phase === 'playing') {
+        drawZones();
+        if (gameState.currentStroke && gameState.currentStroke.length > 0) {
+          drawStroke(gameState.currentStroke);
+        }
+      } else if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        drawZones();
+        drawGameOver();
+      }
+
+      updateUIPanel();
+    }
+
+    function updateUIPanel() {
+      const remaining = gameState.zones.length - gameState.completedCount;
+      document.getElementById('uiRemaining').textContent = remaining;
+      document.getElementById('uiMistakes').textContent = `${gameState.mistakeCount} / ${MISTAKE_LIMIT}`;
+
+      let phaseText = 'プレイ中';
+      if (gameState.phase === 'win') phaseText = '完成！';
+      else if (gameState.phase === 'fail') phaseText = '失敗';
+      else if (gameState.phase === 'loading') phaseText = '準備中';
+      document.getElementById('uiPhase').textContent = phaseText;
+    }
+
+    // ===== イベントハンドラ =====
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameState.phase !== 'playing') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      gameState.isDrawing = true;
+      gameState.currentStroke = [{ x, y }];
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!gameState.isDrawing || gameState.phase !== 'playing') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const lastPoint = gameState.currentStroke[gameState.currentStroke.length - 1];
+      if (!lastPoint) return;
+
+      const dx = x - lastPoint.x;
+      const dy = y - lastPoint.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance > 8) {
+        const steps = Math.ceil(distance / 4);
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          gameState.currentStroke.push({
+            x: lastPoint.x + dx * t,
+            y: lastPoint.y + dy * t
+          });
+        }
+      }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (!gameState.isDrawing || gameState.phase !== 'playing') return;
+
+      gameState.isDrawing = false;
+
+      let matched = false;
+      for (let zone of gameState.zones) {
+        if (zone && !zone.completed && checkStrokeMatch(gameState.currentStroke, zone)) {
+          dragFill(zone.id);
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched && gameState.currentStroke.length > 3) {
+        gameState.mistakeCount++;
+        window.__gameDebug.metrics.strokes++;
+        updateDebug();
+
+        if (gameState.mistakeCount >= MISTAKE_LIMIT) {
+          gameState.phase = 'fail';
+          window.__gameDebug.metrics.phase = 'fail';
+          updateDebug();
+        }
+      }
+
+      gameState.currentStroke = [];
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        initGame();
+      }
+    });
+
+    // ===== ゲーム初期化 =====
+    function initGame() {
+      gameState.phase = 'playing';
+      gameState.zones = generateZones();
+      gameState.completedCount = 0;
+      gameState.mistakeCount = 0;
+      gameState.currentStroke = [];
+      gameState.isDrawing = false;
+
+      window.__gameDebug.metrics = {
+        rate: 0.0,
+        strokes: 0,
+        phase: 'playing'
+      };
+
+      updateDebug();
+    }
+
+    // ===== ゲームループ =====
+    function gameLoop() {
+      drawFrame();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ゲーム開始（2秒以内）
+    setTimeout(() => {
+      initGame();
+      gameLoop();
+    }, 300);
+  </script>
+</body>
+</html>

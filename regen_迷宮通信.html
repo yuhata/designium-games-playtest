@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>迷宮通信</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: 'Courier New', monospace;
+    }
+    canvas {
+      display: block;
+      background: #0f3460;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    // ゲームステート
+    const gameState = {
+      phase: 'playing',
+      currentPhaseIndex: 0,
+      mistakes: 0,
+      mistakeLimit: 3,
+      clues: 0,
+      startTime: 0,
+      lastResultTime: 0,
+      lastResultText: '',
+      lastResultCorrect: false,
+      shuffledChoices: []
+    };
+
+    // デバッグAPI初期化（最初に定義）
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, phase: 'playing' },
+      tapObject: function(id) {}
+    };
+
+    // Canvas設定
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ゲーム内容定義
+    const phases = [
+      {
+        id: 'phase_0',
+        title: '【森の入り口】',
+        description: '謎のシグナル受信中...',
+        npc: '怪盗X',
+        choices: [
+          { id: 'c0', label: '北へ進む', correct: true },
+          { id: 'c1', label: '東へ進む', correct: false },
+          { id: 'c2', label: '南へ進む', correct: false }
+        ]
+      },
+      {
+        id: 'phase_1',
+        title: '【暗い洞窟】',
+        description: '前方に何かがある...',
+        npc: '怪盗X',
+        choices: [
+          { id: 'c0', label: '懐中電灯をつける', correct: true },
+          { id: 'c1', label: '火を起こす', correct: false },
+          { id: 'c2', label: '待つ', correct: false }
+        ]
+      },
+      {
+        id: 'phase_2',
+        title: '【秘密の部屋】',
+        description: 'X:「何かがある...」',
+        npc: '怪盗X',
+        choices: [
+          { id: 'c0', label: '調査する', correct: true },
+          { id: 'c1', label: '立ち去る', correct: false },
+          { id: 'c2', label: '壊す', correct: false }
+        ]
+      },
+      {
+        id: 'phase_3',
+        title: '【謎のメッセージ】',
+        description: 'X:「暗号が見える...」',
+        npc: '怪盗X',
+        choices: [
+          { id: 'c0', label: '解読する', correct: true },
+          { id: 'c1', label: '無視する', correct: false },
+          { id: 'c2', label: '写真を撮る', correct: false }
+        ]
+      },
+      {
+        id: 'phase_4',
+        title: '【最終地点】',
+        description: 'X:「そこだ...取れ！」',
+        npc: '怪盗X',
+        choices: [
+          { id: 'c0', label: '宝をゲット', correct: true },
+          { id: 'c1', label: '罠を避ける', correct: false },
+          { id: 'c2', label: '逃げる', correct: false }
+        ]
+      }
+    ];
+
+    // 配列シャッフル関数
+    function shuffleArray(arr) {
+      const result = [...arr];
+      for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    }
+
+    // 選択肢の視覚的配置
+    function generateChoiceRects(count) {
+      const startY = 350;
+      const spacing = 80;
+      return Array.from({ length: count }, (_, i) => ({
+        x: 100,
+        y: startY + i * spacing,
+        width: 600,
+        height: 60
+      }));
+    }
+
+    // ゲーム処理関数（実装とtapObject両方から呼ばれる）
+    function handleChoice(choiceId) {
+      if (gameState.phase !== 'playing') return;
+
+      const currentPhase = phases[gameState.currentPhaseIndex];
+      if (!currentPhase) return;
+
+      // シャッフルされた選択肢からIDで検索
+      const choice = gameState.shuffledChoices.find(c => c.id === choiceId);
+      if (!choice) return;
+
+      gameState.lastResultTime = Date.now();
+
+      if (choice.correct) {
+        gameState.lastResultText = '正解！';
+        gameState.lastResultCorrect = true;
+        gameState.clues++;
+
+        // 500ms後にフェーズ進行
+        setTimeout(() => {
+          gameState.currentPhaseIndex++;
+          if (gameState.currentPhaseIndex >= phases.length) {
+            gameState.phase = 'win';
+          }
+          updateDebug();
+        }, 500);
+      } else {
+        gameState.lastResultText = 'ハズレ...';
+        gameState.lastResultCorrect = false;
+        gameState.mistakes++;
+
+        if (gameState.mistakes >= gameState.mistakeLimit) {
+          gameState.phase = 'fail';
+        }
+      }
+
+      updateDebug();
+    }
+
+    // デバッグ状態更新
+    function updateDebug() {
+      const currentPhase = phases[gameState.currentPhaseIndex];
+
+      if (currentPhase && gameState.phase === 'playing') {
+        const rects = generateChoiceRects(gameState.shuffledChoices.length);
+        window.__gameDebug.objects = gameState.shuffledChoices.map((choice, idx) => ({
+          id: choice.id,
+          label: choice.label,
+          enabled: true,
+          matchId: null,
+          x: rects[idx].x,
+          y: rects[idx].y,
+          width: rects[idx].width,
+          height: rects[idx].height
+        }));
+      } else {
+        window.__gameDebug.objects = [];
+      }
+
+      window.__gameDebug.metrics = {
+        score: gameState.clues,
+        progress: gameState.clues / phases.length,
+        remaining: gameState.mistakeLimit - gameState.mistakes,
+        phase: gameState.phase
+      };
+    }
+
+    // デバッグ用tapObject実装
+    window.__gameDebug.tapObject = function(id) {
+      if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        if (id === 'restart') {
+          restartGame();
+        }
+        return;
+      }
+      handleChoice(id);
+    };
+
+    // ゲーム初期化
+    function initGame() {
+      gameState.phase = 'playing';
+      gameState.currentPhaseIndex = 0;
+      gameState.mistakes = 0;
+      gameState.clues = 0;
+      gameState.startTime = Date.now();
+      gameState.lastResultTime = 0;
+      gameState.lastResultText = '';
+      gameState.lastResultCorrect = false;
+
+      // 最初のフェーズの選択肢をシャッフル
+      if (phases[0]) {
+        gameState.shuffledChoices = shuffleArray(phases[0].choices);
+      }
+
+      updateDebug();
+    }
+
+    // リスタート
+    function restartGame() {
+      initGame();
+    }
+
+    // マウスクリックイベント（座標正規化必須）
+    canvas.addEventListener('click', function(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      if (gameState.phase === 'playing') {
+        const currentPhase = phases[gameState.currentPhaseIndex];
+        if (!currentPhase) return;
+
+        const choiceRects = generateChoiceRects(gameState.shuffledChoices.length);
+
+        for (let i = 0; i < gameState.shuffledChoices.length; i++) {
+          const choiceRect = choiceRects[i];
+          if (
+            x >= choiceRect.x && x <= choiceRect.x + choiceRect.width &&
+            y >= choiceRect.y && y <= choiceRect.y + choiceRect.height
+          ) {
+            handleChoice(gameState.shuffledChoices[i].id);
+            break;
+          }
+        }
+      } else if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        // リスタートボタン（幅300, 高さ60, 中央配置）
+        if (
+          x >= 250 && x <= 550 &&
+          y >= 480 && y <= 540
+        ) {
+          restartGame();
+        }
+      }
+    });
+
+    // マウスダウン・ムーブ・アップはゲームロジックを呼ばない（P1遵守）
+    // ここではイベント登録のみ
+    canvas.addEventListener('mousedown', function() {});
+    canvas.addEventListener('mousemove', function() {});
+    canvas.addEventListener('mouseup', function() {});
+
+    // 描画関数
+    function draw() {
+      // 背景
+      ctx.fillStyle = '#0f3460';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // タイトル
+      ctx.fillStyle = '#00d4ff';
+      ctx.font = 'bold 36px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('迷宮通信', 400, 50);
+
+      if (gameState.phase === 'playing') {
+        const currentPhase = phases[gameState.currentPhaseIndex];
+        if (!currentPhase) {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '20px Courier New';
+          ctx.fillText('ロード中...', 400, 300);
+          return;
+        }
+
+        // フェーズ情報
+        ctx.fillStyle = '#00ff88';
+        ctx.font = 'bold 24px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText(currentPhase.title, 100, 120);
+
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 14px Courier New';
+        ctx.fillText(`NPC: ${currentPhase.npc}`, 100, 145);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px Courier New';
+        ctx.fillText(currentPhase.description, 100, 170);
+
+        // UI情報パネル
+        ctx.fillStyle = '#ffaa00';
+        ctx.font = 'bold 14px Courier New';
+        ctx.fillText(`手がかり: ${gameState.clues} / ${phases.length}`, 100, 210);
+        ctx.fillText(`ミス: ${gameState.mistakes} / ${gameState.mistakeLimit}`, 100, 235);
+
+        // 選択肢描画
+        const choiceRects = generateChoiceRects(gameState.shuffledChoices.length);
+        gameState.shuffledChoices.forEach((choice, idx) => {
+          const rect = choiceRects[idx];
+
+          ctx.fillStyle = '#1a5f7f';
+          ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+
+          ctx.strokeStyle = '#00d4ff';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 16px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            choice.label,
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2 + 6
+          );
+        });
+
+        // フィードバック表示
+        if (gameState.lastResultTime && Date.now() - gameState.lastResultTime < 1500) {
+          ctx.fillStyle = gameState.lastResultCorrect ? '#00ff88' : '#ff6b6b';
+          ctx.font = 'bold 32px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(gameState.lastResultText, 400, 290);
+        }
+
+        // 説明テキスト
+        ctx.fillStyle = '#999999';
+        ctx.font = '12px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText('選択肢をクリックして進める', 100, 580);
+
+      } else if (gameState.phase === 'win') {
+        ctx.fillStyle = '#00ff88';
+        ctx.font = 'bold 48px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('成功！', 400, 180);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px Courier New';
+        ctx.fillText('宝を手に入れた！', 400, 250);
+
+        ctx.fillStyle = '#ffaa00';
+        ctx.font = '18px Courier New';
+        ctx.fillText(`獲得手がかり: ${gameState.clues} / ${phases.length}`, 400, 310);
+        ctx.fillText(`総ミス: ${gameState.mistakes}`, 400, 340);
+
+        // リスタートボタン
+        ctx.fillStyle = '#00d4ff';
+        ctx.fillRect(250, 480, 300, 60);
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 18px Courier New';
+        ctx.fillText('クリックでリスタート', 400, 515);
+
+      } else if (gameState.phase === 'fail') {
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = 'bold 48px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('失敗...', 400, 180);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px Courier New';
+        ctx.fillText('ミスが多すぎた', 400, 250);
+
+        ctx.fillStyle = '#ffaa00';
+        ctx.font = '18px Courier New';
+        ctx.fillText(`獲得手がかり: ${gameState.clues} / ${phases.length}`, 400, 310);
+        ctx.fillText(`総ミス: ${gameState.mistakes}`, 400, 340);
+
+        // リスタートボタン
+        ctx.fillStyle = '#00d4ff';
+        ctx.fillRect(250, 480, 300, 60);
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 18px Courier New';
+        ctx.fillText('クリックでリスタート', 400, 515);
+      }
+    }
+
+    // ゲームループ
+    function gameLoop() {
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // DOMContentLoaded直後にゲーム開始（2秒以内）
+    document.addEventListener('DOMContentLoaded', function() {
+      initGame();
+      gameLoop();
+    });
+
+  </script>
+</body>
+</html>

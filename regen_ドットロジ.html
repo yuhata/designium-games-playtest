@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ドットロジ</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+    }
+    
+    .game-container {
+      background: white;
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    
+    h1 {
+      margin: 0 0 20px 0;
+      color: #333;
+      font-size: 32px;
+    }
+    
+    .info-panel {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+      font-size: 18px;
+    }
+    
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .info-label {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 5px;
+    }
+    
+    .info-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #667eea;
+    }
+    
+    .rules {
+      background: #f9f9f9;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: left;
+      font-size: 14px;
+      color: #666;
+      border-radius: 5px;
+      line-height: 1.6;
+    }
+    
+    .rules h3 {
+      margin: 0 0 10px 0;
+      color: #333;
+      font-size: 16px;
+    }
+    
+    .rules p {
+      margin: 5px 0;
+    }
+    
+    canvas {
+      border: 2px solid #333;
+      border-radius: 5px;
+      display: block;
+      margin: 0 auto 20px;
+      background: white;
+      cursor: pointer;
+    }
+    
+    .buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+    }
+    
+    .btn-submit {
+      background: #667eea;
+      color: white;
+    }
+    
+    .btn-submit:hover {
+      background: #764ba2;
+      transform: translateY(-2px);
+    }
+    
+    .btn-reset {
+      background: #e0e0e0;
+      color: #333;
+    }
+    
+    .btn-reset:hover {
+      background: #d0d0d0;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: white;
+      padding: 40px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    
+    .modal-content h2 {
+      margin: 0 0 20px 0;
+      font-size: 48px;
+    }
+    
+    .modal-content p {
+      margin: 10px 0;
+      font-size: 18px;
+      color: #666;
+    }
+    
+    .modal-content.win h2 {
+      color: #4CAF50;
+    }
+    
+    .modal-content.fail h2 {
+      color: #f44336;
+    }
+    
+    .click-to-restart {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #999;
+      animation: blink 1s infinite;
+    }
+    
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>🎨 ドットロジ</h1>
+    
+    <div class="info-panel">
+      <div class="info-item">
+        <div class="info-label">正解度</div>
+        <div class="info-value" id="progress">0%</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">ミス</div>
+        <div class="info-value" id="mistakes">0/5</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">クリア数</div>
+        <div class="info-value" id="score">0</div>
+      </div>
+    </div>
+    
+    <div class="rules">
+      <h3>📋 ルール</h3>
+      <p>• 数字は行と列に何個のマスを塗るかを示します</p>
+      <p>• 左クリック: 塗る→塗らない→未確定 を循環</p>
+      <p>• 右クリック: キャンセル</p>
+      <p>• 正しく埋めたら「検証」ボタンを押してください</p>
+    </div>
+    
+    <canvas id="gameCanvas" width="420" height="470"></canvas>
+    
+    <div class="buttons">
+      <button class="btn-submit" id="submitBtn">✓ 検証</button>
+      <button class="btn-reset" id="resetBtn">↺ リセット</button>
+    </div>
+  </div>
+  
+  <div class="modal" id="resultModal">
+    <div class="modal-content" id="modalContent">
+      <h2 id="resultTitle">クリア！</h2>
+      <p id="resultText"></p>
+      <div class="click-to-restart">クリックで次へ</div>
+    </div>
+  </div>
+
+  <script>
+    // ========== デバッグコントラクト初期化 ==========
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0, remaining: 0, phase: "playing" },
+      tapObject: function(id) {}
+    };
+
+    // ========== グローバル状態 ==========
+    const GRID_SIZE = 5;
+    const CELL_SIZE = 50;
+    const CELL_PADDING = 8;
+    const MAX_MISTAKES = 5;
+    
+    // ノノグラムパターン（複数用意）
+    const PATTERNS = [
+      [
+        [0,1,1,0,0],
+        [1,1,1,1,0],
+        [0,1,0,1,1],
+        [1,1,1,1,0],
+        [0,1,1,0,0]
+      ],
+      [
+        [1,0,0,0,1],
+        [0,1,1,1,0],
+        [0,1,0,1,0],
+        [0,1,1,1,0],
+        [1,0,0,0,1]
+      ],
+      [
+        [0,1,1,1,0],
+        [1,1,0,1,1],
+        [1,0,0,0,1],
+        [1,1,0,1,1],
+        [0,1,1,1,0]
+      ]
+    ];
+
+    const gameState = {
+      phase: "playing",
+      currentPattern: null,
+      correctAnswers: null,
+      userAnswers: null,
+      mistakes: 0,
+      score: 0,
+      canvas: null,
+      ctx: null
+    };
+
+    function initGame() {
+      gameState.phase = "playing";
+      gameState.mistakes = 0;
+      gameState.currentPattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+      gameState.correctAnswers = JSON.parse(JSON.stringify(gameState.currentPattern));
+      gameState.userAnswers = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+      
+      gameState.canvas = document.getElementById('gameCanvas');
+      gameState.ctx = gameState.canvas.getContext('2d');
+      
+      updateDebug();
+      draw();
+    }
+
+    function getHints(line) {
+      const groups = [];
+      let count = 0;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === 1) {
+          count++;
+        } else if (count > 0) {
+          groups.push(count);
+          count = 0;
+        }
+      }
+      if (count > 0) groups.push(count);
+      return groups.length > 0 ? groups : [0];
+    }
+
+    function draw() {
+      const ctx = gameState.ctx;
+      const canvas = gameState.canvas;
+      
+      if (!ctx) return;
+      
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const HINT_AREA = 60;
+      const GRID_START_X = HINT_AREA;
+      const GRID_START_Y = HINT_AREA;
+
+      // ヒント数字描画（行）
+      ctx.fillStyle = '#666';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i < GRID_SIZE; i++) {
+        const hints = getHints(gameState.correctAnswers[i]);
+        const hintStr = hints.join(' ');
+        ctx.fillText(hintStr, GRID_START_X - 10, GRID_START_Y + i * CELL_SIZE + CELL_SIZE / 2);
+      }
+
+      // ヒント数字描画（列）
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      for (let j = 0; j < GRID_SIZE; j++) {
+        const col = [];
+        for (let i = 0; i < GRID_SIZE; i++) {
+          col.push(gameState.correctAnswers[i][j]);
+        }
+        const hints = getHints(col);
+        const hintStr = hints.join(' ');
+        ctx.fillText(hintStr, GRID_START_X + j * CELL_SIZE + CELL_SIZE / 2, GRID_START_Y - 10);
+      }
+
+      // グリッド描画
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          const x = GRID_START_X + j * CELL_SIZE;
+          const y = GRID_START_Y + i * CELL_SIZE;
+          const state = gameState.userAnswers[i][j];
+
+          // セル背景
+          ctx.fillStyle = '#f5f5f5';
+          ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+
+          // セル内容描画
+          if (state === 1) {
+            ctx.fillStyle = '#667eea';
+            ctx.fillRect(x + CELL_PADDING, y + CELL_PADDING, CELL_SIZE - 2 * CELL_PADDING, CELL_SIZE - 2 * CELL_PADDING);
+          } else if (state === -1) {
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + CELL_PADDING, y + CELL_PADDING);
+            ctx.lineTo(x + CELL_SIZE - CELL_PADDING, y + CELL_SIZE - CELL_PADDING);
+            ctx.moveTo(x + CELL_SIZE - CELL_PADDING, y + CELL_PADDING);
+            ctx.lineTo(x + CELL_PADDING, y + CELL_SIZE - CELL_PADDING);
+            ctx.stroke();
+          }
+
+          // セル枠
+          ctx.strokeStyle = '#ddd';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+        }
+      }
+    }
+
+    function handleCellClick(gridX, gridY) {
+      if (gameState.phase !== "playing") return;
+      if (gridX < 0 || gridX >= GRID_SIZE || gridY < 0 || gridY >= GRID_SIZE) return;
+
+      const currentState = gameState.userAnswers[gridY][gridX];
+      const nextState = currentState === 0 ? 1 : (currentState === 1 ? -1 : 0);
+      gameState.userAnswers[gridY][gridX] = nextState;
+
+      updateDebug();
+      draw();
+    }
+
+    function getCanvasCoords(clientX, clientY) {
+      const rect = gameState.canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      return { x, y };
+    }
+
+    function pixelToGrid(x, y) {
+      const HINT_AREA = 60;
+      const GRID_START_X = HINT_AREA;
+      const GRID_START_Y = HINT_AREA;
+
+      const gridX = Math.floor((x - GRID_START_X) / CELL_SIZE);
+      const gridY = Math.floor((y - GRID_START_Y) / CELL_SIZE);
+
+      return { gridX, gridY };
+    }
+
+    function checkWin() {
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          const correct = gameState.correctAnswers[i][j];
+          const userAnswer = gameState.userAnswers[i][j];
+          if (correct === 1 && userAnswer !== 1) return false;
+          if (correct === 0 && userAnswer === 1) return false;
+        }
+      }
+      return true;
+    }
+
+    function submitAnswer() {
+      if (gameState.phase !== "playing") return;
+
+      const isCorrect = checkWin();
+
+      if (isCorrect) {
+        gameState.phase = "win";
+        gameState.score++;
+        updateDebug();
+        showWinModal();
+      } else {
+        gameState.mistakes++;
+        updateDebug();
+        if (gameState.mistakes >= MAX_MISTAKES) {
+          gameState.phase = "fail";
+          updateDebug();
+          showFailModal();
+        } else {
+          alert(`正解ではありません。ミス: ${gameState.mistakes}/${MAX_MISTAKES}`);
+        }
+      }
+    }
+
+    function resetGame() {
+      initGame();
+      document.getElementById('resultModal').classList.remove('active');
+    }
+
+    function updateDebug() {
+      const HINT_AREA = 60;
+      const GRID_START_X = HINT_AREA;
+      const GRID_START_Y = HINT_AREA;
+
+      const objects = [];
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          const x = GRID_START_X + j * CELL_SIZE + CELL_SIZE / 2;
+          const y = GRID_START_Y + i * CELL_SIZE + CELL_SIZE / 2;
+          objects.push({
+            id: `cell_${i}_${j}`,
+            enabled: gameState.phase === "playing",
+            matchId: null,
+            x: Math.round(x),
+            y: Math.round(y),
+            w: CELL_SIZE,
+            h: CELL_SIZE
+          });
+        }
+      }
+
+      objects.push({
+        id: 'submit',
+        enabled: gameState.phase === "playing",
+        matchId: null,
+        x: 200,
+        y: 440,
+        w: 80,
+        h: 40
+      });
+
+      window.__gameDebug.objects = objects;
+
+      const remaining = GRID_SIZE * GRID_SIZE;
+      const filled = gameState.userAnswers.flat().filter(s => s !== 0).length;
+      const progress = Math.round((filled / remaining) * 100);
+
+      window.__gameDebug.metrics = {
+        score: gameState.score,
+        progress: progress,
+        remaining: remaining - filled,
+        phase: gameState.phase
+      };
+    }
+
+    function showWinModal() {
+      const modal = document.getElementById('resultModal');
+      const content = document.getElementById('modalContent');
+      content.className = 'modal-content win';
+      document.getElementById('resultTitle').textContent = '✨ クリア！';
+      document.getElementById('resultText').textContent = `スコア: ${gameState.score}`;
+      modal.classList.add('active');
+    }
+
+    function showFailModal() {
+      const modal = document.getElementById('resultModal');
+      const content = document.getElementById('modalContent');
+      content.className = 'modal-content fail';
+      document.getElementById('resultTitle').textContent = '❌ ゲームオーバー';
+      document.getElementById('resultText').textContent = `ミス数が上限に達しました\nスコア: ${gameState.score}`;
+      modal.classList.add('active');
+    }
+
+    // ========== イベントリスナー ==========
+    document.getElementById('gameCanvas').addEventListener('click', function(e) {
+      const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+      const { gridX, gridY } = pixelToGrid(x, y);
+      handleCellClick(gridX, gridY);
+    });
+
+    document.getElementById('gameCanvas').addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+    });
+
+    document.getElementById('submitBtn').addEventListener('click', submitAnswer);
+    document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+    document.getElementById('resultModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        resetGame();
+      }
+    });
+
+    // ========== デバッグAPI ==========
+    window.__gameDebug.tapObject = function(id) {
+      if (id === 'submit') {
+        submitAnswer();
+        return;
+      }
+
+      if (id && id.startsWith('cell_')) {
+        const parts = id.split('_');
+        const gridY = parseInt(parts[1], 10);
+        const gridX = parseInt(parts[2], 10);
+        handleCellClick(gridX, gridY);
+      }
+    };
+
+    // ========== 初期化 ==========
+    initGame();
+
+    function updateUI() {
+      document.getElementById('progress').textContent = window.__gameDebug.metrics.progress + '%';
+      document.getElementById('mistakes').textContent = gameState.mistakes + '/' + MAX_MISTAKES;
+      document.getElementById('score').textContent = gameState.score;
+    }
+
+    function gameLoop() {
+      updateDebug();
+      updateUI();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

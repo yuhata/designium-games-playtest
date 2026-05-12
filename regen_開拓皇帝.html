@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>開拓皇帝</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    canvas {
+      border: 3px solid #333;
+      background: #f0f0f0;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <script>
+    // ============ デバッグコントラクト初期化 ============
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+      tapObject: function(id) {}
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ============ ゲーム状態 ============
+    let gameState = {
+      phase: 'playing',
+      turn: 1,
+      population: 100,
+      money: 1000,
+      deficit_turns: 0,
+      buildings: 0
+    };
+
+    // ============ ゲーム初期化 ============
+    function initGame() {
+      gameState = {
+        phase: 'playing',
+        turn: 1,
+        population: 100,
+        money: 1000,
+        deficit_turns: 0,
+        buildings: 0
+      };
+      updateDebug();
+    }
+
+    // ============ ターン進行 ============
+    function advanceTurn() {
+      if (gameState.phase !== 'playing') return;
+
+      // 収入・支出計算
+      const income = gameState.population * 2;
+      const expense = gameState.buildings * 150 + 100;
+      const profit = income - expense;
+
+      gameState.money += profit;
+
+      // 赤字ターン計数
+      if (profit < 0) {
+        gameState.deficit_turns++;
+      } else {
+        gameState.deficit_turns = 0;
+      }
+
+      // 人口変化
+      if (gameState.money > 500) {
+        gameState.population += Math.floor(Math.random() * 30) + 10;
+      } else if (gameState.money < 0) {
+        gameState.population = Math.max(10, gameState.population - 20);
+      }
+
+      gameState.turn++;
+
+      // 勝利判定
+      if (gameState.population >= 1000 && gameState.money > 0) {
+        gameState.phase = 'win';
+      }
+
+      // 敗北判定
+      if (gameState.deficit_turns >= 3) {
+        gameState.phase = 'fail';
+      }
+
+      if (gameState.money < -2000) {
+        gameState.phase = 'fail';
+      }
+
+      updateDebug();
+    }
+
+    // ============ 建設 ============
+    function buildBuilding() {
+      if (gameState.phase !== 'playing') return;
+      
+      const buildCost = 200;
+      if (gameState.money >= buildCost) {
+        gameState.money -= buildCost;
+        gameState.buildings++;
+        updateDebug();
+      }
+    }
+
+    // ============ デバッグ更新 ============
+    function updateDebug() {
+      window.__gameDebug.objects = [
+        { id: 'next_turn', enabled: gameState.phase === 'playing', matchId: null, x: 650, y: 550, w: 120, h: 40 },
+        { id: 'build', enabled: gameState.phase === 'playing', matchId: null, x: 450, y: 550, w: 120, h: 40 }
+      ];
+
+      window.__gameDebug.metrics = {
+        score: gameState.money,
+        progress: Math.min(1.0, gameState.population / 1000),
+        remaining: Math.max(0, 1000 - gameState.population),
+        phase: gameState.phase
+      };
+    }
+
+    // ============ tapObject実装 ============
+    window.__gameDebug.tapObject = function(id) {
+      if (id === 'next_turn') {
+        advanceTurn();
+      } else if (id === 'build') {
+        buildBuilding();
+      }
+      updateDebug();
+    };
+
+    // ============ 描画 ============
+    function draw() {
+      // 背景
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // タイトル
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('開拓皇帝', 20, 40);
+
+      // ゲーム情報
+      ctx.font = '18px Arial';
+      ctx.fillStyle = '#333';
+      ctx.fillText(`ターン: ${gameState.turn}`, 20, 80);
+      ctx.fillText(`人口: ${gameState.population} / 1000`, 20, 110);
+      ctx.fillText(`資金: $${gameState.money}`, 20, 140);
+      ctx.fillText(`建物: ${gameState.buildings}`, 20, 170);
+      ctx.fillText(`赤字ターン: ${gameState.deficit_turns}/3`, 20, 200);
+
+      // プログレスバー
+      ctx.fillStyle = '#ddd';
+      ctx.fillRect(20, 230, 500, 30);
+      const progress = Math.min(1, gameState.population / 1000);
+      ctx.fillStyle = progress < 1 ? '#667eea' : '#00c853';
+      ctx.fillRect(20, 230, 500 * progress, 30);
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, 230, 500, 30);
+      ctx.fillStyle = '#000';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(`進度: ${Math.round(progress * 100)}%`, 270, 250);
+
+      // ボタン描画
+      drawButton(450, 550, 120, 40, '建設', gameState.phase === 'playing', '#FF9800');
+      drawButton(650, 550, 120, 40, 'ターン終了', gameState.phase === 'playing', '#667eea');
+
+      // ゲーム終了画面
+      if (gameState.phase === 'win') {
+        drawWinScreen();
+      } else if (gameState.phase === 'fail') {
+        drawFailScreen();
+      }
+
+      // 操作説明
+      ctx.fillStyle = '#666';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('「建設」で施設を建てる。「ターン終了」で進める。人口1000以上、黒字経営でクリア。', 20, 320);
+    }
+
+    function drawButton(x, y, w, h, text, enabled, color) {
+      ctx.fillStyle = enabled ? color : '#ccc';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x + w / 2, y + h / 2);
+    }
+
+    function drawWinScreen() {
+      ctx.fillStyle = 'rgba(0, 200, 83, 0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🎉 クリア！', canvas.width / 2, canvas.height / 2 - 60);
+      
+      ctx.font = '24px Arial';
+      ctx.fillText(`最終人口: ${gameState.population}`, canvas.width / 2, canvas.height / 2);
+      ctx.fillText(`最終資金: $${gameState.money}`, canvas.width / 2, canvas.height / 2 + 40);
+      
+      ctx.font = '18px Arial';
+      ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+    }
+
+    function drawFailScreen() {
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('💀 ゲームオーバー', canvas.width / 2, canvas.height / 2 - 60);
+      
+      ctx.font = '24px Arial';
+      let reason = gameState.money < -2000 ? '資金がマイナスになった' : '赤字が3ターン続いた';
+      ctx.fillText(`原因: ${reason}`, canvas.width / 2, canvas.height / 2);
+      ctx.fillText(`到達人口: ${gameState.population}`, canvas.width / 2, canvas.height / 2 + 40);
+      
+      ctx.font = '18px Arial';
+      ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+    }
+
+    // ============ イベントハンドラ ============
+    canvas.addEventListener('click', (e) => {
+      if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        initGame();
+        return;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // ボタン判定
+      if (x >= 450 && x < 570 && y >= 550 && y < 590) {
+        buildBuilding();
+      } else if (x >= 650 && x < 770 && y >= 550 && y < 590) {
+        advanceTurn();
+      }
+    });
+
+    // ============ ゲームループ ============
+    function gameLoop() {
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ============ 起動 ============
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        initGame();
+        gameLoop();
+      }, 100);
+    });
+  </script>
+</body>
+</html>
