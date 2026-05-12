@@ -1,545 +1,368 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>コスモズーム</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #fff;
-        }
-        .game-container {
-            position: relative;
-            width: 800px;
-            height: 600px;
-            background: #000;
-            border: 2px solid #00ff88;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            transform-origin: center;
-            transition: transform 0.3s ease-in-out;
-        }
-        .ui-overlay {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 18px;
-            font-weight: bold;
-            z-index: 10;
-            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-        }
-        .ui-left {
-            display: flex;
-            gap: 20px;
-        }
-        .ui-item {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-        .ui-item label {
-            font-size: 12px;
-            color: #88ff00;
-            opacity: 0.8;
-        }
-        .ui-item span {
-            font-size: 24px;
-            color: #00ffff;
-        }
-        .instruction {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 14px;
-            color: #88ff00;
-            text-align: center;
-            opacity: 0.9;
-            z-index: 10;
-        }
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 100;
-        }
-        .overlay.active {
-            display: flex;
-        }
-        .overlay-text {
-            font-size: 48px;
-            font-weight: bold;
-            margin-bottom: 20px;
-            text-align: center;
-            animation: pulse 0.6s ease-in-out;
-        }
-        .overlay.win .overlay-text {
-            color: #00ff88;
-            text-shadow: 0 0 20px rgba(0, 255, 136, 0.8);
-        }
-        .overlay.fail .overlay-text {
-            color: #ff0055;
-            text-shadow: 0 0 20px rgba(255, 0, 85, 0.8);
-        }
-        .overlay-detail {
-            font-size: 24px;
-            color: #aaa;
-            margin-bottom: 30px;
-        }
-        .overlay-button {
-            padding: 12px 30px;
-            font-size: 18px;
-            background: linear-gradient(135deg, #00ff88, #00ffff);
-            color: #000;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        .overlay-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
-        }
-        .overlay.fail .overlay-button {
-            background: linear-gradient(135deg, #ff0055, #ff6600);
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コスモズーム</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #0a0e27;
+    font-family: "Arial", sans-serif;
+  }
+  canvas {
+    border: 2px solid #1a3a52;
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
+    display: block;
+  }
+</style>
 </head>
 <body>
-    <div class="game-container">
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div class="ui-overlay">
-            <div class="ui-left">
-                <div class="ui-item">
-                    <label>LEVEL</label>
-                    <span id="levelDisplay">0</span>
-                </div>
-                <div class="ui-item">
-                    <label>REMAINING</label>
-                    <span id="remainingDisplay">3</span>
-                </div>
-                <div class="ui-item">
-                    <label>TIME</label>
-                    <span id="timeDisplay">120</span>
-                </div>
-            </div>
-            <div class="ui-item">
-                <label>MISSES</label>
-                <span id="missesDisplay">0</span>
-            </div>
-        </div>
-        <div class="instruction" id="instruction">
-            TAP the hidden points • Discover all levels before time runs out
-        </div>
-        <div class="overlay" id="overlay">
-            <div class="overlay-text" id="overlayText">VICTORY</div>
-            <div class="overlay-detail" id="overlayDetail">All cosmic patterns revealed!</div>
-            <button class="overlay-button" id="overlayButton">RESTART</button>
-        </div>
-    </div>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
 
-    <script>
-        // ============= Debug Contract =============
-        window.__gameDebug = {
-            objects: [],
-            metrics: { score: 0, progress: 0.0, remaining: 3, phase: "playing", level: 0 },
-            tapObject: function(id) {}
-        };
+<script>
+// デバッグコントラクト初期化
+window.__gameDebug = {
+  objects: [],
+  metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+  tapObject: function(id) {}
+};
 
-        // ============= Game State =============
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-        let gameState = {
-            level: 0,
-            remaining: 3,
-            misses: 0,
-            score: 0,
-            phase: 'playing',
-            currentPoints: [],
-            particles: [],
-            isScanning: false,
-            scanProgress: 0,
-            timeRemaining: 120,
-            gameStartTime: Date.now()
-        };
+const game = {
+  phase: "playing",
+  score: 0,
+  remaining: 5,
+  timeLimit: 60,
+  timeElapsed: 0,
+  stars: [],
+  clickedCount: 0,
+  totalStars: 5,
+  particles: [],
+  startTime: null,
+  gameLoopStarted: false
+};
 
-        const maxLevel = 12;
-        const pointRadius = 8;
-        const hitRadius = 12;
-        const maxMisses = 5;
-        const totalGameTime = 120000; // 120 seconds in ms
+class Star {
+  constructor(x, y, id) {
+    this.id = id;
+    this.x = x;
+    this.y = y;
+    this.baseRadius = 20;
+    this.radius = this.baseRadius;
+    this.enabled = true;
+    this.clicked = false;
+    this.clickTime = 0;
+    this.glow = 0;
+    this.rotation = Math.random() * Math.PI * 2;
+  }
 
-        // ============= Zoom Level =============
-        function getZoomLevel(level) {
-            return 0.5 + (level / maxLevel) * 1.5;
+  isPointInside(px, py) {
+    if (!this.enabled) return false;
+    const dist = Math.hypot(px - this.x, py - this.y);
+    return dist <= this.radius + 10;
+  }
+
+  draw() {
+    if (!this.enabled) return;
+    
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
+
+    if (this.clicked) {
+      const elapsed = Date.now() - this.clickTime;
+      const progress = Math.min(elapsed / 300, 1);
+      this.glow = 1 - progress;
+      this.radius = this.baseRadius + progress * 30;
+
+      if (progress >= 1) {
+        this.enabled = false;
+      }
+
+      ctx.globalAlpha = 1 - progress * 0.5;
+    } else {
+      this.glow = Math.sin(Date.now() * 0.003) * 0.3 + 0.7;
+    }
+
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius);
+    gradient.addColorStop(0, `rgba(100, 200, 255, ${this.glow * 0.8})`);
+    gradient.addColorStop(0.5, `rgba(50, 150, 255, ${this.glow * 0.4})`);
+    gradient.addColorStop(1, `rgba(0, 100, 255, 0)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-this.radius, -this.radius, this.radius * 2, this.radius * 2);
+
+    ctx.fillStyle = `rgba(100, 200, 255, ${0.9 - this.glow * 0.2})`;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+      const r = i % 2 === 0 ? this.radius : this.radius * 0.4;
+      const px = Math.cos(angle) * r;
+      const py = Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(200, 255, 255, ${this.glow})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  tap() {
+    if (!this.enabled || this.clicked) return;
+    this.clicked = true;
+    this.clickTime = Date.now();
+    game.clickedCount++;
+    game.score += 100;
+    createParticles(this.x, this.y);
+  }
+}
+
+class Particle {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vx = (Math.random() - 0.5) * 6;
+    this.vy = (Math.random() - 0.5) * 6 - 2;
+    this.life = 1;
+    this.decay = 0.02;
+    this.size = Math.random() * 4 + 2;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.2;
+    this.life -= this.decay;
+  }
+
+  draw() {
+    if (this.life <= 0) return;
+    ctx.fillStyle = `rgba(100, 200, 255, ${this.life * 0.8})`;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function createParticles(x, y) {
+  for (let i = 0; i < 10; i++) {
+    game.particles.push(new Particle(x, y));
+  }
+}
+
+function initGame() {
+  game.phase = "playing";
+  game.score = 0;
+  game.clickedCount = 0;
+  game.timeElapsed = 0;
+  game.stars = [];
+  game.particles = [];
+  game.remaining = game.totalStars;
+  game.startTime = Date.now();
+
+  for (let i = 0; i < game.totalStars; i++) {
+    let x, y, valid;
+    do {
+      valid = true;
+      x = Math.random() * (canvas.width - 100) + 50;
+      y = Math.random() * (canvas.height - 150) + 100;
+      for (const star of game.stars) {
+        if (Math.hypot(x - star.x, y - star.y) < 120) {
+          valid = false;
+          break;
         }
+      }
+    } while (!valid);
+    game.stars.push(new Star(x, y, `star_${i}`));
+  }
 
-        // ============= Seeded Random =============
-        function seededRandom(seed) {
-            const x = Math.sin(seed) * 10000;
-            return x - Math.floor(x);
-        }
+  updateDebug();
+}
 
-        // ============= Generate Points =============
-        function generatePointsForLevel(level) {
-            const points = [];
-            const seedBase = level * 99991;
-            for (let i = 0; i < 3; i++) {
-                const seedX = seedBase + i * 12345;
-                const seedY = seedBase + i * 54321;
-                const x = seededRandom(seedX) * 700 + 50;
-                const y = seededRandom(seedY) * 500 + 50;
-                points.push({
-                    id: `pt_${level}_${i}`,
-                    x, y,
-                    discovered: false,
-                    index: i
-                });
-            }
-            return points;
-        }
+function updateDebug() {
+  window.__gameDebug.objects = game.stars
+    .filter(star => star.enabled)
+    .map((star) => ({
+      id: star.id,
+      enabled: !star.clicked,
+      matchId: null,
+      x: Math.round(star.x),
+      y: Math.round(star.y),
+      w: star.baseRadius * 2,
+      h: star.baseRadius * 2
+    }));
 
-        // ============= Update Debug =============
-        function updateDebug() {
-            window.__gameDebug.objects = gameState.currentPoints.map((pt) => ({
-                id: pt.id,
-                enabled: !pt.discovered,
-                matchId: null,
-                x: pt.x,
-                y: pt.y,
-                radius: pointRadius
-            }));
+  window.__gameDebug.metrics = {
+    score: game.score,
+    progress: Math.min(game.clickedCount / game.totalStars, 1),
+    remaining: game.remaining,
+    phase: game.phase
+  };
+}
 
-            window.__gameDebug.metrics = {
-                score: gameState.score,
-                progress: gameState.level / maxLevel,
-                remaining: gameState.remaining,
-                phase: gameState.phase,
-                level: gameState.level
-            };
-        }
+window.__gameDebug.tapObject = function(id) {
+  const match = id.match(/_(\d+)$/);
+  if (!match) return;
+  const idx = parseInt(match[1], 10);
+  if (game.stars[idx] && !game.stars[idx].clicked) {
+    game.stars[idx].tap();
+    updateDebug();
+  }
+};
 
-        // ============= tapObject Implementation =============
-        window.__gameDebug.tapObject = function(id) {
-            if (gameState.phase !== 'playing') return;
-            const point = gameState.currentPoints.find(p => p.id === id);
-            if (point && !point.discovered) {
-                handlePointTap(point);
-            }
-        };
+function handleCanvasClick(e) {
+  if (game.phase === "win" || game.phase === "fail") {
+    initGame();
+    return;
+  }
 
-        // ============= Handle Point Tap =============
-        function handlePointTap(point) {
-            if (point.discovered || gameState.phase !== 'playing') return;
-            
-            point.discovered = true;
-            gameState.remaining--;
-            gameState.score += 100;
+  if (game.phase !== "playing") return;
 
-            playDiscoverySound();
-            createParticles(point.x, point.y);
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
 
-            if (gameState.remaining === 0) {
-                if (gameState.level === maxLevel) {
-                    endGame('win');
-                } else {
-                    advanceLevel();
-                }
-            }
+  for (const star of game.stars) {
+    if (star.isPointInside(x, y) && !star.clicked) {
+      star.tap();
+      break;
+    }
+  }
+  updateDebug();
+}
 
-            updateDebug();
-        }
+function checkWinCondition() {
+  if (game.clickedCount >= game.totalStars && game.phase === "playing") {
+    game.phase = "win";
+    updateDebug();
+  }
+}
 
-        // ============= Advance Level =============
-        function advanceLevel() {
-            gameState.level++;
-            gameState.remaining = 3;
-            gameState.currentPoints = generatePointsForLevel(gameState.level);
-            gameState.isScanning = true;
-            gameState.scanProgress = 0;
-            updateDebug();
-        }
+function checkFailCondition() {
+  if (game.timeElapsed >= game.timeLimit && game.phase === "playing") {
+    game.phase = "fail";
+    updateDebug();
+  }
+}
 
-        // ============= Particle Class =============
-        class Particle {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.vx = (Math.random() - 0.5) * 4;
-                this.vy = (Math.random() - 0.5) * 4;
-                this.scale = 1;
-                this.alpha = 1;
-                this.lifetime = 400;
-                this.age = 0;
-            }
+function update() {
+  if (game.phase === "playing") {
+    const now = Date.now();
+    game.timeElapsed = (now - game.startTime) / 1000;
+    game.remaining = Math.max(0, game.totalStars - game.clickedCount);
 
-            update(dt) {
-                this.age += dt;
-                const progress = this.age / this.lifetime;
-                this.scale = 1 + progress * 0.5;
-                this.alpha = 1 - progress;
-                this.x += this.vx;
-                this.y += this.vy;
-            }
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+      game.particles[i].update();
+      if (game.particles[i].life <= 0) {
+        game.particles.splice(i, 1);
+      }
+    }
 
-            isAlive() {
-                return this.age < this.lifetime;
-            }
+    checkWinCondition();
+    checkFailCondition();
+  }
+}
 
-            draw(ctx) {
-                ctx.save();
-                ctx.globalAlpha = this.alpha;
-                ctx.fillStyle = '#00ff88';
-                ctx.shadowColor = '#00ff88';
-                ctx.shadowBlur = 10;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, pointRadius * this.scale, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            }
-        }
+function draw() {
+  ctx.fillStyle = "rgba(10, 14, 39, 0.2)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        function createParticles(x, y) {
-            for (let i = 0; i < 8; i++) {
-                gameState.particles.push(new Particle(x, y));
-            }
-        }
+  for (const star of game.stars) {
+    star.draw();
+  }
 
-        // ============= Audio =============
-        function playDiscoverySound() {
-            try {
-                const now = audioCtx.currentTime;
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                
-                osc.frequency.value = 800;
-                osc.type = 'sine';
-                
-                gain.gain.setValueAtTime(0.1, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-                
-                osc.start(now);
-                osc.stop(now + 0.05);
-            } catch (e) {
-                // Audio context not available
-            }
-        }
+  for (const particle of game.particles) {
+    particle.draw();
+  }
 
-        // ============= End Game =============
-        function endGame(result) {
-            gameState.phase = result;
-            updateDebug();
-            showOverlay(result);
-        }
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "18px Arial";
+  ctx.textAlign = "left";
+  ctx.fillText(`Score: ${game.score}`, 20, 30);
+  ctx.fillText(`Remaining: ${game.remaining}`, 20, 60);
+  const timeDisplay = Math.max(0, game.timeLimit - Math.floor(game.timeElapsed));
+  ctx.fillText(`Time: ${timeDisplay}s left`, 20, 90);
 
-        function showOverlay(result) {
-            const overlay = document.getElementById('overlay');
-            const overlayText = document.getElementById('overlayText');
-            const overlayDetail = document.getElementById('overlayDetail');
-            const overlayButton = document.getElementById('overlayButton');
+  if (game.clickedCount === 0 && game.timeElapsed < 3) {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.font = "bold 20px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("Click the stars to collect cosmic points!", canvas.width / 2, canvas.height - 20);
+  }
 
-            if (result === 'win') {
-                overlay.classList.add('win');
-                overlay.classList.remove('fail');
-                overlayText.textContent = '✦ COSMIC DISCOVERY ✦';
-                overlayDetail.textContent = `Level ${gameState.level} Complete • Score: ${gameState.score}`;
-            } else {
-                overlay.classList.add('fail');
-                overlay.classList.remove('win');
-                overlayText.textContent = '⚠ SIGNAL LOST ⚠';
-                overlayDetail.textContent = `Reached Level ${gameState.level} • Score: ${gameState.score}`;
-            }
+  if (game.phase === "win") {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            overlay.classList.add('active');
-            overlayButton.onclick = resetGame;
-        }
+    ctx.fillStyle = "#ffff00";
+    ctx.font = "bold 56px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("COSMIC VICTORY!", canvas.width / 2, canvas.height / 2 - 60);
+    
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "28px Arial";
+    ctx.fillText(`Final Score: ${game.score}`, canvas.width / 2, canvas.height / 2 + 20);
+    
+    ctx.fillStyle = "#88ff88";
+    ctx.font = "20px Arial";
+    ctx.fillText("Click to continue", canvas.width / 2, canvas.height / 2 + 80);
+  }
 
-        // ============= Reset Game =============
-        function resetGame() {
-            document.getElementById('overlay').classList.remove('active');
-            gameState.level = 0;
-            gameState.remaining = 3;
-            gameState.misses = 0;
-            gameState.score = 0;
-            gameState.phase = 'playing';
-            gameState.currentPoints = generatePointsForLevel(0);
-            gameState.particles = [];
-            gameState.isScanning = true;
-            gameState.scanProgress = 0;
-            gameState.gameStartTime = Date.now();
-            gameState.timeRemaining = 120;
-            updateDebug();
-            updateUI();
-        }
+  if (game.phase === "fail") {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // ============= Handle Input =============
-        function handleCanvasClick(event) {
-            if (gameState.phase !== 'playing') return;
+    ctx.fillStyle = "#ff5555";
+    ctx.font = "bold 56px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("TIME UP!", canvas.width / 2, canvas.height / 2 - 60);
+    
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "28px Arial";
+    ctx.fillText(`Score: ${game.score}`, canvas.width / 2, canvas.height / 2 + 20);
+    
+    ctx.fillStyle = "#ff8888";
+    ctx.font = "20px Arial";
+    ctx.fillText("Click to retry", canvas.width / 2, canvas.height / 2 + 80);
+  }
 
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
+  ctx.textAlign = "left";
+}
 
-            let hit = false;
-            for (let point of gameState.currentPoints) {
-                if (!point.discovered) {
-                    const dx = point.x - x;
-                    const dy = point.y - y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance <= hitRadius) {
-                        handlePointTap(point);
-                        hit = true;
-                        break;
-                    }
-                }
-            }
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
 
-            if (!hit) {
-                gameState.misses++;
-                updateUI();
-                if (gameState.misses >= maxMisses) {
-                    endGame('fail');
-                }
-            }
-        }
+canvas.addEventListener('click', handleCanvasClick);
 
-        // ============= Update UI =============
-        function updateUI() {
-            document.getElementById('levelDisplay').textContent = gameState.level;
-            document.getElementById('remainingDisplay').textContent = gameState.remaining;
-            document.getElementById('missesDisplay').textContent = gameState.misses;
-            document.getElementById('timeDisplay').textContent = Math.max(0, gameState.timeRemaining);
-        }
+function startGame() {
+  if (!game.gameLoopStarted) {
+    game.gameLoopStarted = true;
+    initGame();
+    gameLoop();
+  }
+}
 
-        // ============= Main Draw Loop =============
-        let lastTime = Date.now();
-        function draw() {
-            const now = Date.now();
-            const dt = Math.min(now - lastTime, 16);
-            lastTime = now;
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startGame);
+} else {
+  startGame();
+}
 
-            // Update time
-            if (gameState.phase === 'playing') {
-                const elapsed = now - gameState.gameStartTime;
-                gameState.timeRemaining = Math.max(0, 120 - Math.floor(elapsed / 1000));
-                
-                if (gameState.timeRemaining === 0) {
-                    endGame('fail');
-                }
-                updateUI();
-            }
-
-            // Clear canvas
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Grid background
-            ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < canvas.width; i += 40) {
-                ctx.beginPath();
-                ctx.moveTo(i, 0);
-                ctx.lineTo(i, canvas.height);
-                ctx.stroke();
-            }
-            for (let i = 0; i < canvas.height; i += 40) {
-                ctx.beginPath();
-                ctx.moveTo(0, i);
-                ctx.lineTo(canvas.width, i);
-                ctx.stroke();
-            }
-
-            // Scanning effect
-            if (gameState.isScanning) {
-                gameState.scanProgress += dt / 400;
-                if (gameState.scanProgress >= 1) {
-                    gameState.isScanning = false;
-                }
-                const scanAlpha = (1 - gameState.scanProgress) * 0.3;
-                ctx.fillStyle = `rgba(0, 0, 0, ${scanAlpha})`;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
-
-            // Draw points
-            for (let point of gameState.currentPoints) {
-                if (point.discovered) {
-                    ctx.fillStyle = 'rgba(0, 255, 136, 0.2)';
-                } else {
-                    ctx.fillStyle = '#00ff88';
-                    ctx.shadowColor = '#00ff88';
-                    ctx.shadowBlur = 15;
-                }
-                ctx.beginPath();
-                ctx.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            }
-
-            // Draw particles
-            gameState.particles = gameState.particles.filter(p => p.isAlive());
-            for (let particle of gameState.particles) {
-                particle.update(dt);
-                particle.draw(ctx);
-            }
-
-            // Update zoom
-            const zoom = getZoomLevel(gameState.level);
-            canvas.style.transform = `scale(${zoom})`;
-
-            requestAnimationFrame(draw);
-        }
-
-        // ============= Event Listeners =============
-        canvas.addEventListener('click', handleCanvasClick);
-
-        // ============= Initialization =============
-        function init() {
-            gameState.currentPoints = generatePointsForLevel(0);
-            gameState.isScanning = true;
-            gameState.gameStartTime = Date.now();
-            updateDebug();
-            updateUI();
-            draw();
-        }
-
-        init();
-    </script>
+</script>
 </body>
 </html>

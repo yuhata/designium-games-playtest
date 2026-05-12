@@ -1,607 +1,434 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>アヤカシ狩</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #000;
-            overflow: hidden;
-        }
-
-        .container {
-            width: 375px;
-            height: 812px;
-            margin: 0 auto;
-            background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 100%);
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .demo-banner {
-            background: linear-gradient(90deg, #ff6b35 0%, #f7931e 100%);
-            color: white;
-            text-align: center;
-            padding: 6px;
-            font-size: 12px;
-            font-weight: bold;
-            letter-spacing: 1px;
-        }
-
-        .game-screen {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .screen {
-            display: none;
-            flex: 1;
-            flex-direction: column;
-        }
-
-        .screen.active {
-            display: flex;
-        }
-
-        /* タイトル画面 */
-        .title-screen {
-            justify-content: center;
-            align-items: center;
-            background: linear-gradient(180deg, #16213e 0%, #0f3460 100%);
-            padding: 40px 20px;
-            text-align: center;
-        }
-
-        .title-screen h1 {
-            font-size: 48px;
-            color: #00ffff;
-            margin-bottom: 20px;
-            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-            font-weight: bold;
-        }
-
-        .title-screen p {
-            color: #aaa;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #00ffff 0%, #0099ff 100%);
-            color: #000;
-            border: none;
-            padding: 14px 40px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-top: 20px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .btn:active {
-            transform: scale(0.95);
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-        }
-
-        /* ゲーム画面 */
-        .game-play-screen {
-            padding: 0;
-        }
-
-        .game-header {
-            background: rgba(0, 0, 0, 0.7);
-            padding: 12px;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 8px;
-            border-bottom: 2px solid #00ffff;
-        }
-
-        .stat {
-            text-align: center;
-            color: #00ffff;
-            font-size: 12px;
-        }
-
-        .stat-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #00ff88;
-        }
-
-        .hp-bar {
-            width: 100%;
-            height: 20px;
-            background: #222;
-            border: 1px solid #00ffff;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 4px;
-        }
-
-        .hp-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #ff6b35 0%, #ff9a3d 100%);
-            transition: width 0.3s;
-        }
-
-        .game-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .ar-view {
-            flex: 1;
-            background: linear-gradient(180deg, #0a0a2e 0%, #16213e 100%);
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .gps-info {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid #00ffff;
-            padding: 6px 8px;
-            font-size: 10px;
-            color: #00ffff;
-            border-radius: 4px;
-            font-family: monospace;
-        }
-
-        .yokai-container {
-            position: absolute;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            animation: yokaiAppear 0.3s ease-out;
-        }
-
-        @keyframes yokaiAppear {
-            from {
-                transform: scale(0.5);
-                opacity: 0;
-            }
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        .yokai {
-            width: 80px;
-            height: 80px;
-            background: radial-gradient(circle at 30% 30%, #ff00ff, #8b00ff);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 40px;
-            box-shadow: 0 0 20px rgba(255, 0, 255, 0.8);
-            border: 2px solid #00ffff;
-        }
-
-        .yokai-name {
-            color: #00ffff;
-            font-size: 10px;
-            margin-top: 4px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 2px 6px;
-            border-radius: 3px;
-        }
-
-        .distance-indicator {
-            color: #ff6b35;
-            font-size: 12px;
-            margin-top: 2px;
-        }
-
-        .canvas-container {
-            flex: 1;
-            position: relative;
-            background: rgba(0, 0, 0, 0.4);
-            border-top: 2px solid #00ffff;
-        }
-
-        #drawingCanvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            cursor: crosshair;
-            touch-action: none;
-        }
-
-        .canvas-label {
-            position: absolute;
-            bottom: 8px;
-            left: 8px;
-            color: #00ffff;
-            font-size: 11px;
-            opacity: 0.7;
-        }
-
-        .miss-indicator {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 107, 53, 0.9);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            animation: missFlash 0.5s ease-out;
-            pointer-events: none;
-        }
-
-        @keyframes missFlash {
-            0% {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-            100% {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-30px);
-            }
-        }
-
-        /* リザルト画面 */
-        .result-screen {
-            justify-content: center;
-            align-items: center;
-            background: linear-gradient(180deg, #16213e 0%, #0f3460 100%);
-            padding: 40px 20px;
-            text-align: center;
-        }
-
-        .result-title {
-            font-size: 42px;
-            margin-bottom: 20px;
-            font-weight: bold;
-            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-        }
-
-        .result-title.win {
-            color: #00ff88;
-        }
-
-        .result-title.lose {
-            color: #ff6b35;
-        }
-
-        .result-stats {
-            background: rgba(0, 255, 255, 0.1);
-            border: 2px solid #00ffff;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            color: #00ffff;
-        }
-
-        .result-stat {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
-        }
-
-        .result-stat:last-child {
-            border-bottom: none;
-        }
-
-        .result-stat-label {
-            font-size: 14px;
-        }
-
-        .result-stat-value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #00ff88;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アヤカシ狩</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #1a0033 0%, #330066 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    #gameContainer {
+      position: relative;
+      background: #0a0015;
+      border: 3px solid #6600cc;
+      border-radius: 10px;
+      box-shadow: 0 0 30px rgba(102, 0, 204, 0.6);
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 18px;
+      color: #ffcc00;
+      font-weight: bold;
+      z-index: 10;
+      text-shadow: 0 0 5px rgba(255, 204, 0, 0.8);
+    }
+    #score {
+      margin-bottom: 5px;
+    }
+    #remaining {
+      margin-bottom: 5px;
+    }
+    #instructions {
+      position: absolute;
+      bottom: 15px;
+      left: 15px;
+      font-size: 16px;
+      color: #99ff00;
+      text-shadow: 0 0 5px rgba(153, 255, 0, 0.6);
+    }
+    .phase-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 100;
+      cursor: pointer;
+      font-size: 28px;
+      color: white;
+      text-align: center;
+    }
+    .phase-overlay h1 {
+      margin-bottom: 20px;
+      font-size: 48px;
+    }
+    .phase-overlay p {
+      margin: 10px 0;
+      font-size: 20px;
+    }
+    .win {
+      background: rgba(0, 150, 0, 0.8) !important;
+    }
+    .win h1 {
+      color: #00ff00;
+    }
+    .fail {
+      background: rgba(150, 0, 0, 0.8) !important;
+    }
+    .fail h1 {
+      color: #ff4444;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="demo-banner">🎮 [デモモード] 妖怪は自動出現します</div>
-
-        <div class="game-screen">
-            <!-- タイトル画面 -->
-            <div class="screen title-screen active">
-                <h1>アヤカシ狩</h1>
-                <p>スワイプで封印陣を描いて<br>妖怪を捕獲しよう</p>
-                <p style="color: #666; font-size: 12px; margin-top: 20px;">捕獲目標: 30体<br>ミス上限: 3回</p>
-                <button class="btn" onclick="startGame()">ゲーム開始</button>
-            </div>
-
-            <!-- ゲーム画面 -->
-            <div class="screen game-play-screen">
-                <div class="game-header">
-                    <div class="stat">
-                        <div>捕獲数</div>
-                        <div class="stat-value" id="captureCount">0</div>
-                    </div>
-                    <div class="stat">
-                        <div>HP</div>
-                        <div class="hp-bar">
-                            <div class="hp-fill" id="hpFill" style="width: 100%;"></div>
-                        </div>
-                    </div>
-                    <div class="stat">
-                        <div>ミス</div>
-                        <div class="stat-value" id="missCount">0</div>
-                    </div>
-                </div>
-
-                <div class="game-content">
-                    <div class="ar-view" id="arView">
-                        <div class="gps-info" id="gpsInfo">GPS: (35.68, 139.65)</div>
-                        <div class="yokai-container" id="yokaiContainer"></div>
-                    </div>
-
-                    <div class="canvas-container">
-                        <canvas id="drawingCanvas"></canvas>
-                        <div class="canvas-label">← スワイプで封印陣を描く</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- リザルト画面 -->
-            <div class="screen result-screen">
-                <div class="result-title" id="resultTitle">勝利！</div>
-                <div class="result-stats">
-                    <div class="result-stat">
-                        <span class="result-stat-label">捕獲妖怪数</span>
-                        <span class="result-stat-value" id="finalCapture">0</span>
-                    </div>
-                    <div class="result-stat">
-                        <span class="result-stat-label">遭遇種族数</span>
-                        <span class="result-stat-value" id="finalSpecies">0</span>
-                    </div>
-                    <div class="result-stat">
-                        <span class="result-stat-label">ミス数</span>
-                        <span class="result-stat-value" id="finalMiss">0</span>
-                    </div>
-                </div>
-                <button class="btn" onclick="backToTitle()">タイトルに戻る</button>
-            </div>
-        </div>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="ui">
+      <div id="score">スコア: 0</div>
+      <div id="remaining">妖怪残数: 0</div>
+      <div id="missCount">ミス: 0/3</div>
     </div>
+    <div id="instructions">妖怪をクリック/タップして捕獲！</div>
+  </div>
 
-    <script>
-        const SPECIES = [
-            { name: '火狐', emoji: '🦊' },
-            { name: '水妖', emoji: '💧' },
-            { name: '風霊', emoji: '💨' },
-            { name: '古狸', emoji: '🦝' },
-            { name: '鬼火', emoji: '🔥' }
-        ];
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // デバッグコントラクト初期化
+    window.__gameDebug = {
+      objects: [],
+      metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+      tapObject: function(id) {}
+    };
 
-        let gameState = {
-            screen: 'title',
-            captureCount: 0,
-            missCount: 0,
-            hp: 3,
-            currentYokai: null,
-            species: new Set(),
-            score: 0
-        };
+    // ゲーム状態
+    let gameState = {
+      phase: "playing",
+      score: 0,
+      missCount: 0,
+      maxMisses: 3,
+      enemies: [],
+      totalEnemies: 8,
+      capturedCount: 0,
+      particles: [],
+      gameStartTime: null
+    };
 
-        let canvas = document.getElementById('drawingCanvas');
-        let ctx = canvas ? canvas.getContext('2d') : null;
-        let isDrawing = false;
-        let lastX = 0, lastY = 0;
-        let gameLoopInterval = null;
-        let yokaiUpdateInterval = null;
+    class Enemy {
+      constructor(id) {
+        this.id = id;
+        this.alive = true;
+        this.randomize();
+        this.captured = false;
+      }
 
-        function resizeCanvas() {
-            if (!canvas) return;
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
+      randomize() {
+        this.radius = 25 + Math.random() * 15;
+        this.x = this.radius + Math.random() * (canvas.width - 2 * this.radius);
+        this.y = this.radius + 80 + Math.random() * (canvas.height - 200 - 2 * this.radius);
+        this.hue = 240 + Math.random() * 60;
+        this.pulse = 0;
+        this.pulseSpeed = 0.02 + Math.random() * 0.03;
+      }
+
+      update() {
+        if (this.alive) {
+          this.pulse += this.pulseSpeed;
+          if (this.pulse > 2 * Math.PI) {
+            this.pulse -= 2 * Math.PI;
+          }
         }
+      }
 
-        function startGame() {
-            gameState = {
-                screen: 'game',
-                captureCount: 0,
-                missCount: 0,
-                hp: 3,
-                currentYokai: null,
-                species: new Set(),
-                score: 0
-            };
-            showScreen('game-play-screen');
-            resizeCanvas();
-            setupCanvasEvents();
-            startGameLoop();
+      draw() {
+        if (!this.alive) return;
+
+        const pulseEffect = 1 + 0.2 * Math.sin(this.pulse);
+        const drawRadius = this.radius * pulseEffect;
+
+        // 妖怪本体（グラデーション）
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, drawRadius);
+        gradient.addColorStop(0, `hsl(${this.hue}, 100%, 60%)`);
+        gradient.addColorStop(1, `hsl(${this.hue}, 100%, 30%)`);
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, drawRadius, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // 外枠
+        ctx.strokeStyle = `hsl(${this.hue}, 100%, 70%)`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 目
+        const eyeOffset = drawRadius * 0.3;
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(this.x - eyeOffset, this.y - eyeOffset * 0.5, drawRadius * 0.15, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + eyeOffset, this.y - eyeOffset * 0.5, drawRadius * 0.15, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // 瞳
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(this.x - eyeOffset + 2, this.y - eyeOffset * 0.5 + 1, drawRadius * 0.07, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + eyeOffset + 2, this.y - eyeOffset * 0.5 + 1, drawRadius * 0.07, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+
+      isClicked(x, y) {
+        if (!this.alive) return false;
+        const dist = Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
+        return dist <= this.radius * 1.2;
+      }
+    }
+
+    class Particle {
+      constructor(x, y, vx, vy, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.color = color;
+        this.life = 1;
+        this.decay = 0.02;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.1;
+        this.life -= this.decay;
+      }
+
+      draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    function initGame() {
+      gameState.phase = "playing";
+      gameState.score = 0;
+      gameState.missCount = 0;
+      gameState.capturedCount = 0;
+      gameState.enemies = [];
+      gameState.particles = [];
+      gameState.gameStartTime = Date.now();
+
+      for (let i = 0; i < gameState.totalEnemies; i++) {
+        gameState.enemies.push(new Enemy(i));
+      }
+
+      updateDebug();
+    }
+
+    function captureEnemy(index) {
+      if (gameState.phase !== "playing" || index < 0 || index >= gameState.enemies.length) return;
+      
+      const enemy = gameState.enemies[index];
+      if (!enemy.alive) return;
+
+      enemy.alive = false;
+      enemy.captured = true;
+      gameState.score += 100;
+      gameState.capturedCount++;
+
+      // パーティクル生成
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * 2 * Math.PI;
+        const speed = 3 + Math.random() * 4;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        const color = `hsl(${enemy.hue}, 100%, 50%)`;
+        gameState.particles.push(new Particle(enemy.x, enemy.y, vx, vy, color));
+      }
+
+      // ゲーム終了判定
+      if (gameState.capturedCount === gameState.totalEnemies) {
+        gameState.phase = "win";
+      }
+
+      updateDebug();
+    }
+
+    function handleMiss() {
+      if (gameState.phase !== "playing") return;
+      gameState.missCount++;
+
+      if (gameState.missCount >= gameState.maxMisses) {
+        gameState.phase = "fail";
+      }
+
+      updateDebug();
+    }
+
+    function handleCanvasClick(event) {
+      if (gameState.phase !== "playing") return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      let hit = false;
+      for (let i = 0; i < gameState.enemies.length; i++) {
+        if (gameState.enemies[i].isClicked(x, y)) {
+          captureEnemy(i);
+          hit = true;
+          break;
         }
+      }
 
-        function showScreen(screenClass) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.querySelector(`.${screenClass}`).classList.add('active');
+      if (!hit) {
+        handleMiss();
+      }
+    }
+
+    function updateDebug() {
+      window.__gameDebug.objects = gameState.enemies.map((e, i) => ({
+        id: `enemy_${i}`,
+        enabled: e.alive,
+        matchId: null,
+        x: Math.round(e.x),
+        y: Math.round(e.y),
+        w: e.radius * 2,
+        h: e.radius * 2
+      }));
+
+      window.__gameDebug.metrics = {
+        score: gameState.score,
+        progress: gameState.capturedCount / gameState.totalEnemies,
+        remaining: gameState.enemies.filter(e => e.alive).length,
+        phase: gameState.phase
+      };
+    }
+
+    window.__gameDebug.tapObject = function(id) {
+      const idx = parseInt(id.split('_').pop(), 10);
+      if (!isNaN(idx) && idx >= 0 && idx < gameState.enemies.length) {
+        captureEnemy(idx);
+      }
+    };
+
+    function updateUI() {
+      document.getElementById('score').textContent = `スコア: ${gameState.score}`;
+      document.getElementById('remaining').textContent = `妖怪残数: ${gameState.enemies.filter(e => e.alive).length}`;
+      document.getElementById('missCount').textContent = `ミス: ${gameState.missCount}/${gameState.maxMisses}`;
+    }
+
+    function drawGameOver() {
+      const overlay = document.createElement('div');
+      overlay.className = 'phase-overlay';
+      if (gameState.phase === "win") {
+        overlay.classList.add('win');
+        overlay.innerHTML = `
+          <h1>🎉 全妖怪を捕獲！ 🎉</h1>
+          <p>スコア: ${gameState.score}</p>
+          <p style="margin-top: 20px; font-size: 18px;">クリックでリスタート</p>
+        `;
+      } else {
+        overlay.classList.add('fail');
+        overlay.innerHTML = `
+          <h1>❌ ゲームオーバー ❌</h1>
+          <p>ミス数上限に達しました</p>
+          <p>最終スコア: ${gameState.score}</p>
+          <p style="margin-top: 20px; font-size: 18px;">クリックでリスタート</p>
+        `;
+      }
+      
+      const container = document.getElementById('gameContainer');
+      const existingOverlay = container.querySelector('.phase-overlay');
+      if (existingOverlay) existingOverlay.remove();
+      container.appendChild(overlay);
+
+      overlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        overlay.remove();
+        initGame();
+      });
+    }
+
+    function gameLoop() {
+      // 背景描画
+      ctx.fillStyle = '#0a0015';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // グリッド背景
+      ctx.strokeStyle = 'rgba(102, 0, 204, 0.1)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= canvas.width; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+      for (let i = 0; i <= canvas.height; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+      }
+
+      // 敵の更新・描画
+      gameState.enemies.forEach(enemy => {
+        enemy.update();
+        enemy.draw();
+      });
+
+      // パーティクルの更新・描画
+      for (let i = gameState.particles.length - 1; i >= 0; i--) {
+        gameState.particles[i].update();
+        gameState.particles[i].draw();
+        if (gameState.particles[i].life <= 0) {
+          gameState.particles.splice(i, 1);
         }
+      }
 
-        function setupCanvasEvents() {
-            canvas.addEventListener('touchstart', (e) => {
-                isDrawing = true;
-                const rect = canvas.getBoundingClientRect();
-                lastX = e.touches[0].clientX - rect.left;
-                lastY = e.touches[0].clientY - rect.top;
-            });
+      updateUI();
 
-            canvas.addEventListener('touchmove', (e) => {
-                if (!isDrawing) return;
-                e.preventDefault();
+      if (gameState.phase === "win" || gameState.phase === "fail") {
+        drawGameOver();
+        return;
+      }
 
-                const rect = canvas.getBoundingClientRect();
-                const x = e.touches[0].clientX - rect.left;
-                const y = e.touches[0].clientY - rect.top;
+      requestAnimationFrame(gameLoop);
+    }
 
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-                ctx.lineWidth = 3;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(x, y);
-                ctx.stroke();
+    canvas.addEventListener('click', handleCanvasClick);
 
-                lastX = x;
-                lastY = y;
-            });
+    // マウスイベント全て処理（P2対策）
+    canvas.addEventListener('mousedown', () => {});
+    canvas.addEventListener('mousemove', () => {});
+    canvas.addEventListener('mouseup', () => {});
 
-            canvas.addEventListener('touchend', () => {
-                if (isDrawing && gameState.currentYokai) {
-                    captureYokai();
-                }
-                isDrawing = false;
-            });
-        }
-
-        function spawnYokai() {
-            if (gameState.currentYokai) return;
-
-            const species = SPECIES[Math.floor(Math.random() * SPECIES.length)];
-            const x = Math.random() * (canvas.offsetWidth - 100) + 50;
-            const y = Math.random() * (canvas.offsetHeight * 0.4) + 40;
-
-            gameState.currentYokai = {
-                species: species,
-                x: x,
-                y: y,
-                distance: Math.floor(Math.random() * 150) + 50,
-                spawnTime: Date.now()
-            };
-
-            gameState.species.add(species.name);
-            renderYokai();
-
-            setTimeout(() => {
-                if (gameState.currentYokai && gameState.currentYokai.species === species) {
-                    missYokai();
-                }
-            }, 4000);
-        }
-
-        function renderYokai() {
-            const container = document.getElementById('yokaiContainer');
-            container.innerHTML = '';
-
-            if (!gameState.currentYokai) return;
-
-            const yokai = gameState.currentYokai;
-            const yokaiEl = document.createElement('div');
-            yokaiEl.className = 'yokai-container';
-            yokaiEl.style.left = yokai.x + 'px';
-            yokaiEl.style.top = yokai.y + 'px';
-            yokaiEl.innerHTML = `
-                <div class="yokai">${yokai.species.emoji}</div>
-                <div class="yokai-name">${yokai.species.name}</div>
-                <div class="distance-indicator">距離: ${yokai.distance}m</div>
-            `;
-            container.appendChild(yokaiEl);
-        }
-
-        function captureYokai() {
-            if (!gameState.currentYokai) return;
-
-            gameState.captureCount++;
-            gameState.currentYokai = null;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            document.getElementById('captureCount').textContent = gameState.captureCount;
-
-            if (gameState.captureCount >= 30) {
-                endGame(true);
-            }
-        }
-
-        function missYokai() {
-            if (!gameState.currentYokai) return;
-
-            gameState.missCount++;
-            gameState.currentYokai = null;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const missEl = document.createElement('div');
-            missEl.className = 'miss-indicator';
-            missEl.textContent = 'ミス！';
-            document.querySelector('.game-content').appendChild(missEl);
-            setTimeout(() => missEl.remove(), 500);
-
-            document.getElementById('missCount').textContent = gameState.missCount;
-
-            if (gameState.missCount > 3) {
-                endGame(false);
-            }
-        }
-
-        function endGame(isWin) {
-            clearInterval(gameLoopInterval);
-            clearInterval(yokaiUpdateInterval);
-
-            const resultTitle = document.getElementById('resultTitle');
-            resultTitle.className = 'result-title ' + (isWin ? 'win' : 'lose');
-            resultTitle.textContent = isWin ? '妖怪を制圧した！' : 'ゲームオーバー...';
-
-            document.getElementById('finalCapture').textContent = gameState.captureCount;
-            document.getElementById('finalSpecies').textContent = gameState.species.size;
-            document.getElementById('finalMiss').textContent = gameState.missCount;
-
-            showScreen('result-screen');
-        }
-
-        function startGameLoop() {
-            let gpsLat = 35.68;
-            let gpsLon = 139.65;
-
-            yokaiUpdateInterval = setInterval(() => {
-                spawnYokai();
-                
-                gpsLat += (Math.random() - 0.5) * 0.001;
-                gpsLon += (Math.random() - 0.5) * 0.001;
-                document.getElementById('gpsInfo').textContent =
-                    `GPS: (${gpsLat.toFixed(3)}, ${gpsLon.toFixed(3)})`;
-            }, 3500);
-
-            gameLoopInterval = setInterval(() => {
-                if (gameState.currentYokai) {
-                    gameState.currentYokai.distance = Math.max(0, gameState.currentYokai.distance - Math.random() * 30);
-                    if (gameState.currentYokai.distance <= 0) {
-                        gameState.currentYokai.distance = 0;
-                    }
-                    renderYokai();
-                }
-            }, 500);
-        }
-
-        function backToTitle() {
-            clearInterval(gameLoopInterval);
-            clearInterval(yokaiUpdateInterval);
-            gameState.currentYokai = null;
-            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-            showScreen('title-screen');
-        }
-
-        window.addEventListener('resize', resizeCanvas);
-    </script>
+    // ゲーム開始
+    setTimeout(() => {
+      initGame();
+      gameLoop();
+    }, 500);
+  </script>
 </body>
 </html>

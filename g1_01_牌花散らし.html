@@ -217,6 +217,8 @@
       moves: 0,
       patterns: [],
       animationState: {},
+      canvasClickHandler: null,
+      canvasTouchHandler: null,
 
       generatePatterns() {
         const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', 
@@ -238,10 +240,13 @@
         this.canvas.width = this.cols * this.tileSize;
         this.canvas.height = this.rows * this.tileSize;
 
-        this.generatePatterns();
+        if (this.patterns.length === 0) {
+          this.generatePatterns();
+        }
         this.createTiles();
         this.shuffleTiles();
         this.startTime = Date.now();
+        this.phase = "playing";
         this.bindEvents();
         this.updateDebug();
         this.gameLoop();
@@ -280,9 +285,21 @@
       },
 
       bindEvents() {
-        this.canvas.addEventListener('mousedown', (e) => this.handleInput(e));
-        this.canvas.addEventListener('touchstart', (e) => this.handleInput(e), { passive: false });
-        document.getElementById('endButton').addEventListener('click', () => this.reset());
+        if (this.canvasClickHandler) {
+          this.canvas.removeEventListener('mousedown', this.canvasClickHandler);
+        }
+        if (this.canvasTouchHandler) {
+          this.canvas.removeEventListener('touchstart', this.canvasTouchHandler);
+        }
+
+        this.canvasClickHandler = (e) => this.handleInput(e);
+        this.canvasTouchHandler = (e) => this.handleInput(e);
+        
+        this.canvas.addEventListener('mousedown', this.canvasClickHandler);
+        this.canvas.addEventListener('touchstart', this.canvasTouchHandler, { passive: false });
+        
+        const endBtn = document.getElementById('endButton');
+        endBtn.onclick = () => this.reset();
       },
 
       handleInput(e) {
@@ -321,12 +338,12 @@
         const state = this.animationState[tile.id];
         state.scale = 0.85;
 
+        this.updateDebug();
+
         if (this.selectedIndices.length === 2) {
           this.isProcessing = true;
           setTimeout(() => this.evaluateMatch(), 500);
         }
-
-        this.updateDebug();
       },
 
       evaluateMatch() {
@@ -355,6 +372,8 @@
               
               const remaining = 72 - Math.floor(this.matchedSet.size / 2);
               if (remaining === 0) {
+                this.phase = "win";
+                this.updateDebug();
                 this.winGame();
               } else {
                 this.checkDeadlock();
@@ -394,6 +413,7 @@
         }
         
         this.phase = "fail";
+        this.updateDebug();
         this.showEndScreen("ゲームオーバー", "💥", 
           `マッチできる牌がありません<br>操作: ${this.moves}回<br>時間: ${this.getElapsedTime().toFixed(1)}秒`, "NoMove");
       },
@@ -406,7 +426,6 @@
         const elapsed = this.getElapsedTime();
         const isPerfect = elapsed < 120 && this.moves < 150;
         
-        this.phase = "win";
         let emoji = "🎉";
         let rank = "Good!";
         
@@ -431,6 +450,13 @@
       },
 
       reset() {
+        if (this.canvasClickHandler) {
+          this.canvas.removeEventListener('mousedown', this.canvasClickHandler);
+        }
+        if (this.canvasTouchHandler) {
+          this.canvas.removeEventListener('touchstart', this.canvasTouchHandler);
+        }
+        
         this.tiles = [];
         this.selectedIndices = [];
         this.matchedSet.clear();
@@ -447,7 +473,9 @@
         window.__gameDebug.objects = this.tiles.map(tile => ({
           id: tile.id,
           enabled: !tile.matched,
-          matchId: tile.matched ? null : String(tile.pattern.id)
+          matchId: tile.matched ? null : String(tile.pattern.id),
+          x: tile.x + this.tileSize / 2,
+          y: tile.y + this.tileSize / 2
         }));
         window.__gameDebug.metrics = {
           score: this.moves,
@@ -472,6 +500,7 @@
 
           if (elapsed >= 300) {
             this.phase = "fail";
+            this.updateDebug();
             this.showEndScreen("ゲームオーバー", "⏰", `時間切れ<br>操作: ${this.moves}回`, "TimeUp");
           }
         }
@@ -500,6 +529,8 @@
           if (tile.matched) continue;
 
           const state = this.animationState[tile.id];
+          if (!state) continue;
+          
           this.ctx.save();
           this.ctx.globalAlpha = state.opacity;
           this.ctx.translate(tile.x + this.tileSize / 2, tile.y + this.tileSize / 2);
@@ -523,7 +554,7 @@
       }
     };
 
-    window.addEventListener('load', () => {
+    window.addEventListener('DOMContentLoaded', () => {
       game.init();
     });
   </script>

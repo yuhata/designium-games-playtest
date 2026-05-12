@@ -1,448 +1,384 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>頂上ドラッグ</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      font-family: 'Arial', sans-serif;
-    }
-    #gameContainer {
-      position: relative;
-      width: 100%;
-      max-width: 800px;
-      aspect-ratio: 9 / 16;
-      background: #000;
-      border: 4px solid #fff;
-      overflow: hidden;
-    }
-    canvas { display: block; width: 100%; height: 100%; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>頂上ドラッグ</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 3px solid #333;
+            cursor: grab;
+            display: block;
+            background: white;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+    </style>
 </head>
 <body>
-  <div id="gameContainer">
-    <canvas id="gameCanvas"></canvas>
-  </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-  <script>
-    // ==================== γ-1 デバッグコントラクト ====================
-    window.__gameDebug = {
-      objects: [],
-      metrics: { score: 0, progress: 0.0, remaining: 0, phase: "title" },
-      tapObject: function(id) { /* オーバーライド対象 */ }
-    };
+        // グローバルデバッグコントラクト（必須）
+        window.__gameDebug = {
+            drags: [],
+            objects: [],
+            metrics: { score: 0, progress: 0.0, remaining: 0, phase: "playing" },
+            dragObject: function(id) {}
+        };
 
-    // Canvas初期化
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    let rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+        // ゲーム状態
+        const game = {
+            phase: 'playing',  // playing, win, fail
+            score: 0,
+            mistakes: 0,
+            maxMistakes: 3,
+            gears: [],
+            mountain: null,
+            draggingGear: null,
+            dragOffsetX: 0,
+            dragOffsetY: 0,
+            startTime: Date.now()
+        };
 
-    // 音声コンテキスト（警告音生成用）
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // ギアクラス
+        class Gear {
+            constructor(id, x, y, radius, color) {
+                this.id = id;
+                this.x = x;
+                this.y = y;
+                this.baseX = x;
+                this.baseY = y;
+                this.radius = radius;
+                this.color = color;
+                this.placed = false;
+            }
 
-    // ゲーム状態
-    const gameState = {
-      phase: 'title',
-      rpm: 2000,
-      maxRpm: 6000,
-      temp: 20,
-      rank: 10,
-      enemyRank: 10,
-      playerGear: 3,
-      enemyRpm: 3000,
-      shiftCount: 0,
-      bestRank: Infinity,
-      bestScore: 0,
-      startTime: 0,
-      elapsedTime: 0,
-      prevRank: 10,
-      rankReversed: false,
-      sensibilityMult: 1.0
-    };
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
 
-    // Best記録ロード
-    function loadBestRecord() {
-      const best = localStorage.getItem('topDragBest');
-      if (best) {
-        const data = JSON.parse(best);
-        gameState.bestRank = data.rank;
-        gameState.bestScore = data.score;
-      }
-    }
+                // ギアの歯
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 8; i++) {
+                    const angle = (Math.PI * 2 / 8) * i;
+                    const startX = this.x + Math.cos(angle) * this.radius;
+                    const startY = this.y + Math.sin(angle) * this.radius;
+                    const endX = this.x + Math.cos(angle) * (this.radius + 8);
+                    const endY = this.y + Math.sin(angle) * (this.radius + 8);
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                }
 
-    function saveBestRecord() {
-      if (gameState.rank < gameState.bestRank) {
-        gameState.bestRank = gameState.rank;
-        gameState.bestScore = gameState.shiftCount;
-        localStorage.setItem('topDragBest', JSON.stringify({ 
-          rank: gameState.bestRank, 
-          score: gameState.bestScore 
-        }));
-      }
-    }
+                // 中心穴
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                ctx.fill();
 
-    loadBestRecord();
+                // 配置済みマーク
+                if (this.placed) {
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
 
-    // ==================== updateDebug ====================
-    function updateDebug() {
-      const shiftObjects = [];
-      for (let i = 1; i <= 5; i++) {
-        const x = (i - 1) * (canvas.width / 5);
-        const y = canvas.height * 0.7;
-        const w = canvas.width / 5;
-        const h = canvas.height * 0.3;
-        shiftObjects.push({
-          id: `shift_gear_${i}`,
-          enabled: gameState.phase === 'playing',
-          matchId: null,
-          x, y, w, h,
-          active: gameState.playerGear === i,
-          rpmDelta: (i - 3) * 500
+            contains(px, py) {
+                const dx = px - this.x;
+                const dy = py - this.y;
+                return Math.sqrt(dx * dx + dy * dy) <= this.radius + 10;
+            }
+        }
+
+        // 山クラス
+        class Mountain {
+            constructor(x, y, width, height) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.peakX = x + width / 2;
+                this.peakY = y;
+            }
+
+            draw(ctx) {
+                // 山の本体
+                ctx.fillStyle = '#8B7355';
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y + this.height);
+                ctx.lineTo(this.peakX, this.peakY);
+                ctx.lineTo(this.x + this.width, this.y + this.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // 山の輪郭
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 頂上エリア（ドロップターゲット）
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+                ctx.beginPath();
+                ctx.arc(this.peakX, this.peakY - 30, 35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // テキスト
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('頂上', this.peakX, this.peakY - 60);
+            }
+
+            isInPeak(x, y) {
+                const dx = x - this.peakX;
+                const dy = y - (this.peakY - 30);
+                return Math.sqrt(dx * dx + dy * dy) <= 40;
+            }
+        }
+
+        // 初期化
+        function initGame() {
+            game.phase = 'playing';
+            game.score = 0;
+            game.mistakes = 0;
+            game.draggingGear = null;
+            game.gears = [];
+            game.startTime = Date.now();
+
+            game.mountain = new Mountain(120, 200, 280, 180);
+
+            const gearConfigs = [
+                { id: 'gear_red', x: 540, y: 280, radius: 20, color: '#FF6B6B' },
+                { id: 'gear_cyan', x: 630, y: 320, radius: 18, color: '#4ECDC4' },
+                { id: 'gear_yellow', x: 710, y: 280, radius: 19, color: '#FFE66D' }
+            ];
+
+            gearConfigs.forEach(cfg => {
+                game.gears.push(new Gear(cfg.id, cfg.x, cfg.y, cfg.radius, cfg.color));
+            });
+
+            updateDebug();
+        }
+
+        // デバッグ情報更新（必須）
+        function updateDebug() {
+            window.__gameDebug.drags = game.gears
+                .filter(g => !g.placed)
+                .map(g => ({
+                    id: g.id,
+                    type: 'gear',
+                    enabled: game.phase === 'playing' && !g.placed,
+                    x: Math.round(g.x),
+                    y: Math.round(g.y)
+                }));
+
+            window.__gameDebug.objects = game.gears.map(g => ({
+                id: g.id,
+                x: Math.round(g.x),
+                y: Math.round(g.y),
+                placed: g.placed
+            }));
+
+            window.__gameDebug.metrics = {
+                score: game.score,
+                progress: game.score / Math.max(1, game.gears.length),
+                remaining: Math.max(0, game.gears.length - game.score),
+                phase: game.phase
+            };
+        }
+
+        // dragObject実装（デバッグコントラクト・本実装）
+        window.__gameDebug.dragObject = function(id) {
+            const gear = game.gears.find(g => g.id === id);
+            if (!gear || gear.placed || game.phase !== 'playing') return;
+
+            // 自動配置
+            gear.x = game.mountain.peakX;
+            gear.y = game.mountain.peakY - 30;
+            gear.placed = true;
+            game.score++;
+            updateDebug();
+            checkWinCondition();
+        };
+
+        // マウスイベント（P2座標正規化、P1 mousemove/mouseupでgameover禁止）
+        canvas.addEventListener('mousedown', (e) => {
+            if (game.phase !== 'playing') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            // 後ろのギアから順に（Z-order）
+            for (let i = game.gears.length - 1; i >= 0; i--) {
+                const gear = game.gears[i];
+                if (!gear.placed && gear.contains(mx, my)) {
+                    game.draggingGear = gear;
+                    game.dragOffsetX = mx - gear.x;
+                    game.dragOffsetY = my - gear.y;
+                    break;
+                }
+            }
         });
-      }
 
-      if (gameState.phase === 'title') {
-        shiftObjects.push({ id: 'start', enabled: true, matchId: null });
-      }
+        canvas.addEventListener('mousemove', (e) => {
+            // mousemoveではgameover判定をしない（P1）
+            if (!game.draggingGear || game.phase !== 'playing') return;
 
-      window.__gameDebug.objects = shiftObjects;
-      window.__gameDebug.metrics = {
-        score: gameState.shiftCount,
-        progress: Math.max(0, 1 - gameState.temp / 100),
-        remaining: 0,
-        phase: gameState.phase
-      };
-    }
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
 
-    // ==================== tapObject 実装 ====================
-    window.__gameDebug.tapObject = function(id) {
-      if (id === 'start') {
-        startGame();
-        return;
-      }
-      if (id.startsWith('shift_gear_')) {
-        const gear = parseInt(id.split('_').pop(), 10);
-        selectGear(gear);
-      }
-    };
+            game.draggingGear.x = mx - game.dragOffsetX;
+            game.draggingGear.y = my - game.dragOffsetY;
 
-    // ==================== ゲーム開始 ====================
-    function startGame() {
-      gameState.phase = 'playing';
-      gameState.rpm = 2000;
-      gameState.temp = 20;
-      gameState.rank = 10;
-      gameState.enemyRank = 10;
-      gameState.playerGear = 3;
-      gameState.enemyRpm = 3000;
-      gameState.shiftCount = 0;
-      gameState.startTime = Date.now();
-      gameState.sensibilityMult = 1.0;
-      gameState.rankReversed = false;
-      updateDebug();
-    }
+            // canvas範囲内に留める（P5）
+            const r = game.draggingGear.radius;
+            game.draggingGear.x = Math.max(r, Math.min(canvas.width - r, game.draggingGear.x));
+            game.draggingGear.y = Math.max(r, Math.min(canvas.height - r, game.draggingGear.y));
+        });
 
-    // ==================== ギア選択 ====================
-    function selectGear(gear) {
-      if (gameState.phase !== 'playing' || gear < 1 || gear > 5) return;
+        canvas.addEventListener('mouseup', (e) => {
+            // mouseupでのみ配置判定（P1）
+            if (!game.draggingGear || game.phase !== 'playing') return;
 
-      const prevGear = gameState.playerGear;
-      gameState.playerGear = gear;
+            const gear = game.draggingGear;
 
-      if (prevGear === gear) return;
+            if (game.mountain.isInPeak(gear.x, gear.y)) {
+                gear.placed = true;
+                game.score++;
+            } else {
+                // 間違い
+                game.mistakes++;
+                gear.x = gear.baseX;
+                gear.y = gear.baseY;
 
-      const rpmDelta = (gear - prevGear) * 500;
-      gameState.rpm += rpmDelta;
-      gameState.rpm = Math.max(1000, Math.min(gameState.maxRpm, gameState.rpm));
-      gameState.temp += Math.abs(rpmDelta) * 0.3;
-      gameState.shiftCount++;
+                if (game.mistakes >= game.maxMistakes) {
+                    game.phase = 'fail';
+                }
+            }
 
-      updateDebug();
-    }
+            game.draggingGear = null;
+            updateDebug();
+            checkWinCondition();  // P3: 状態変更後の必須チェック
+        });
 
-    // 警告音発火
-    function playWarningSound() {
-      try {
-        const now = audioContext.currentTime;
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        osc.connect(gain);
-        gain.connect(audioContext.destination);
-        osc.frequency.value = 800;
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-      } catch (e) { /* 音声コンテキスト未対応 */ }
-    }
+        // クリックでリスタート（P10）
+        canvas.addEventListener('click', (e) => {
+            if ((game.phase === 'win' || game.phase === 'fail') && e.button === 0) {
+                initGame();
+                draw();
+            }
+        });
 
-    // ==================== ゲームループ ====================
-    function update() {
-      if (gameState.phase !== 'playing') return;
-
-      gameState.elapsedTime = (Date.now() - gameState.startTime) / 1000;
-
-      // RPM自動減速
-      gameState.rpm *= 0.98;
-      gameState.rpm = Math.max(1000, gameState.rpm);
-
-      // 敵RPM変化
-      gameState.enemyRpm = 3000 + Math.sin(gameState.elapsedTime * 0.4) * 1500;
-      if (gameState.temp >= 60) {
-        gameState.enemyRpm *= 1.3;
-      }
-      if (gameState.temp >= 90) {
-        gameState.enemyRpm *= 1.5;
-      }
-
-      // RPMクランプ（temp >= 60）
-      if (gameState.temp >= 60) {
-        const clampFactor = (100 - gameState.temp) / 100;
-        gameState.rpm = Math.min(gameState.rpm, gameState.maxRpm * clampFactor);
-      }
-
-      // タップ感度低下（temp >= 90）
-      if (gameState.temp >= 90) {
-        gameState.sensibilityMult = 0.7;
-      }
-
-      // 順位更新
-      gameState.prevRank = gameState.rank;
-      if (gameState.rpm > gameState.enemyRpm && gameState.temp < 80) {
-        gameState.rank -= 0.01;
-      } else {
-        gameState.rank += 0.005;
-      }
-      gameState.enemyRank += 0.008;
-
-      // 順位逆転検出
-      if (gameState.prevRank > gameState.enemyRank && gameState.rank <= gameState.enemyRank) {
-        if (!gameState.rankReversed) {
-          gameState.rankReversed = true;
-          playWarningSound();
-          if (navigator.vibrate) navigator.vibrate(200);
+        // 勝利条件チェック（P3）
+        function checkWinCondition() {
+            if (game.score >= game.gears.length) {
+                game.phase = 'win';
+            }
         }
-      } else if (gameState.rank > gameState.enemyRank) {
-        gameState.rankReversed = false;
-      }
 
-      // 温度上昇
-      gameState.temp += 0.15;
+        // 描画
+        function draw() {
+            // 背景
+            ctx.fillStyle = '#E8F4F8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Win/Fail判定
-      if (gameState.rank <= 1) {
-        gameState.phase = 'win';
-        saveBestRecord();
-      } else if (gameState.temp >= 100) {
-        gameState.phase = 'fail';
-      }
+            // 山
+            game.mountain.draw(ctx);
 
-      updateDebug();
-    }
+            // ギア
+            game.gears.forEach(gear => gear.draw(ctx));
 
-    // ==================== 描画 ====================
-    function draw() {
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // UI: スコア・操作説明（P11: インタラクティブ性維持）
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('頂上ドラッグ', 20, 20);
 
-      if (gameState.phase === 'title') drawTitle();
-      else if (gameState.phase === 'playing') drawGame();
-      else if (gameState.phase === 'win') drawWin();
-      else if (gameState.phase === 'fail') drawFail();
-    }
+            ctx.font = '16px Arial';
+            ctx.fillText(`配置: ${game.score} / ${game.gears.length}`, 20, 50);
+            ctx.fillText(`ミス: ${game.mistakes} / ${game.maxMistakes}`, 20, 75);
 
-    function drawTitle() {
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 48px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('頂上ドラッグ', canvas.width / 2, canvas.height * 0.25);
+            ctx.fillStyle = '#666';
+            ctx.font = '13px Arial';
+            ctx.fillText('ギアをドラッグして山頂に配置してください', 20, 105);
 
-      ctx.font = '16px Arial';
-      ctx.fillStyle = '#ccc';
-      ctx.fillText('下のシフトゾーン(1-5)をタップして', canvas.width / 2, canvas.height * 0.4);
-      ctx.fillText('ギアを変更し、RPMを高めて順位を上げよう！', canvas.width / 2, canvas.height * 0.44);
-      ctx.fillText('ただし温度(Temp)が100°Cに達するとゲームオーバー', canvas.width / 2, canvas.height * 0.48);
+            // FAIL画面
+            if (game.phase === 'fail') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      if (gameState.bestRank !== Infinity) {
-        ctx.fillStyle = '#ffcc00';
-        ctx.font = '18px Arial';
-        ctx.fillText(`🏆 Best Rank: ${gameState.bestRank.toFixed(1)} (${gameState.bestScore} shifts)`, 
-          canvas.width / 2, canvas.height * 0.6);
-      }
+                ctx.fillStyle = '#FF6B6B';
+                ctx.font = 'bold 44px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - 60);
 
-      ctx.fillStyle = '#00aa00';
-      ctx.fillRect(canvas.width * 0.25, canvas.height * 0.75, canvas.width * 0.5, 70);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 36px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('START', canvas.width / 2, canvas.height * 0.75 + 50);
-    }
+                ctx.fillStyle = '#fff';
+                ctx.font = '18px Arial';
+                ctx.fillText(`配置できたギア: ${game.score} / ${game.gears.length}`, canvas.width / 2, canvas.height / 2);
+                ctx.fillText('ミス上限に達しました', canvas.width / 2, canvas.height / 2 + 35);
 
-    function drawGame() {
-      // 赤フラッシュ（temp >= 90）
-      if (gameState.temp >= 90) {
-        ctx.fillStyle = `rgba(255, 0, 0, ${0.15 * (gameState.temp - 90) / 10})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+                ctx.font = '16px Arial';
+                ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+            }
 
-      // 相対位置ゲージ
-      ctx.fillStyle = '#333';
-      ctx.fillRect(15, 15, canvas.width - 30, 35);
-      ctx.fillStyle = gameState.rank < gameState.enemyRank ? '#00ff00' : '#ff6600';
-      const gaugeW = (canvas.width - 30) * Math.max(0, Math.min(1, (10 - gameState.rank) / 20));
-      ctx.fillRect(15, 15, gaugeW, 35);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(15, 15, canvas.width - 30, 35);
+            // WIN画面
+            if (game.phase === 'win') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 数値UI
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'left';
-      ctx.font = '20px Arial';
-      ctx.fillText(`Rank: ${gameState.rank.toFixed(1)}`, 20, 80);
-      ctx.fillText(`RPM: ${Math.floor(gameState.rpm)}`, 20, 110);
-      ctx.fillText(`Temp: ${Math.floor(gameState.temp)}°C`, 20, 140);
-      ctx.fillText(`Gear: ${gameState.playerGear}`, 20, 170);
-      ctx.fillText(`Shifts: ${gameState.shiftCount}`, 20, 200);
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 44px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('頂上到達！', canvas.width / 2, canvas.height / 2 - 60);
 
-      // 敵情報
-      ctx.fillStyle = '#ff6666';
-      ctx.font = '16px Arial';
-      ctx.fillText(`Enemy Rank: ${gameState.enemyRank.toFixed(1)}`, 20, 240);
+                ctx.fillStyle = '#fff';
+                ctx.font = '18px Arial';
+                ctx.fillText(`全${game.score}個のギアを配置`, canvas.width / 2, canvas.height / 2);
+                ctx.fillText(`ミス: ${game.mistakes}`, canvas.width / 2, canvas.height / 2 + 35);
 
-      // シフトゾーン
-      for (let i = 1; i <= 5; i++) {
-        const x = (i - 1) * (canvas.width / 5);
-        const y = canvas.height * 0.7;
-        const w = canvas.width / 5;
-        const h = canvas.height * 0.3;
-        const isActive = gameState.playerGear === i;
-
-        ctx.fillStyle = isActive ? '#00dd00' : '#333';
-        ctx.fillRect(x, y, w, h);
-
-        ctx.strokeStyle = isActive ? '#fff' : '#666';
-        ctx.lineWidth = isActive ? 3 : 1;
-        ctx.strokeRect(x, y, w, h);
-
-        ctx.fillStyle = isActive ? '#000' : '#fff';
-        ctx.font = 'bold 40px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(i), x + w / 2, y + h / 2);
-      }
-
-      // 操作説明
-      ctx.fillStyle = '#aaa';
-      ctx.font = '13px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('下のギア(1～5)をタップしてシフト', canvas.width / 2, canvas.height * 0.67);
-    }
-
-    function drawWin() {
-      ctx.fillStyle = 'rgba(0, 200, 0, 0.15)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.fillStyle = '#00ff00';
-      ctx.font = 'bold 60px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('🏆 WIN! 🏆', canvas.width / 2, canvas.height * 0.3);
-
-      ctx.fillStyle = '#fff';
-      ctx.font = '22px Arial';
-      ctx.fillText(`Final Rank: ${gameState.rank.toFixed(1)}`, canvas.width / 2, canvas.height * 0.45);
-      ctx.fillText(`Temperature: ${Math.floor(gameState.temp)}°C`, canvas.width / 2, canvas.height * 0.52);
-      ctx.fillText(`Total Shifts: ${gameState.shiftCount}`, canvas.width / 2, canvas.height * 0.59);
-
-      if (gameState.rank === gameState.bestRank) {
-        ctx.fillStyle = '#ffff00';
-        ctx.font = 'bold 24px Arial';
-        ctx.fillText('✨ NEW BEST! ✨', canvas.width / 2, canvas.height * 0.7);
-      }
-
-      ctx.fillStyle = '#0066ff';
-      ctx.fillRect(canvas.width * 0.25, canvas.height * 0.8, canvas.width * 0.5, 70);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 32px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('RETRY', canvas.width / 2, canvas.height * 0.8 + 50);
-    }
-
-    function drawFail() {
-      ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.fillStyle = '#ff3333';
-      ctx.font = 'bold 60px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('💥 OVERHEAT! 💥', canvas.width / 2, canvas.height * 0.3);
-
-      ctx.fillStyle = '#fff';
-      ctx.font = '22px Arial';
-      ctx.fillText(`Final Rank: ${gameState.rank.toFixed(1)}`, canvas.width / 2, canvas.height * 0.45);
-      ctx.fillText(`Temperature: ${Math.floor(gameState.temp)}°C`, canvas.width / 2, canvas.height * 0.52);
-      ctx.fillText(`Total Shifts: ${gameState.shiftCount}`, canvas.width / 2, canvas.height * 0.59);
-
-      ctx.fillStyle = '#0066ff';
-      ctx.fillRect(canvas.width * 0.25, canvas.height * 0.8, canvas.width * 0.5, 70);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 32px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('RETRY', canvas.width / 2, canvas.height * 0.8 + 50);
-    }
-
-    // ==================== イベント処理 ====================
-    function getClickPos(e) {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: (e.clientX - rect.left) * (canvas.width / rect.width),
-        y: (e.clientY - rect.top) * (canvas.height / rect.height)
-      };
-    }
-
-    canvas.addEventListener('click', (e) => {
-      const pos = getClickPos(e);
-
-      if (gameState.phase === 'title') {
-        if (pos.x > canvas.width * 0.25 && pos.x < canvas.width * 0.75 &&
-            pos.y > canvas.height * 0.75 && pos.y < canvas.height * 0.75 + 70) {
-          window.__gameDebug.tapObject('start');
+                ctx.font = '16px Arial';
+                ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 100);
+            }
         }
-      } else if (gameState.phase === 'playing') {
-        if (pos.y >= canvas.height * 0.7) {
-          const gearIdx = Math.floor(pos.x / (canvas.width / 5)) + 1;
-          window.__gameDebug.tapObject(`shift_gear_${gearIdx}`);
+
+        // ゲームループ
+        function gameLoop() {
+            draw();
+            requestAnimationFrame(gameLoop);
         }
-      } else if (gameState.phase === 'win' || gameState.phase === 'fail') {
-        if (pos.x > canvas.width * 0.25 && pos.x < canvas.width * 0.75 &&
-            pos.y > canvas.height * 0.8 && pos.y < canvas.height * 0.8 + 70) {
-          startGame();
-        }
-      }
-    });
 
-    canvas.addEventListener('mousedown', (e) => { /* マウスダウン処理 */ });
-    canvas.addEventListener('mousemove', (e) => { /* マウスムーブ処理 */ });
-    canvas.addEventListener('mouseup', (e) => { /* マウスアップ処理 */ });
-
-    // ==================== ゲームループ ====================
-    function gameLoop() {
-      update();
-      draw();
-      requestAnimationFrame(gameLoop);
-    }
-
-    updateDebug();
-    gameLoop();
-  </script>
+        // ゲーム開始（2秒以内）
+        initGame();
+        gameLoop();
+    </script>
 </body>
 </html>
