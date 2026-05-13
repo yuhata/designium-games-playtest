@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さよなら宇宙犬</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #000;
+    }
+    canvas {
+      border: 2px solid #fff;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "scene >= 3",
+  "fail_condition": "time <= 0 && scene < 3",
+  "input_types": ["click"],
+  "state_vars": ["scene", "bond", "time"],
+  "core_loop": "click → scene++ → anim+SE+bond+10 → check win/fail → repeat",
+  "clear_trigger": "scene >= 3",
+  "gameover_trigger": "time <= 0 && scene < 3"
+}
+-->
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let gameState = {
+  scene: 0,
+  bond: 0,
+  time: 60,
+  phase: "playing",
+  animLocking: false,
+  frameCount: 0,
+  lastSceneChangeFrame: 0
+};
+
+const MAX_BOND = 100;
+const ANIM_DURATION_FRAMES = 36;
+
+const sceneData = [
+  { name: "孤独", bgColor: "#1a1a2e", dogY: 120, text: "ひとり...", se: 200 },
+  { name: "食事", bgColor: "#8b6914", dogY: 100, text: "あ、ご飯だ！", se: 400 },
+  { name: "別れ", bgColor: "#5a3a5a", dogY: 110, text: "ずっと...一緒。", se: 300 },
+  { name: "帰還", bgColor: "#2d5a2d", dogY: 90, text: "また明日！", se: 600 }
+];
+
+function playBeep(freq) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    osc.frequency.value = freq;
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch (e) {}
+}
+
+function drawDog(x, y, alpha) {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#f4a460";
+  ctx.fillRect(x - 20, y, 40, 50);
+  ctx.beginPath();
+  ctx.arc(x, y - 20, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(x - 20, y - 35, 10, 20);
+  ctx.fillRect(x + 10, y - 35, 10, 20);
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.arc(x - 6, y - 25, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + 6, y - 25, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y - 15, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#f4a460";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(x + 25, y + 20, 15, 0, Math.PI);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function drawUI() {
+  ctx.fillStyle = "#fff";
+  ctx.font = "24px Arial";
+  ctx.textAlign = "left";
+  ctx.fillText(`Scene: ${gameState.scene}/3`, 20, 40);
+  ctx.fillText(`Bond: ${gameState.bond}/${MAX_BOND}`, 20, 80);
+  ctx.fillText(`Time: ${Math.max(0, gameState.time)}s`, 20, 120);
+  
+  const barX = canvas.width - 80;
+  const barY = 20;
+  const barW = 30;
+  const barH = 180;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(barX, barY, barW, barH);
+  ctx.fillStyle = "#663399";
+  const fillH = (gameState.bond / MAX_BOND) * barH;
+  ctx.fillRect(barX, barY + barH - fillH, barW, fillH);
+}
+
+function drawInstruction() {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+  ctx.fillStyle = "#fff";
+  ctx.font = "18px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("画面をクリックして先へ進む", canvas.width / 2, canvas.height - 15);
+}
+
+function drawWin() {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff";
+  for (let i = 0; i < 50; i++) {
+    const x = Math.sin(i * 0.5) * 200 + canvas.width / 2;
+    const y = Math.cos(i * 0.5) * 150 + canvas.height / 2;
+    const size = 3 + Math.sin(gameState.frameCount / 10 + i) * 2;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(0.5, size), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.font = "bold 48px Arial";
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.fillText("さよなら。また明日。", canvas.width / 2, canvas.height / 2);
+  ctx.font = "24px Arial";
+  ctx.fillText(`最終Bond: ${gameState.bond}`, canvas.width / 2, canvas.height / 2 + 60);
+  ctx.fillText("クリックでリスタート", canvas.width / 2, canvas.height - 50);
+}
+
+function drawFail() {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = "bold 48px Arial";
+  ctx.fillStyle = "#ff4444";
+  ctx.textAlign = "center";
+  ctx.fillText("時間切れ。また明日。", canvas.width / 2, canvas.height / 2);
+  ctx.font = "24px Arial";
+  ctx.fillStyle = "#fff";
+  ctx.fillText(`到達Scene: ${gameState.scene}/3`, canvas.width / 2, canvas.height / 2 + 60);
+  ctx.fillText(`Bond: ${gameState.bond}/${MAX_BOND}`, canvas.width / 2, canvas.height / 2 + 100);
+  ctx.fillText("クリックでリスタート", canvas.width / 2, canvas.height - 50);
+}
+
+function getAnimProgress() {
+  const elapsed = gameState.frameCount - gameState.lastSceneChangeFrame;
+  if (elapsed < ANIM_DURATION_FRAMES) {
+    return elapsed / ANIM_DURATION_FRAMES;
+  }
+  return 1;
+}
+
+function gameLoop() {
+  gameState.frameCount++;
+  
+  if (gameState.frameCount % 60 === 0 && gameState.phase === "playing") {
+    gameState.time--;
+  }
+  
+  const sceneIdx = Math.min(Math.max(gameState.scene, 0), sceneData.length - 1);
+  const current = sceneData[sceneIdx];
+  
+  ctx.fillStyle = current.bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  if (gameState.phase === "playing") {
+    const animProgress = getAnimProgress();
+    drawDog(canvas.width / 2, current.dogY, animProgress);
+    
+    ctx.fillStyle = "#fff";
+    ctx.font = "24px Arial";
+    ctx.textAlign = "center";
+    ctx.globalAlpha = animProgress;
+    ctx.fillText(current.text, canvas.width / 2, 80);
+    ctx.globalAlpha = 1;
+    
+    drawUI();
+    drawInstruction();
+    
+    if (gameState.scene >= 3) {
+      gameState.phase = "win";
+    } else if (gameState.time <= 0) {
+      gameState.phase = "fail";
+    }
+  } else if (gameState.phase === "win") {
+    drawWin();
+  } else if (gameState.phase === "fail") {
+    drawFail();
+  }
+  
+  requestAnimationFrame(gameLoop);
+}
+
+function handleClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
+    return;
+  }
+  
+  if (gameState.phase === "playing" && !gameState.animLocking) {
+    gameState.animLocking = true;
+    gameState.lastSceneChangeFrame = gameState.frameCount;
+    
+    const prevIdx = Math.min(Math.max(gameState.scene, 0), sceneData.length - 1);
+    playBeep(sceneData[prevIdx].se);
+    
+    gameState.scene++;
+    gameState.bond = Math.min(gameState.bond + 10, MAX_BOND);
+    
+    setTimeout(() => {
+      gameState.animLocking = false;
+    }, 600);
+  } else if (gameState.phase === "win" || gameState.phase === "fail") {
+    gameState = {
+      scene: 0,
+      bond: 0,
+      time: 60,
+      phase: "playing",
+      animLocking: false,
+      frameCount: 0,
+      lastSceneChangeFrame: 0
+    };
+  }
+}
+
+document.addEventListener('click', handleClick);
+document.addEventListener('mousedown', () => {});
+document.addEventListener('mousemove', () => {});
+document.addEventListener('mouseup', () => {});
+
+gameLoop();
+</script>
+</body>
+</html>

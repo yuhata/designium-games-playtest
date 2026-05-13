@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+<!--GAME_SPEC
+{
+  "win_condition": "正解数が5以上",
+  "fail_condition": "不正解数が3以上かつ経過時間30秒以上",
+  "input_types": ["click"],
+  "state_vars": ["question_number", "correct_count", "incorrect_count", "elapsed_seconds"],
+  "core_loop": "問題表示→選択肢クリック→正解/不正解判定→シュール演出→次問題",
+  "clear_trigger": "correctCount >= 5",
+  "gameover_trigger": "incorrectCount >= 3 && elapsedSeconds >= 30"
+}
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ズルい問題ばかり</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 10px; font-family: 'Arial', sans-serif; background: #f0f0f0; }
+    canvas { border: 3px solid #333; background: white; display: block; margin: 10px auto; }
+    #ui-info { text-align: center; font-size: 16px; margin: 10px 0; color: #333; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="ui-info">正解: 0 | 不正解: 0 | 経過: 0秒</div>
+  <canvas id="game-canvas" width="800" height="600"></canvas>
+  <script>
+    const gameState = {
+      questionNumber: 0,
+      correctCount: 0,
+      incorrectCount: 0,
+      phase: 'init',
+      selectedOption: -1,
+      animationProgress: 0,
+      startTime: Date.now(),
+      elapsedSeconds: 0
+    };
+
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const uiInfo = document.getElementById('ui-info');
+
+    const questions = [
+      { text: '赤と青を混ぜると何色？', options: ['紫', 'オレンジ', '緑', 'ピンク'], correct: 0 },
+      { text: '地球の自転周期は？', options: ['24時間', '12時間', '30時間', '20時間'], correct: 0 },
+      { text: '世界で最も人口が多い国は？', options: ['インド', '中国', 'アメリカ', 'インドネシア'], correct: 0 },
+      { text: '猫は何本の足がありますか？', options: ['4本', '6本', '8本', '3本'], correct: 0 },
+      { text: 'バナナは何色ですか？', options: ['黄色', '白', '茶色', '緑'], correct: 0 },
+      { text: 'タコは何本の足がありますか？', options: ['8本', '6本', '10本', '12本'], correct: 0 },
+      { text: '水の化学式は？', options: ['H2O', 'O2H', 'H3O', 'O3'], correct: 0 },
+      { text: '正解は左から2番目です。どれ？', options: ['A', 'B', 'C', 'D'], correct: 1 },
+      { text: 'このゲームはズルい問題ばかり。ズル度MAXは？', options: ['問題文が嘘', '選択肢が嘘', '全部嘘', 'ゲーム自体がズル'], correct: 3 },
+      { text: '👻 は何ですか？', options: ['おばけ', 'ゴースト', 'スピリット', 'ぜんぶ同じ'], correct: 3 },
+      { text: '空は何色ですか？（日中）', options: ['青', '白', 'グレー', '時間による'], correct: 3 },
+      { text: 'この問題の答えは何ですか？', options: ['この問題', '答え', '何か', 'わかりません'], correct: 3 },
+      { text: 'ピザを焼く道具は？', options: ['ピザピール', 'ピザナイフ', 'ピザシャベル', 'ピザスプーン'], correct: 0 },
+      { text: 'ウサギは何を食べますか？', options: ['ニンジン', 'レタス', 'キャベツ', 'どちらでもない'], correct: 3 }
+    ];
+
+    let currentQuestion = null;
+    let currentOptions = [];
+
+    function generateQuestion() {
+      if (!questions || questions.length === 0) return;
+      const q = questions[Math.floor(Math.random() * questions.length)];
+      currentQuestion = {
+        text: q.text || '',
+        originalOptions: [...(q.options || [])],
+        correct: q.correct || 0
+      };
+      
+      const correctText = currentQuestion.originalOptions[currentQuestion.correct];
+      currentOptions = [...currentQuestion.originalOptions].sort(() => Math.random() - 0.5);
+      currentQuestion.correct = currentOptions.indexOf(correctText);
+    }
+
+    function checkAnswer(optionIndex) {
+      if (gameState.phase !== 'playing' || !currentQuestion) return;
+      
+      gameState.phase = 'answering';
+      gameState.selectedOption = optionIndex;
+      gameState.animationProgress = 0;
+      
+      if (optionIndex === currentQuestion.correct) {
+        gameState.correctCount++;
+      } else {
+        gameState.incorrectCount++;
+      }
+      
+      updateUIInfo();
+    }
+
+    function updateUIInfo() {
+      const sec = Math.floor(gameState.elapsedSeconds);
+      uiInfo.textContent = `正解: ${gameState.correctCount} | 不正解: ${gameState.incorrectCount} | 経過: ${sec}秒`;
+    }
+
+    const buttonHeight = 70;
+    const buttonY = [160, 250, 340, 430];
+    const buttonX = 150;
+    const buttonWidth = 500;
+
+    function handleCanvasClick(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      if (gameState.phase === 'init') {
+        gameState.phase = 'playing';
+        return;
+      }
+
+      if (gameState.phase === 'win' || gameState.phase === 'fail') {
+        resetGame();
+        return;
+      }
+
+      if (gameState.phase !== 'playing' || !currentQuestion) return;
+
+      for (let i = 0; i < 4; i++) {
+        if (x >= buttonX && x <= buttonX + buttonWidth &&
+            y >= buttonY[i] && y <= buttonY[i] + buttonHeight) {
+          checkAnswer(i);
+          return;
+        }
+      }
+    }
+
+    canvas.addEventListener('click', handleCanvasClick);
+    canvas.addEventListener('mousedown', () => {});
+    canvas.addEventListener('mouseup', () => {});
+    canvas.addEventListener('mousemove', () => {});
+
+    function update() {
+      gameState.elapsedSeconds = (Date.now() - gameState.startTime) / 1000;
+
+      if (gameState.phase === 'answering') {
+        gameState.animationProgress += 0.035;
+
+        if (gameState.animationProgress >= 1) {
+          gameState.animationProgress = 1;
+          gameState.phase = 'playing';
+
+          if (gameState.correctCount >= 5) {
+            gameState.phase = 'win';
+          } else if (gameState.incorrectCount >= 3 && gameState.elapsedSeconds >= 30) {
+            gameState.phase = 'fail';
+          } else {
+            gameState.questionNumber++;
+            generateQuestion();
+          }
+        }
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState.phase === 'init') {
+        drawInitScreen();
+      } else if (gameState.phase === 'win') {
+        drawWinScreen();
+      } else if (gameState.phase === 'fail') {
+        drawFailScreen();
+      } else {
+        drawGameScreen();
+      }
+    }
+
+    function drawInitScreen() {
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 52px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('ズルい問題ばかり', canvas.width / 2, 130);
+
+      ctx.font = '20px Arial';
+      ctx.fillStyle = '#666';
+      ctx.fillText('シュールな問題に答えてみよう', canvas.width / 2, 190);
+
+      ctx.fillStyle = '#2196F3';
+      ctx.fillRect(250, 250, 300, 80);
+      ctx.strokeStyle = '#1976D2';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(250, 250, 300, 80);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('クリックで開始', canvas.width / 2, 300);
+
+      ctx.fillStyle = '#333';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('💡 正解5個で勝利', canvas.width / 2, 380);
+      ctx.fillText('❌ 不正解3個で敗北（30秒後）', canvas.width / 2, 410);
+      ctx.fillText('選択肢をクリックして答えよう！ｗｗ', canvas.width / 2, 450);
+    }
+
+    function drawGameScreen() {
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 22px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('ズルい問題ばかり', canvas.width / 2, 35);
+
+      ctx.fillStyle = '#666';
+      ctx.font = '12px Arial';
+      ctx.fillText('✔︎ ' + gameState.correctCount + ' | ✗ ' + gameState.incorrectCount + ' | ⏱ ' + Math.floor(gameState.elapsedSeconds) + 's | 選択肢をクリック', canvas.width / 2, 60);
+
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('問題 #' + (gameState.questionNumber + 1), canvas.width / 2, 100);
+
+      if (currentQuestion && currentQuestion.text) {
+        ctx.font = '18px Arial';
+        ctx.fillText(currentQuestion.text, canvas.width / 2, 135);
+      }
+
+      for (let i = 0; i < 4; i++) {
+        drawButton(i);
+      }
+
+      if (gameState.phase === 'answering' && currentQuestion) {
+        drawAnsweringFX();
+      }
+    }
+
+    function drawButton(index) {
+      const y = buttonY[index];
+      const isSelected = (gameState.selectedOption === index && gameState.phase === 'answering');
+
+      ctx.fillStyle = isSelected ? '#FFC107' : '#2196F3';
+      ctx.fillRect(buttonX, y, buttonWidth, buttonHeight);
+
+      ctx.strokeStyle = '#1976D2';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      if (currentOptions && currentOptions[index]) {
+        ctx.fillText(currentOptions[index], buttonX + buttonWidth / 2, y + buttonHeight / 2 + 6);
+      }
+    }
+
+    function drawAnsweringFX() {
+      const progress = gameState.animationProgress;
+      const selectedIdx = gameState.selectedOption;
+
+      if (selectedIdx === currentQuestion.correct) {
+        // laugh演出：正解時の拡大・回転・黄色フラッシュ
+        const scale = 1 + progress * 1.5;
+        const rotation = progress * Math.PI * 4;
+
+        ctx.globalAlpha = progress * 0.5;
+        ctx.fillStyle = '#ffff99';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+
+        const y = buttonY[selectedIdx] + buttonHeight / 2;
+        const x = buttonX + buttonWidth / 2;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.scale(scale, scale);
+        ctx.translate(-x, -y);
+
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(buttonX, buttonY[selectedIdx], buttonWidth, buttonHeight);
+        ctx.strokeStyle = '#2e7d32';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(buttonX, buttonY[selectedIdx], buttonWidth, buttonHeight);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(currentOptions[selectedIdx], buttonX + buttonWidth / 2, buttonY[selectedIdx] + buttonHeight / 2 + 6);
+
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - progress);
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold ' + (60 + progress * 30) + 'px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('ｗｗｗ', canvas.width / 2 - 100, 250);
+        ctx.fillText('ｗｗｗ', canvas.width / 2 + 100, 280);
+        ctx.restore();
+
+        ctx.fillStyle = '#4CAF50';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('正解！', canvas.width / 2, 330);
+      } else {
+        // 不正解演出
+        ctx.globalAlpha = 0.4 + progress * 0.2;
+        ctx.fillStyle = '#ff6b6b';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = '#f44336';
+        ctx.font = 'bold 52px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('ハズレ〜', canvas.width / 2, 300);
+
+        ctx.fillStyle = '#333';
+        ctx.font = '16px Arial';
+        if (currentOptions && currentOptions[currentQuestion.correct] !== undefined) {
+          ctx.fillText('正解は「' + currentOptions[currentQuestion.correct] + '」', canvas.width / 2, 360);
+        }
+      }
+    }
+
+    function drawWinScreen() {
+      ctx.fillStyle = 'rgba(76, 175, 80, 0.15)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#4CAF50';
+      ctx.font = 'bold 64px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🎉 YOU WIN! 🎉', canvas.width / 2, 180);
+
+      ctx.fillStyle = '#333';
+      ctx.font = '24px Arial';
+      ctx.fillText('正解: ' + gameState.correctCount + '個', canvas.width / 2, 260);
+      ctx.fillText('不正解: ' + gameState.incorrectCount + '個', canvas.width / 2, 300);
+
+      ctx.fillStyle = '#2196F3';
+      ctx.fillRect(200, 380, 400, 60);
+      ctx.strokeStyle = '#1976D2';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(200, 380, 400, 60);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('クリックでリスタート', canvas.width / 2, 415);
+    }
+
+    function drawFailScreen() {
+      ctx.fillStyle = 'rgba(244, 67, 54, 0.15)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#f44336';
+      ctx.font = 'bold 64px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('💥 GAME OVER 💥', canvas.width / 2, 180);
+
+      ctx.fillStyle = '#333';
+      ctx.font = '24px Arial';
+      ctx.fillText('正解: ' + gameState.correctCount + '個', canvas.width / 2, 260);
+      ctx.fillText('不正解: ' + gameState.incorrectCount + '個', canvas.width / 2, 300);
+
+      ctx.fillStyle = '#f44336';
+      ctx.fillRect(200, 380, 400, 60);
+      ctx.strokeStyle = '#c62828';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(200, 380, 400, 60);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('クリックでリスタート', canvas.width / 2, 415);
+    }
+
+    function resetGame() {
+      gameState.questionNumber = 0;
+      gameState.correctCount = 0;
+      gameState.incorrectCount = 0;
+      gameState.phase = 'playing';
+      gameState.selectedOption = -1;
+      gameState.animationProgress = 0;
+      gameState.startTime = Date.now();
+      gameState.elapsedSeconds = 0;
+      updateUIInfo();
+      generateQuestion();
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    generateQuestion();
+    gameLoop();
+  </script>
+</body>
+</html>

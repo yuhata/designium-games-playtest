@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ビートジャンプ</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #222;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 600px;
+      height: 600px;
+    }
+    canvas {
+      border: 2px solid #fff;
+      display: block;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      cursor: pointer;
+    }
+    #uiOverlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #0f0;
+      font-size: 16px;
+      pointer-events: none;
+      z-index: 10;
+      font-weight: bold;
+    }
+    #scoreDisplay {
+      font-size: 24px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "perfectJump >= 20",
+  "fail_condition": "missCount >= 10",
+  "input_types": ["click", "touchstart"],
+  "state_vars": ["perfectJump", "missCount", "score", "bpmMeter"],
+  "core_loop": "BPMメーター常時回転→タップ判定（±100ms）→perfect時に輝きジャンプ・金色パーティクル・+10スコア、miss時に転倒・赤パーティクル・missCount+1→勝敗判定",
+  "clear_trigger": "perfectJump >= 20",
+  "gameover_trigger": "missCount >= 10"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="600" height="600"></canvas>
+  <div id="uiOverlay">
+    <div>Perfect: <span id="perfectCount">0</span>/20</div>
+    <div>Miss: <span id="missCount">0</span>/10</div>
+    <div id="scoreDisplay">Score: 0</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let gameState = {
+  phase: 'play',
+  perfectJump: 0,
+  missCount: 0,
+  score: 0,
+  bpm: 120,
+  beatDuration: 500,
+  beatStartTime: Date.now(),
+  characterX: 300,
+  characterY: 400,
+  characterScale: 1,
+  characterRotation: 0,
+  particles: [],
+  floatingTexts: [],
+  gameStartTime: Date.now(),
+  lastTapTime: -1000,
+  screenFlashAlpha: 0,
+  screenFlashColor: 'white'
+};
+
+function getCurrentBeatPhase() {
+  const now = Date.now();
+  const timeSinceBeatStart = (now - gameState.beatStartTime) % gameState.beatDuration;
+  return timeSinceBeatStart / gameState.beatDuration;
+}
+
+function updateGame() {
+  if (gameState.phase !== 'play') return;
+
+  gameState.particles = gameState.particles.filter(p => {
+    p.life -= 0.02;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    return p.life > 0;
+  });
+
+  gameState.floatingTexts = gameState.floatingTexts.filter(t => {
+    t.y -= 2;
+    t.life -= 0.02;
+    return t.life > 0;
+  });
+
+  if (gameState.characterScale > 1) {
+    gameState.characterScale -= 0.08;
+    if (gameState.characterScale < 1) gameState.characterScale = 1;
+  }
+
+  if (gameState.characterRotation !== 0) {
+    gameState.characterRotation *= 0.9;
+    if (Math.abs(gameState.characterRotation) < 0.01) gameState.characterRotation = 0;
+  }
+
+  gameState.screenFlashAlpha = Math.max(0, gameState.screenFlashAlpha - 0.05);
+
+  if (gameState.perfectJump >= 20) {
+    gameState.phase = 'win';
+  }
+
+  if (gameState.missCount >= 10) {
+    const elapsedSeconds = (Date.now() - gameState.gameStartTime) / 1000;
+    if (elapsedSeconds >= 30) {
+      gameState.phase = 'fail';
+    }
+  }
+}
+
+function handleTap(x, y) {
+  if (gameState.phase === 'play') {
+    const now = Date.now();
+    
+    if (now - gameState.lastTapTime < 100) return;
+    gameState.lastTapTime = now;
+
+    const beatPhase = getCurrentBeatPhase();
+    const distFromPeak = Math.min(beatPhase, 1 - beatPhase);
+    const isInWindow = distFromPeak < (100 / gameState.beatDuration);
+    const isPerfect = distFromPeak < (50 / gameState.beatDuration);
+
+    if (isInWindow) {
+      if (isPerfect) {
+        gameState.perfectJump++;
+        gameState.score += 10;
+        createParticles(gameState.characterX, gameState.characterY, 'gold', 50);
+        gameState.characterScale = 1.5;
+        gameState.screenFlashAlpha = 0.7;
+        gameState.screenFlashColor = 'gold';
+        
+        gameState.floatingTexts.push({
+          x: gameState.characterX,
+          y: gameState.characterY - 50,
+          text: '+10 PERFECT!',
+          size: 32,
+          color: 'gold',
+          life: 1,
+          weight: 'bold'
+        });
+      } else {
+        gameState.perfectJump++;
+        gameState.score += 5;
+        createParticles(gameState.characterX, gameState.characterY, 'yellow', 25);
+        gameState.characterScale = 1.3;
+        gameState.screenFlashAlpha = 0.4;
+        gameState.screenFlashColor = 'yellow';
+        
+        gameState.floatingTexts.push({
+          x: gameState.characterX,
+          y: gameState.characterY - 50,
+          text: '+5 Good!',
+          size: 22,
+          color: 'yellow',
+          life: 0.8,
+          weight: 'normal'
+        });
+      }
+    } else {
+      gameState.missCount++;
+      gameState.score = Math.max(0, gameState.score - 3);
+      createParticles(gameState.characterX, gameState.characterY, 'red', 25);
+      gameState.characterRotation = Math.PI * 0.4;
+      gameState.screenFlashAlpha = 0.6;
+      gameState.screenFlashColor = 'red';
+      
+      gameState.floatingTexts.push({
+        x: gameState.characterX,
+        y: gameState.characterY + 50,
+        text: 'MISS',
+        size: 28,
+        color: 'red',
+        life: 0.8,
+        weight: 'bold'
+      });
+    }
+
+    document.getElementById('perfectCount').textContent = gameState.perfectJump;
+    document.getElementById('missCount').textContent = gameState.missCount;
+    document.getElementById('scoreDisplay').textContent = 'Score: ' + gameState.score;
+  } else if (gameState.phase === 'win' || gameState.phase === 'fail') {
+    resetGame();
+  }
+}
+
+function createParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count;
+    const speed = 2.5 + Math.random() * 3.5;
+    gameState.particles.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y + (Math.random() - 0.5) * 20,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      color: color,
+      life: 1,
+      size: 4 + Math.random() * 6
+    });
+  }
+}
+
+function drawGame() {
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (gameState.phase === 'play') {
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('タップでジャンプ！ビートに合わせてね', canvas.width / 2, 20);
+
+    drawBPMMeter();
+
+    const beatPhase = getCurrentBeatPhase();
+    ctx.globalAlpha = 0.15 + beatPhase * 0.35;
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+    ctx.beginPath();
+    ctx.arc(gameState.characterX, gameState.characterY, 70, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.save();
+    ctx.translate(gameState.characterX, gameState.characterY);
+    ctx.scale(gameState.characterScale, gameState.characterScale);
+    ctx.rotate(gameState.characterRotation);
+    ctx.fillStyle = '#00ff00';
+    ctx.beginPath();
+    ctx.arc(0, 0, 25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    gameState.particles.forEach(p => {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    gameState.floatingTexts.forEach(t => {
+      ctx.globalAlpha = t.life;
+      ctx.fillStyle = t.color;
+      ctx.font = (t.weight === 'bold' ? 'bold ' : '') + t.size + 'px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(t.text, t.x, t.y);
+    });
+    ctx.globalAlpha = 1;
+
+  } else if (gameState.phase === 'win') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowColor = '#ffff00';
+    ctx.shadowBlur = 30;
+    ctx.font = 'bold 56px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('🎉 クリアした！', canvas.width / 2, canvas.height / 2 - 80);
+    ctx.shadowBlur = 0;
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px Arial';
+    ctx.fillText('Perfect Jumps: ' + gameState.perfectJump, canvas.width / 2, canvas.height / 2);
+    ctx.fillText('Final Score: ' + gameState.score, canvas.width / 2, canvas.height / 2 + 50);
+    
+    ctx.fillStyle = '#0f0';
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 120);
+
+  } else if (gameState.phase === 'fail') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ff3333';
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 30;
+    ctx.font = 'bold 56px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('💥 ゲームオーバー', canvas.width / 2, canvas.height / 2 - 80);
+    ctx.shadowBlur = 0;
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px Arial';
+    ctx.fillText('Perfect Jumps: ' + gameState.perfectJump, canvas.width / 2, canvas.height / 2);
+    ctx.fillText('Final Score: ' + gameState.score, canvas.width / 2, canvas.height / 2 + 50);
+    
+    ctx.fillStyle = '#0f0';
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 120);
+  }
+
+  if (gameState.screenFlashAlpha > 0) {
+    ctx.globalAlpha = gameState.screenFlashAlpha;
+    ctx.fillStyle = gameState.screenFlashColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawBPMMeter() {
+  const beatPhase = getCurrentBeatPhase();
+  
+  const meterX = canvas.width / 2;
+  const meterY = 50;
+  const meterRadius = 35;
+
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(meterX, meterY, meterRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#0ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(meterX, meterY, meterRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const isPerfectZone = beatPhase < (50 / gameState.beatDuration) || beatPhase > (1 - 50 / gameState.beatDuration);
+  const isGoodZone = beatPhase < (100 / gameState.beatDuration) || beatPhase > (1 - 100 / gameState.beatDuration);
+
+  if (isPerfectZone) {
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 4;
+  } else if (isGoodZone) {
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 3;
+  } else {
+    ctx.strokeStyle = '#ff0000';
+    ctx.lineWidth = 2;
+  }
+
+  ctx.beginPath();
+  ctx.arc(meterX, meterY, meterRadius - 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * beatPhase);
+  ctx.stroke();
+
+  const pointerAngle = -Math.PI / 2 + Math.PI * 2 * beatPhase;
+  const pointerX = meterX + Math.cos(pointerAngle) * meterRadius;
+  const pointerY = meterY + Math.sin(pointerAngle) * meterRadius;
+  
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(pointerX, pointerY, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#0ff';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('BEAT', meterX, meterY + 4);
+}
+
+function resetGame() {
+  gameState.phase = 'play';
+  gameState.perfectJump = 0;
+  gameState.missCount = 0;
+  gameState.score = 0;
+  gameState.characterScale = 1;
+  gameState.characterRotation = 0;
+  gameState.particles = [];
+  gameState.floatingTexts = [];
+  gameState.gameStartTime = Date.now();
+  gameState.beatStartTime = Date.now();
+  gameState.screenFlashAlpha = 0;
+  
+  document.getElementById('perfectCount').textContent = '0';
+  document.getElementById('missCount').textContent = '0';
+  document.getElementById('scoreDisplay').textContent = 'Score: 0';
+}
+
+document.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  handleTap(x, y);
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const x = e.touches[0].clientX - rect.left;
+  const y = e.touches[0].clientY - rect.top;
+  handleTap(x, y);
+});
+
+document.addEventListener('mousedown', () => {});
+document.addEventListener('mousemove', () => {});
+document.addEventListener('mouseup', () => {});
+
+function gameLoop() {
+  updateGame();
+  drawGame();
+  requestAnimationFrame(gameLoop);
+}
+
+resetGame();
+gameLoop();
+</script>
+
+</body>
+</html>

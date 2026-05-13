@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ビートぬりえ</title>
+<style>
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #222;
+  font-family: Arial, sans-serif;
+}
+canvas {
+  border: 2px solid #333;
+  display: block;
+}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<!--GAME_SPEC
+{
+  "win_condition": "fill_percent >= 80",
+  "fail_condition": "miss_count >= 10 after 30 seconds",
+  "input_types": ["mousedown", "mousemove", "mouseup"],
+  "state_vars": ["bpm_count", "fill_percent", "miss_count", "score"],
+  "core_loop": "tap-circle-on-beat → precision-check → fill-expand-or-miss → win/fail-judgment",
+  "clear_trigger": "gameState.fill >= 80",
+  "gameover_trigger": "gameState.missCount >= 10 && elapsed >= 30000"
+}
+-->
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let gameState = {
+  phase: 'playing',
+  bpmCount: 0,
+  fill: 0,
+  missCount: 0,
+  score: 0,
+  startTime: 0,
+  beatIndex: 0,
+  beatInterval: 500
+};
+
+let pulseEffects = [];
+let flashEffect = { active: false, startTime: 0, duration: 200 };
+
+const BEAT_WINDOW = 100;
+const PERFECT_WINDOW = 50;
+const PERFECT_GAIN = 25;
+const GOOD_GAIN = 15;
+const FILL_WIN = 80;
+const MISS_FAIL = 10;
+const GRACE_PERIOD = 30000;
+const CIRCLE_RADIUS = 80;
+const CIRCLE_X = 400;
+const CIRCLE_Y = 300;
+
+function init() {
+  gameState.phase = 'playing';
+  gameState.bpmCount = 0;
+  gameState.fill = 0;
+  gameState.missCount = 0;
+  gameState.score = 0;
+  gameState.startTime = Date.now();
+  gameState.beatIndex = 0;
+  pulseEffects = [];
+  flashEffect = { active: false, startTime: 0, duration: 200 };
+  
+  canvas.addEventListener('mousedown', handleMouseDown);
+  canvas.addEventListener('mousemove', handleMouseMove);
+  canvas.addEventListener('mouseup', handleMouseUp);
+  canvas.addEventListener('click', handleCanvasClick);
+  
+  gameLoop();
+}
+
+function handleMouseDown(e) {
+  if (gameState.phase !== 'playing') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  processInput(x, y);
+}
+
+function handleMouseMove(e) {
+  // P1: do not modify game state in mousemove
+}
+
+function handleMouseUp(e) {
+  // P1: do not modify game state in mouseup
+}
+
+function handleCanvasClick(e) {
+  if (gameState.phase === 'win' || gameState.phase === 'fail') {
+    init();
+  }
+}
+
+function processInput(x, y) {
+  const now = Date.now();
+  const elapsed = now - gameState.startTime;
+  
+  // P2: normalize coordinates
+  const dx = x - CIRCLE_X;
+  const dy = y - CIRCLE_Y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  if (distance > CIRCLE_RADIUS) {
+    return;
+  }
+  
+  // beat timing judgment
+  const currentBeatTime = gameState.startTime + gameState.beatIndex * gameState.beatInterval;
+  const nextBeatTime = currentBeatTime + gameState.beatInterval;
+  
+  const distToCurrent = Math.abs(now - currentBeatTime);
+  const distToNext = Math.abs(now - nextBeatTime);
+  const timeToBeat = Math.min(distToCurrent, distToNext);
+  
+  let isPerfect = false;
+  if (timeToBeat <= PERFECT_WINDOW) {
+    gameState.fill = Math.min(100, gameState.fill + PERFECT_GAIN);
+    gameState.score += 25;
+    gameState.bpmCount++;
+    isPerfect = true;
+    createPulse(CIRCLE_X, CIRCLE_Y);
+    triggerFlash();
+  } else if (timeToBeat <= BEAT_WINDOW) {
+    gameState.fill = Math.min(100, gameState.fill + GOOD_GAIN);
+    gameState.score += 15;
+    gameState.bpmCount++;
+  } else {
+    if (elapsed >= GRACE_PERIOD) {
+      gameState.missCount++;
+    }
+  }
+  
+  // P3: check win/fail after every input
+  updateGamePhase();
+}
+
+function createPulse(x, y) {
+  pulseEffects.push({
+    x: x,
+    y: y,
+    startTime: Date.now(),
+    duration: 300,
+    maxRadius: 150
+  });
+}
+
+function triggerFlash() {
+  flashEffect.active = true;
+  flashEffect.startTime = Date.now();
+}
+
+function updateGamePhase() {
+  if (gameState.phase !== 'playing') return;
+  
+  const elapsed = Date.now() - gameState.startTime;
+  
+  // P3: set phase immediately when condition met
+  if (gameState.fill >= FILL_WIN) {
+    gameState.phase = 'win';
+  } else if (gameState.missCount >= MISS_FAIL && elapsed >= GRACE_PERIOD) {
+    gameState.phase = 'fail';
+  }
+}
+
+function gameLoop() {
+  const now = Date.now();
+  
+  if (gameState.phase === 'playing') {
+    const elapsed = now - gameState.startTime;
+    gameState.beatIndex = Math.floor(elapsed / gameState.beatInterval);
+  }
+  
+  draw(now);
+  requestAnimationFrame(gameLoop);
+}
+
+function draw(now) {
+  const elapsed = now - gameState.startTime;
+  const elapsedSec = elapsed / 1000;
+  
+  // background
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // penalty hue shift
+  if (gameState.missCount >= 10) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else if (gameState.missCount >= 6) {
+    ctx.filter = 'hue-rotate(-40deg)';
+  } else if (gameState.missCount >= 3) {
+    ctx.filter = 'hue-rotate(-20deg)';
+  }
+  ctx.filter = 'none';
+  
+  // title
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('ビートぬりえ', 400, 40);
+  
+  // beat progress bar
+  const beatProgress = (elapsed % gameState.beatInterval) / gameState.beatInterval;
+  const barX = 150;
+  const barY = 70;
+  const barW = 500;
+  const barH = 20;
+  
+  ctx.strokeStyle = '#ccc';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(barX, barY, barW, barH);
+  
+  ctx.fillStyle = beatProgress > 0.8 ? '#ff6b6b' : '#4caf50';
+  ctx.fillRect(barX, barY, barW * beatProgress, barH);
+  
+  // stats
+  ctx.fillStyle = '#000';
+  ctx.font = '14px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(`ビート数: ${gameState.bpmCount}`, 20, 120);
+  ctx.fillText(`Fill: ${gameState.fill}%`, 20, 150);
+  ctx.fillText(`Miss: ${gameState.missCount}/${MISS_FAIL}`, 20, 180);
+  ctx.fillText(`Score: ${gameState.score}`, 20, 210);
+  ctx.fillText(`時間: ${elapsedSec.toFixed(1)}秒`, 20, 240);
+  
+  // instruction
+  ctx.font = '16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#666';
+  ctx.fillText('クリック/タップでビートに合わせてね！', 400, canvas.height - 30);
+  
+  // paint circle
+  const scaleAmount = 0.5 + gameState.fill / 200;
+  ctx.save();
+  ctx.translate(CIRCLE_X, CIRCLE_Y);
+  ctx.scale(scaleAmount, scaleAmount);
+  ctx.translate(-CIRCLE_X, -CIRCLE_Y);
+  
+  ctx.fillStyle = `rgba(100, 150, 255, ${0.3 + gameState.fill / 200})`;
+  ctx.beginPath();
+  ctx.arc(CIRCLE_X, CIRCLE_Y, CIRCLE_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
+  
+  ctx.strokeStyle = '#2196f3';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  
+  ctx.restore();
+  
+  // pulse effects
+  pulseEffects = pulseEffects.filter(pulse => {
+    const prog = (now - pulse.startTime) / pulse.duration;
+    if (prog >= 1) return false;
+    
+    const radius = pulse.maxRadius * prog;
+    const opacity = (1 - prog) * 0.8;
+    
+    ctx.strokeStyle = `rgba(255, 200, 0, ${opacity})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    return true;
+  });
+  
+  // flash effect
+  if (flashEffect.active) {
+    const prog = (now - flashEffect.startTime) / flashEffect.duration;
+    if (prog >= 1) {
+      flashEffect.active = false;
+    } else {
+      const alpha = (1 - prog) * 0.3;
+      ctx.fillStyle = `rgba(255, 255, 100, ${alpha})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+  
+  // win screen
+  if (gameState.phase === 'win') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ffeb3b';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('WIN!', 400, 200);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px Arial';
+    ctx.fillText(`最終スコア: ${gameState.score}`, 400, 270);
+    ctx.fillText(`Fill: ${gameState.fill}%`, 400, 310);
+    ctx.fillText(`ビート数: ${gameState.bpmCount}`, 400, 350);
+    
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('クリックでリスタート', 400, 420);
+  }
+  
+  // fail screen
+  if (gameState.phase === 'fail') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ff6b6b';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', 400, 200);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px Arial';
+    ctx.fillText(`最終スコア: ${gameState.score}`, 400, 270);
+    ctx.fillText(`Miss: ${gameState.missCount}/${MISS_FAIL}`, 400, 310);
+    ctx.fillText(`ビート数: ${gameState.bpmCount}`, 400, 350);
+    
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('クリックでリスタート', 400, 420);
+  }
+}
+
+window.addEventListener('load', init);
+</script>
+
+</body>
+</html>

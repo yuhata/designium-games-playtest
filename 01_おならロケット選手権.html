@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>おならロケット選手権</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 5px solid #333;
+      background: #fff;
+      display: block;
+      cursor: pointer;
+    }
+    #scoreBoard {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+      z-index: 10;
+    }
+    #timerBoard {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "height_m >= 1000",
+  "fail_condition": "timeLeft <= 0 && height_m < 1000",
+  "input_types": ["click", "mouseup", "touchend"],
+  "state_vars": ["height_m", "tap_count", "combo", "timeLeft"],
+  "core_loop": "tap → SE + face random → height += rand(20,50) + combo_bonus → combo++ → check win/fail",
+  "clear_trigger": "height_m >= 1000",
+  "gameover_trigger": "timeLeft <= 0 && height_m < 1000"
+}
+-->
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="scoreBoard">高さ: 0m | タップ: 0 | コンボ: 0</div>
+<div id="timerBoard">残り: 30秒</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreBoard = document.getElementById('scoreBoard');
+const timerBoard = document.getElementById('timerBoard');
+
+// ゲーム状態
+const state = {
+  phase: 'playing', // 'playing' | 'win' | 'fail'
+  height_m: 0,
+  tap_count: 0,
+  combo: 0,
+  timeLeft: 30,
+  faceIndex: 0,
+  particles: [],
+  lastTapTime: 0
+};
+
+// キャラクター顔セット
+const faces = [
+  '😄', '😆', '😂', '🤣', '😝', 
+  '😜', '😊', '😁', '🤪'
+];
+
+// パーティクル
+class Particle {
+  constructor(x, y, vx, vy, color) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.color = color;
+    this.life = 1;
+    this.decay = Math.random() * 0.02 + 0.01;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.2; // 重力
+    this.life -= this.decay;
+    return this.life > 0;
+  }
+
+  draw(ctx) {
+    ctx.globalAlpha = this.life;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// SE再生（Web Audio API）
+function playSound(freq, duration) {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    
+    gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+    
+    osc.start(audioContext.currentTime);
+    osc.stop(audioContext.currentTime + duration);
+  } catch (e) {
+    // Web Audio API not available
+  }
+}
+
+// ゲームループ
+function gameUpdate(deltaTime) {
+  if (state.phase === 'playing') {
+    state.timeLeft -= deltaTime / 1000;
+    if (state.timeLeft < 0) state.timeLeft = 0;
+
+    // win/fail判定
+    if (state.height_m >= 1000) {
+      state.phase = 'win';
+      triggerWinEffect();
+    } else if (state.timeLeft <= 0) {
+      state.phase = 'fail';
+      triggerFailEffect();
+    }
+  }
+
+  // パーティクル更新
+  state.particles = state.particles.filter(p => p.update());
+}
+
+function handleTap(x, y) {
+  if (state.phase !== 'playing') return;
+
+  const now = Date.now();
+  if (now - state.lastTapTime < 50) return; // デバウンス
+  state.lastTapTime = now;
+
+  // 高さ増加計算
+  const baseGain = Math.floor(Math.random() * 31) + 20; // 20-50m
+  const comboBonus = state.combo > 0 ? state.combo * 2 : 0;
+  state.height_m += baseGain + comboBonus;
+  state.tap_count += 1;
+  state.combo += 1;
+
+  // SE再生（「ぷぷっ」的な音）
+  playSound(150 + state.combo * 5, 0.1);
+
+  // キャラ顔ランダム切替
+  state.faceIndex = Math.floor(Math.random() * faces.length);
+
+  // パーティクル発生
+  for (let i = 0; i < 5; i++) {
+    const angle = (Math.random() - 0.5) * Math.PI;
+    const speed = Math.random() * 3 + 2;
+    const p = new Particle(
+      400 + Math.random() * 50 - 25,
+      400 + Math.random() * 50 - 25,
+      Math.cos(angle) * speed,
+      Math.sin(angle) * speed - 2,
+      `hsl(${Math.random() * 60 + 30}, 100%, 50%)`
+    );
+    state.particles.push(p);
+  }
+
+  // コンボ表示更新
+  updateUI();
+}
+
+function triggerWinEffect() {
+  // 金色パーティクル噴出
+  for (let i = 0; i < 50; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 2;
+    const p = new Particle(
+      400,
+      300,
+      Math.cos(angle) * speed,
+      Math.sin(angle) * speed,
+      '#FFD700'
+    );
+    state.particles.push(p);
+  }
+
+  // コンボを爆笑顔に固定
+  state.faceIndex = 2; // 😂
+}
+
+function triggerFailEffect() {
+  // 失敗顔に変更
+  state.faceIndex = 4; // 😝を落ち込み顔として使用
+}
+
+function updateUI() {
+  const comboColor = state.combo >= 20 ? '#FF0000' : 
+                     state.combo >= 10 ? '#FF8800' : '#00AA00';
+  const comboSize = state.combo >= 10 ? 22 : 18;
+  
+  scoreBoard.innerHTML = `高さ: ${Math.floor(state.height_m)}m | タップ: ${state.tap_count} | コンボ: <span style="color:${comboColor}; font-size:${comboSize}px">${state.combo}</span>`;
+  timerBoard.innerHTML = `残り: ${Math.max(0, Math.ceil(state.timeLeft))}秒`;
+  
+  if (state.timeLeft <= 10 && state.timeLeft > 0) {
+    timerBoard.style.color = Math.floor(Date.now() / 250) % 2 === 0 ? '#FF0000' : '#FFAAAA';
+  } else {
+    timerBoard.style.color = '#333';
+  }
+}
+
+function draw() {
+  // 背景
+  if (state.phase === 'win') {
+    const flashAlpha = Math.sin(Date.now() / 100) * 0.3 + 0.5;
+    ctx.fillStyle = `rgba(255, 255, 0, ${flashAlpha * 0.3})`;
+  } else {
+    ctx.fillStyle = '#E3F2FD';
+  }
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (state.phase === 'playing' || state.phase === 'win') {
+    // ロケット上昇線（高さの視覚化）
+    const rocketY = 500 - Math.min(state.height_m / 10, 450);
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(400, 500);
+    ctx.lineTo(400, Math.max(50, rocketY));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // キャラクター（顔）
+    ctx.font = 'bold 120px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(faces[state.faceIndex], 400, Math.max(100, rocketY - 30));
+
+    // 高さ表示（キャラ上部）
+    ctx.font = 'bold 32px Arial';
+    ctx.fillStyle = '#1976D2';
+    ctx.fillText(`${Math.floor(state.height_m)}m`, 400, Math.max(50, rocketY - 100));
+  }
+
+  // パーティクル描画
+  state.particles.forEach(p => p.draw(ctx));
+
+  // win画面
+  if (state.phase === 'win') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font = 'bold 100px Arial';
+    ctx.fillStyle = '#FFD700';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('CLEAR!', 400, 200);
+
+    ctx.font = 'bold 60px Arial';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(`${Math.floor(state.height_m)}m到達！`, 400, 300);
+
+    ctx.font = '32px Arial';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('クリックでリスタート', 400, 450);
+  }
+
+  // fail画面
+  if (state.phase === 'fail') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const shortfall = 1000 - state.height_m;
+    ctx.font = 'bold 60px Arial';
+    ctx.fillStyle = '#FF6B6B';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('失敗', 400, 200);
+
+    ctx.font = '36px Arial';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(`あと${Math.floor(Math.max(0, shortfall))}m足りません`, 400, 280);
+
+    ctx.font = '32px Arial';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(`最高高度: ${Math.floor(state.height_m)}m`, 400, 350);
+
+    ctx.font = '24px Arial';
+    ctx.fillText('クリックでリスタート', 400, 450);
+  }
+
+  // playing時の操作説明
+  if (state.phase === 'playing') {
+    ctx.font = '20px Arial';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('画面をクリック or タップして、ロケットを上昇させよう！', 20, 20);
+  }
+}
+
+function gameLoop(currentTime) {
+  if (!lastTime) lastTime = currentTime;
+  const deltaTime = Math.min(currentTime - lastTime, 50);
+  lastTime = currentTime;
+
+  gameUpdate(deltaTime);
+  draw();
+  updateUI();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function reset() {
+  state.phase = 'playing';
+  state.height_m = 0;
+  state.tap_count = 0;
+  state.combo = 0;
+  state.timeLeft = 30;
+  state.faceIndex = 0;
+  state.particles = [];
+  state.lastTapTime = 0;
+  updateUI();
+}
+
+// イベントリスナー
+canvas.addEventListener('mouseup', (e) => {
+  if (state.phase !== 'playing') {
+    reset();
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+    handleTap(x, y);
+  }
+});
+
+canvas.addEventListener('touchend', (e) => {
+  if (state.phase !== 'playing') {
+    reset();
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.changedTouches[0];
+  const x = touch.clientX - rect.left;
+  const y = touch.clientY - rect.top;
+
+  if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+    handleTap(x, y);
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  if (state.phase !== 'playing') {
+    reset();
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+    handleTap(x, y);
+  }
+});
+
+// ゲーム開始
+let lastTime = 0;
+updateUI();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

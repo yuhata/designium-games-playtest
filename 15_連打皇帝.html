@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html>
+<!--GAME_SPEC
+{
+  "win_condition": "自ゲージが100%に達する",
+  "fail_condition": "敵ゲージが100%に達する",
+  "input_types": ["click", "touchstart", "mousedown"],
+  "state_vars": ["playerGauge", "enemyGauge", "playerTPS", "enemyTPS", "score", "time"],
+  "core_loop": "画面連打→TPS計測→TPS差でゲージ増減→100%到達で勝敗判定",
+  "clear_trigger": "playerGauge >= 100",
+  "gameover_trigger": "enemyGauge >= 100"
+}
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>連打皇帝</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a0a0a 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    #container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+    }
+    canvas {
+      display: block;
+      border: 3px solid #ffd700;
+      background: linear-gradient(180deg, #0a0a1a 0%, #1a0a0a 100%);
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      font-size: 14px;
+      color: white;
+      text-shadow: 0 0 5px rgba(0, 0, 0, 0.9);
+    }
+    .stat {
+      position: absolute;
+      font-weight: bold;
+    }
+    #score { top: 8px; left: 8px; color: #ffff00; font-size: 16px; }
+    #time { top: 28px; left: 8px; color: #ffffff; }
+    #tps { top: 48px; left: 8px; color: #88ff88; }
+    #best { top: 8px; right: 8px; color: #ffd700; font-size: 16px; }
+    #ranking {
+      position: absolute;
+      top: 70px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #ffd700;
+      padding: 8px;
+      width: 160px;
+      font-size: 12px;
+    }
+    .rank-title { color: #ffd700; font-weight: bold; margin-bottom: 4px; }
+    .rank-item { padding: 3px 0; border-bottom: 1px solid #444; }
+    .rank-item:last-child { border-bottom: none; }
+    .rank-item.current { color: #ffff00; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="overlay">
+      <div id="score" class="stat">Score: <span>0</span></div>
+      <div id="time" class="stat">Time: <span>0</span>s</div>
+      <div id="tps" class="stat">P/E: <span>0</span>/<span>0</span>TPS</div>
+      <div id="best" class="stat">Best: <span>0</span></div>
+      <div id="ranking">
+        <div class="rank-title">🏆 ランキング</div>
+        <div class="rank-item">1. ライバル太郎</div>
+        <div class="rank-item">2. チャンプ花子</div>
+        <div class="rank-item">3. キング太郎</div>
+        <div class="rank-item current">4. あなた <span>0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const game = {
+      phase: 'init',
+      playerTPS: 0,
+      enemyTPS: 4,
+      playerGauge: 50,
+      enemyGauge: 50,
+      score: 0,
+      bestScore: parseInt(localStorage.getItem('tappingBest') || '0'),
+      startTime: 0,
+      touchCount: 0,
+      lastSecond: -1,
+      screenShakeX: 0,
+      newBestFlash: 0,
+      enemyScale: 1,
+      enemyFlashColor: 0,
+      frameCount: 0,
+      enemyName: 'ライバル太郎'
+    };
+
+    let touchActive = false;
+
+    document.addEventListener('touchstart', (e) => {
+      if ((game.phase === 'playing' || game.phase === 'init') && !touchActive) {
+        touchActive = true;
+        game.touchCount++;
+        game.score += 5;
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      touchActive = false;
+    }, { passive: true });
+
+    document.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      if ((game.phase === 'playing' || game.phase === 'init') && x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+        game.touchCount++;
+        game.score += 5;
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+        if (game.phase === 'init') {
+          startGame();
+        } else if (game.phase === 'win' || game.phase === 'fail') {
+          resetGame();
+        }
+      }
+    });
+
+    function startGame() {
+      game.phase = 'playing';
+      game.startTime = Date.now();
+      game.playerTPS = 0;
+      game.touchCount = 0;
+      game.lastSecond = 0;
+      game.playerGauge = 50;
+      game.enemyGauge = 50;
+      game.score = 0;
+      game.screenShakeX = 0;
+      game.newBestFlash = 0;
+      game.enemyScale = 1;
+      game.frameCount = 0;
+    }
+
+    function resetGame() {
+      const diffs = [3, 4, 6];
+      game.phase = 'init';
+      game.enemyTPS = diffs[Math.floor(Math.random() * diffs.length)];
+      game.startTime = 0;
+      game.playerTPS = 0;
+      game.touchCount = 0;
+      game.lastSecond = -1;
+      game.playerGauge = 50;
+      game.enemyGauge = 50;
+      game.score = 0;
+      game.screenShakeX = 0;
+      game.newBestFlash = 0;
+      game.enemyScale = 1;
+      game.enemyFlashColor = 0;
+      game.frameCount = 0;
+    }
+
+    function updateGame() {
+      if (game.phase !== 'playing') return;
+
+      const elapsed = Date.now() - game.startTime;
+      const elapsedSec = Math.floor(elapsed / 1000);
+
+      if (elapsedSec > game.lastSecond) {
+        game.playerTPS = game.touchCount;
+        game.touchCount = 0;
+        game.lastSecond = elapsedSec;
+      }
+
+      const gaugeDelta = (game.playerTPS - game.enemyTPS) * 0.3 / 60;
+      game.playerGauge = Math.max(0, Math.min(100, game.playerGauge + gaugeDelta));
+      game.enemyGauge = 100 - game.playerGauge;
+
+      if (game.playerGauge >= 100) {
+        game.phase = 'win';
+        onWin();
+      } else if (game.enemyGauge >= 100) {
+        game.phase = 'fail';
+        onFail();
+      }
+
+      if (game.screenShakeX !== 0) {
+        game.screenShakeX *= 0.85;
+        if (Math.abs(game.screenShakeX) < 0.5) game.screenShakeX = 0;
+      }
+
+      if (game.newBestFlash > 0) game.newBestFlash--;
+      if (game.enemyFlashColor > 0) game.enemyFlashColor--;
+
+      if (game.enemyGauge >= 95 && game.enemyScale < 1.8) {
+        game.enemyScale += 0.05;
+        game.enemyFlashColor = 25;
+      } else if (game.enemyScale > 1) {
+        game.enemyScale -= 0.02;
+      }
+
+      updateUI();
+    }
+
+    function onWin() {
+      game.screenShakeX = 15;
+      if (game.score > game.bestScore) {
+        game.bestScore = game.score;
+        localStorage.setItem('tappingBest', game.bestScore);
+        game.newBestFlash = 150;
+      }
+    }
+
+    function onFail() {
+      game.screenShakeX = -12;
+    }
+
+    function updateUI() {
+      const elapsed = Date.now() - game.startTime;
+      const elapsedSec = Math.floor(elapsed / 1000);
+
+      document.querySelector('#score span').textContent = game.score;
+      document.querySelector('#time span').textContent = elapsedSec;
+      document.querySelector('#tps span:nth-of-type(1)').textContent = game.playerTPS;
+      document.querySelector('#tps span:nth-of-type(2)').textContent = game.enemyTPS;
+      document.querySelector('#best span').textContent = game.bestScore;
+      document.querySelector('#ranking .rank-item.current span').textContent = game.score;
+    }
+
+    function draw() {
+      ctx.fillStyle = 'rgba(10, 10, 26, 0.95)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (game.screenShakeX !== 0) {
+        ctx.save();
+        ctx.translate(game.screenShakeX, 0);
+      }
+
+      if (game.phase === 'init') {
+        drawInitScreen();
+      } else {
+        drawGameScreen();
+        if (game.phase === 'win') drawWinOverlay();
+        else if (game.phase === 'fail') drawFailOverlay();
+      }
+
+      if (game.screenShakeX !== 0) {
+        ctx.restore();
+      }
+    }
+
+    function drawInitScreen() {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 56px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('連打皇帝', canvas.width / 2, 140);
+
+      ctx.font = '20px Arial';
+      ctx.fillStyle = '#ffff00';
+      ctx.fillText('敵を倒す連打ゲーム', canvas.width / 2, 220);
+
+      ctx.font = '16px Arial';
+      ctx.fillStyle = '#cccccc';
+      ctx.fillText('画面をタップ・クリックして敵より多く', canvas.width / 2, 290);
+      ctx.fillText('攻撃してゲージを100%まで上げよう！', canvas.width / 2, 320);
+
+      ctx.font = 'bold 24px Arial';
+      ctx.fillStyle = '#ffff00';
+      ctx.fillText('↓ クリックで開始 ↓', canvas.width / 2, 430);
+    }
+
+    function drawGameScreen() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.fillRect(0, 0, canvas.width, 45);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 22px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('連打皇帝', canvas.width / 2, 30);
+
+      const enemyY = 120;
+      ctx.fillStyle = '#666666';
+      ctx.fillRect(50, enemyY - 35, 320, 28);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('敵: ' + game.enemyName, 65, enemyY - 15);
+
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(50, enemyY + 5, 320, 35);
+      const enemyBarColor = game.enemyFlashColor > 0 ? '#ff8888' : '#ff4444';
+      ctx.fillStyle = enemyBarColor;
+      ctx.fillRect(50, enemyY + 5, (game.enemyGauge / 100) * 320, 35);
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(50, enemyY + 5, 320, 35);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.round(game.enemyGauge) + '%', 210, enemyY + 28);
+
+      const enemyCharX = 420;
+      const enemyCharY = enemyY + 20;
+      ctx.save();
+      ctx.translate(enemyCharX, enemyCharY);
+      ctx.scale(game.enemyScale, game.enemyScale);
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(-28, -38, 56, 76);
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('👹', 0, 8);
+      ctx.restore();
+
+      const playerY = canvas.height - 140;
+      ctx.fillStyle = '#666666';
+      ctx.fillRect(50, playerY - 35, 320, 28);
+      ctx.fillStyle = '#0099ff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('あなた', 65, playerY - 15);
+
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(50, playerY + 5, 320, 35);
+      ctx.fillStyle = '#4488ff';
+      ctx.fillRect(50, playerY + 5, (game.playerGauge / 100) * 320, 35);
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(50, playerY + 5, 320, 35);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.round(game.playerGauge) + '%', 210, playerY + 28);
+
+      const playerCharX = 420;
+      const playerCharY = playerY + 20;
+      ctx.fillStyle = '#0099ff';
+      ctx.fillRect(playerCharX - 28, playerCharY - 38, 56, 76);
+      ctx.fillStyle = '#ffff00';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚔️', playerCharX, playerCharY + 8);
+
+      if (game.phase === 'playing') {
+        const blinkAlpha = game.frameCount % 60 < 30 ? 1 : 0.4;
+        ctx.fillStyle = 'rgba(255, 255, 0, ' + blinkAlpha + ')';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('← 画面をタップ・クリック！→', canvas.width / 2, canvas.height - 15);
+      }
+    }
+
+    function drawWinOverlay() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#ffff00';
+      ctx.font = 'bold 70px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('勝 利！', canvas.width / 2, 170);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 32px Arial';
+      ctx.fillText('Score: ' + game.score, canvas.width / 2, 270);
+
+      if (game.newBestFlash > 0) {
+        const flash = (game.newBestFlash % 30) < 15;
+        ctx.fillStyle = flash ? '#ffff00' : '#ffffff';
+        ctx.font = 'bold 36px Arial';
+        ctx.fillText('🏆 新 記 録！🏆', canvas.width / 2, 340);
+      }
+
+      ctx.fillStyle = '#cccccc';
+      ctx.font = '16px Arial';
+      ctx.fillText('クリックで再挑戦', canvas.width / 2, 440);
+    }
+
+    function drawFailOverlay() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 70px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('敗 北！', canvas.width / 2, 170);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 32px Arial';
+      ctx.fillText('Score: ' + game.score, canvas.width / 2, 270);
+
+      ctx.fillStyle = '#cccccc';
+      ctx.font = '16px Arial';
+      ctx.fillText('クリックでリトライ', canvas.width / 2, 440);
+    }
+
+    function gameLoop() {
+      game.frameCount++;
+      updateGame();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    resetGame();
+    gameLoop();
+  </script>
+</body>
+</html>

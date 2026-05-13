@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おじさんぶつかり王</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 4px solid #ff6b00;
+            background-color: #fff9f0;
+            cursor: crosshair;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+        }
+        #uiPanel {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: #333;
+            font-weight: bold;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "衝突数が10以上に到達した時点で勝利",
+  "fail_condition": "時間が0になり、かつ衝突数が5未満の時点で失敗",
+  "input_types": ["click", "mousedown", "mousemove", "mouseup"],
+  "state_vars": ["collision_count", "time"],
+  "core_loop": "クリック→方向ベクトル計算→物理移動→衝突判定→爆笑演出→スコア更新",
+  "clear_trigger": "collision_count >= 10",
+  "gameover_trigger": "time <= 0 && collision_count < 5"
+}
+-->
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="uiPanel">
+    <div>衝突数: <span id="score">0</span>/10</div>
+    <div>時間: <span id="timer">60.0</span>秒</div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const game = {
+    phase: 'playing',
+    time: 60,
+    collision_count: 0,
+    objects: [],
+    particles: [],
+    textPopups: [],
+    dragging: false
+};
+
+class Ojisan {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.radius = 30;
+        this.color = `hsl(${Math.random() * 60 + 20}, 80%, 60%)`;
+        this.collided_this_frame = false;
+        this.scale = 1;
+        this.scale_target = 1;
+    }
+
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vx *= 0.96;
+        this.vy *= 0.96;
+
+        if (this.x - this.radius < 0) {
+            this.x = this.radius;
+            this.vx *= -0.3;
+        }
+        if (this.x + this.radius > canvas.width) {
+            this.x = canvas.width - this.radius;
+            this.vx *= -0.3;
+        }
+        if (this.y - this.radius < 0) {
+            this.y = this.radius;
+            this.vy *= -0.3;
+        }
+        if (this.y + this.radius > canvas.height) {
+            this.y = canvas.height - this.radius;
+            this.vy *= -0.3;
+        }
+
+        this.scale += (this.scale_target - this.scale) * 0.12;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.scale, this.scale);
+        
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(-9, -8, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(9, -8, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(-9, -8, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(9, -8, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 4, 9, 0, Math.PI);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    distanceTo(other) {
+        const dx = other.x - this.x;
+        const dy = other.y - this.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    collidesWith(other) {
+        return this.distanceTo(other) < this.radius + other.radius;
+    }
+}
+
+class Particle {
+    constructor(x, y, vx, vy, life, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.life = life;
+        this.life_max = life;
+        this.color = color;
+        this.radius = 5;
+    }
+
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vy += 400 * dt;
+        this.life -= dt;
+    }
+
+    draw() {
+        const alpha = Math.max(0, this.life / this.life_max);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+class TextPopup {
+    constructor(x, y, text, color) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.life = 1.5;
+        this.life_max = 1.5;
+    }
+
+    update(dt) {
+        this.y -= 100 * dt;
+        this.life -= dt;
+    }
+
+    draw() {
+        const alpha = Math.max(0, this.life / this.life_max);
+        const scale = 1 + (1 - alpha) * 0.4;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = `bold ${28 * scale}px Arial`;
+        ctx.fillStyle = this.color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+    }
+}
+
+function init() {
+    game.phase = 'playing';
+    game.time = 60;
+    game.collision_count = 0;
+    game.objects = [];
+    game.particles = [];
+    game.textPopups = [];
+
+    for (let i = 0; i < 6; i++) {
+        let x, y, valid;
+        do {
+            valid = true;
+            x = Math.random() * (canvas.width - 140) + 70;
+            y = Math.random() * (canvas.height - 140) + 70;
+            for (let obj of game.objects) {
+                const dx = obj.x - x;
+                const dy = obj.y - y;
+                if (Math.sqrt(dx * dx + dy * dy) < 130) {
+                    valid = false;
+                    break;
+                }
+            }
+        } while (!valid);
+        game.objects.push(new Ojisan(x, y));
+    }
+}
+
+function checkCollisions() {
+    for (let obj of game.objects) {
+        obj.collided_this_frame = false;
+    }
+
+    for (let i = 0; i < game.objects.length; i++) {
+        for (let j = i + 1; j < game.objects.length; j++) {
+            if (game.objects[i].collidesWith(game.objects[j])) {
+                if (!game.objects[i].collided_this_frame && !game.objects[j].collided_this_frame) {
+                    game.collision_count++;
+                    onCollision(game.objects[i], game.objects[j]);
+                }
+                game.objects[i].collided_this_frame = true;
+                game.objects[j].collided_this_frame = true;
+            }
+        }
+    }
+}
+
+function onCollision(obj1, obj2) {
+    obj1.scale_target = 1.4;
+    obj2.scale_target = 1.4;
+    
+    const hx = (obj1.x + obj2.x) / 2;
+    const hy = (obj1.y + obj2.y) / 2;
+
+    for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI * 2 * i) / 6;
+        const speed = 200;
+        game.particles.push(new Particle(
+            hx, hy,
+            Math.cos(angle) * speed,
+            Math.sin(angle) * speed,
+            1.5,
+            '#ff69b4'
+        ));
+    }
+
+    game.textPopups.push(new TextPopup(hx, hy - 30, '+1', '#ff3333'));
+}
+
+function update(dt) {
+    if (game.phase !== 'playing') return;
+
+    game.time -= dt;
+    if (game.time < 0) game.time = 0;
+
+    for (let obj of game.objects) {
+        obj.update(dt);
+    }
+
+    checkCollisions();
+
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+        game.particles[i].update(dt);
+        if (game.particles[i].life <= 0) {
+            game.particles.splice(i, 1);
+        }
+    }
+
+    for (let i = game.textPopups.length - 1; i >= 0; i--) {
+        game.textPopups[i].update(dt);
+        if (game.textPopups[i].life <= 0) {
+            game.textPopups.splice(i, 1);
+        }
+    }
+
+    if (game.collision_count >= 10) {
+        game.phase = 'win';
+    } else if (game.time <= 0 && game.collision_count < 5) {
+        game.phase = 'fail';
+    }
+
+    document.getElementById('score').textContent = game.collision_count;
+    document.getElementById('timer').textContent = Math.max(0, game.time).toFixed(1);
+}
+
+function draw() {
+    ctx.fillStyle = '#fff9f0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let obj of game.objects) {
+        obj.draw();
+    }
+
+    for (let p of game.particles) {
+        p.draw();
+    }
+
+    for (let tp of game.textPopups) {
+        tp.draw();
+    }
+
+    ctx.fillStyle = '#444';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('おじさんをクリック！複数のおじさんをぶつけてスコアを稼ぐ', 20, canvas.height - 15);
+
+    if (game.phase === 'win') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 72px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#ff6b00';
+        ctx.shadowBlur = 20;
+        ctx.fillText('🎉 VICTORY! 🎉', canvas.width / 2, canvas.height / 2 - 80);
+
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 40px Arial';
+        ctx.fillText(`最終スコア: ${game.collision_count}衝突`, canvas.width / 2, canvas.height / 2 + 40);
+
+        ctx.font = '24px Arial';
+        ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 120);
+    }
+
+    if (game.phase === 'fail') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#ff3333';
+        ctx.font = 'bold 72px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#8b0000';
+        ctx.shadowBlur = 20;
+        ctx.fillText('❌ GAME OVER ❌', canvas.width / 2, canvas.height / 2 - 80);
+
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 40px Arial';
+        ctx.fillText(`スコア: ${game.collision_count} / 10`, canvas.width / 2, canvas.height / 2 + 40);
+
+        ctx.font = '24px Arial';
+        ctx.fillText('クリックでリスタート', canvas.width / 2, canvas.height / 2 + 120);
+    }
+}
+
+let last_time = performance.now();
+function gameLoop(current_time) {
+    const dt = Math.min((current_time - last_time) / 1000, 0.016);
+    last_time = current_time;
+
+    update(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener('click', (e) => {
+    if (game.phase !== 'playing') {
+        init();
+        return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    let closest = null;
+    let minDist = Infinity;
+    for (let obj of game.objects) {
+        const dist = obj.distanceTo({x, y});
+        if (dist < minDist && dist < 200) {
+            closest = obj;
+            minDist = dist;
+        }
+    }
+
+    if (closest) {
+        const dx = x - closest.x;
+        const dy = y - closest.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 1) {
+            const dirx = dx / dist;
+            const diry = dy / dist;
+            closest.vx += dirx * 400;
+            closest.vy += diry * 400;
+        }
+    } else {
+        const target = game.objects[Math.floor(Math.random() * game.objects.length)];
+        if (target) {
+            const angle = Math.random() * Math.PI * 2;
+            target.vx += Math.cos(angle) * 400;
+            target.vy += Math.sin(angle) * 400;
+        }
+    }
+});
+
+canvas.addEventListener('mousedown', () => {});
+canvas.addEventListener('mousemove', () => {});
+canvas.addEventListener('mouseup', () => {});
+
+init();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

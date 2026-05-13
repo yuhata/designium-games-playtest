@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ぷちガーデン</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #f0f8ff;
+    font-family: Arial, sans-serif;
+  }
+  canvas {
+    border: 3px solid #4caf50;
+    background: #e8f5e9;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+</style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "Flower level reaches 3 (full bloom)",
+  "fail_condition": "Water level drops to 0 or below",
+  "input_types": ["click", "mousemove", "mousedown", "mouseup"],
+  "state_vars": ["flower_lv", "water", "sunlight", "growthAccum"],
+  "core_loop": "Tap root area to water flower (+25 water), adjust sunlight with slider. Each frame with water>0 and sunlight>30 accumulates growth. Reach lv3 to win.",
+  "clear_trigger": "flower_lv >= 3",
+  "gameover_trigger": "water <= 0"
+}
+-->
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const game = {
+  phase: 'playing',
+  flowerLv: 1,
+  water: 50,
+  sunlight: 50,
+  growthAccum: 0,
+  time: 0,
+  lastTapTime: 0,
+  tapCooldown: 300,
+  particles: [],
+  scaleAnim: 1,
+  scaleTarget: 1,
+  flashAlpha: 0,
+  rotation: 0,
+  startTime: performance.now()
+};
+
+const slider = {
+  x: 280,
+  y: 60,
+  width: 240,
+  height: 20,
+  isDragging: false
+};
+
+class Particle {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vx = (Math.random() - 0.5) * 3;
+    this.vy = (Math.random() - 0.5) * 4 - 2;
+    this.life = 0.6;
+    this.maxLife = 0.6;
+    this.size = 5;
+  }
+  
+  update(dt) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.vy += 1.5 * dt;
+    this.life -= dt;
+  }
+  
+  draw(ctx) {
+    if (this.life <= 0) return;
+    const alpha = Math.max(0, this.life / this.maxLife);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#4dd0e1';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function update(dt) {
+  if (game.phase !== 'playing') return;
+  
+  game.time += dt;
+  
+  if (game.water > 0) {
+    game.water = Math.max(0, game.water - dt * 1);
+  }
+  
+  if (game.water > 0 && game.sunlight > 30) {
+    const growthRate = (game.water + game.sunlight) / 300;
+    game.growthAccum += growthRate * dt;
+    
+    if (game.growthAccum >= 1.0) {
+      game.flowerLv += 1;
+      game.growthAccum = 0;
+      game.scaleTarget = 1.3;
+      
+      if (game.flowerLv >= 3) {
+        game.phase = 'win';
+        game.flashAlpha = 0.7;
+      }
+    }
+  }
+  
+  if (game.water <= 0 && game.phase === 'playing') {
+    game.phase = 'fail';
+  }
+  
+  if (game.scaleTarget > game.scaleAnim) {
+    game.scaleAnim += (game.scaleTarget - game.scaleAnim) * 0.12;
+  } else if (game.scaleAnim > 1) {
+    game.scaleAnim += (1 - game.scaleAnim) * 0.12;
+  }
+  
+  if (game.flashAlpha > 0) {
+    game.flashAlpha -= dt / 1.2;
+  }
+  
+  if (game.phase === 'win') {
+    game.rotation += Math.PI * 1.5 * dt / 2;
+  }
+  
+  game.particles = game.particles.filter(p => p.life > 0);
+  game.particles.forEach(p => p.update(dt));
+}
+
+function drawFlower(x, y, lv, scale, rot) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.rotate(rot);
+  
+  const stemHeight = 40 + Math.max(0, lv - 1) * 40;
+  const petalCount = 4 + Math.max(0, lv - 1) * 2;
+  
+  ctx.strokeStyle = '#27ae60';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -stemHeight);
+  ctx.stroke();
+  
+  ctx.fillStyle = '#e91e63';
+  ctx.translate(0, -stemHeight);
+  
+  for (let i = 0; i < petalCount; i++) {
+    ctx.save();
+    ctx.rotate((i / petalCount) * Math.PI * 2);
+    ctx.beginPath();
+    ctx.ellipse(0, -18, 10, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  
+  ctx.fillStyle = '#ffc107';
+  ctx.beginPath();
+  ctx.arc(0, 0, 6, 0, Math.PI * 2);
+  ctx.fill();
+  
+  ctx.restore();
+}
+
+function drawSlider() {
+  const x = slider.x;
+  const y = slider.y;
+  const w = slider.width;
+  const h = slider.height;
+  
+  const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+  const s = game.sunlight;
+  
+  if (s < 33) {
+    grad.addColorStop(0, '#ff9800');
+    grad.addColorStop(1, '#ffb74d');
+  } else if (s < 66) {
+    grad.addColorStop(0, '#ffb74d');
+    grad.addColorStop(1, '#ffeb3b');
+  } else {
+    grad.addColorStop(0, '#ffeb3b');
+    grad.addColorStop(1, '#ff5722');
+  }
+  
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, w, h);
+  
+  const thumbX = x + (game.sunlight / 100) * w;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(thumbX - 6, y - 6, 12, h + 12);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(thumbX - 6, y - 6, 12, h + 12);
+}
+
+function drawRootArea() {
+  const x = 400;
+  const y = 325;
+  const w = 80;
+  const h = 50;
+  
+  ctx.fillStyle = 'rgba(139, 69, 19, 0.15)';
+  ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  ctx.strokeStyle = 'rgba(139, 69, 19, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+  ctx.setLineDash([]);
+}
+
+function drawUI() {
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'left';
+  
+  ctx.fillText(`Water: ${Math.round(game.water)}`, 20, 30);
+  ctx.fillText(`Sunlight: ${Math.round(game.sunlight)}`, 20, 55);
+  
+  ctx.font = 'bold 24px Arial';
+  ctx.fillStyle = '#e91e63';
+  ctx.fillText(`Lv${game.flowerLv}`, 720, 35);
+  
+  ctx.fillStyle = '#ddd';
+  ctx.fillRect(20, 475, 200, 18);
+  ctx.fillStyle = '#4caf50';
+  ctx.fillRect(20, 475, 200 * Math.min(1, game.growthAccum), 18);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(20, 475, 200, 18);
+  
+  ctx.fillStyle = '#666';
+  ctx.font = '12px Arial';
+  ctx.fillText('Growth', 20, 468);
+  
+  ctx.font = '13px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#555';
+  ctx.fillText('Tap root to water | Slide to adjust sunlight | Reach Lv3 to bloom', 400, 560);
+}
+
+function draw() {
+  ctx.fillStyle = '#e8f5e9';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  drawUI();
+  drawSlider();
+  drawRootArea();
+  
+  game.particles.forEach(p => p.draw(ctx));
+  
+  let finalScale = game.scaleAnim;
+  if (game.phase === 'win') finalScale = 2;
+  
+  drawFlower(400, 350, game.flowerLv, finalScale, game.rotation);
+  
+  if (game.flashAlpha > 0) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, game.flashAlpha)})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  
+  if (game.phase === 'win') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 52px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('🌸 BLOOM! 🌸', 400, 140);
+    
+    ctx.font = '22px Arial';
+    ctx.fillStyle = '#4caf50';
+    ctx.fillText('Your garden has bloomed!', 400, 210);
+    
+    ctx.font = '18px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Time: ' + Math.round(game.time) + 's', 400, 270);
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#ccc';
+    ctx.fillText('Click to restart', 400, 340);
+  }
+  
+  if (game.phase === 'fail') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 52px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('💔 WILTED 💔', 400, 140);
+    
+    ctx.font = '22px Arial';
+    ctx.fillStyle = '#f44336';
+    ctx.fillText('The flower needs water!', 400, 210);
+    
+    ctx.font = '18px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Time: ' + Math.round(game.time) + 's', 400, 270);
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#ccc';
+    ctx.fillText('Click to restart', 400, 340);
+  }
+}
+
+function gameLoop() {
+  const now = performance.now();
+  if (!gameLoop.lastTime) gameLoop.lastTime = now;
+  const dt = Math.min((now - gameLoop.lastTime) / 1000, 0.05);
+  gameLoop.lastTime = now;
+  
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function getCanvasCoords(e) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: e.clientX - r.left,
+    y: e.clientY - r.top
+  };
+}
+
+function restartGame() {
+  game.phase = 'playing';
+  game.flowerLv = 1;
+  game.water = 50;
+  game.sunlight = 50;
+  game.growthAccum = 0;
+  game.time = 0;
+  game.scaleAnim = 1;
+  game.scaleTarget = 1;
+  game.flashAlpha = 0;
+  game.rotation = 0;
+  game.particles = [];
+  game.lastTapTime = 0;
+}
+
+canvas.addEventListener('click', function(e) {
+  const coords = getCanvasCoords(e);
+  
+  if (game.phase !== 'playing') {
+    restartGame();
+    return;
+  }
+  
+  const rootX = 400;
+  const rootY = 325;
+  const rootW = 80;
+  const rootH = 50;
+  
+  if (coords.x >= rootX - rootW / 2 && coords.x <= rootX + rootW / 2 &&
+      coords.y >= rootY - rootH / 2 && coords.y <= rootY + rootH / 2) {
+    const now = performance.now();
+    if (now - game.lastTapTime >= game.tapCooldown) {
+      game.water = Math.min(100, game.water + 25);
+      game.lastTapTime = now;
+      
+      for (let i = 0; i < 8; i++) {
+        game.particles.push(new Particle(rootX, rootY));
+      }
+    }
+  }
+});
+
+canvas.addEventListener('mousedown', function(e) {
+  const coords = getCanvasCoords(e);
+  const x = coords.x;
+  const y = coords.y;
+  
+  if (x >= slider.x && x <= slider.x + slider.width &&
+      y >= slider.y - 10 && y <= slider.y + slider.height + 10) {
+    slider.isDragging = true;
+  }
+});
+
+canvas.addEventListener('mousemove', function(e) {
+  if (!slider.isDragging || game.phase !== 'playing') return;
+  
+  const coords = getCanvasCoords(e);
+  const x = coords.x;
+  const newSunlight = Math.max(0, Math.min(100, (x - slider.x) / slider.width * 100));
+  game.sunlight = newSunlight;
+});
+
+canvas.addEventListener('mouseup', function(e) {
+  slider.isDragging = false;
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>

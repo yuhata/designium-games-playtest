@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ゲームプレイテスト — 73本</title>
+<title>ゲームプレイテスト — 84本</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, sans-serif; background: #0f0f13; color: #eee; padding: 24px; }
@@ -25,6 +25,12 @@
   .badge-g2 { background: #3a2a1a; color: #fb923c; }
   .badge-g3 { background: #2a1a3a; color: #c084fc; }
   .badge-g4 { background: #3a1a1a; color: #f87171; }
+  .badge-gap { background: #1a2a3a; color: #38bdf8; }
+  .desire-tag {
+    display: inline-block; font-size: 10px; padding: 1px 6px;
+    background: #1a2a1a; color: #86efac; border-radius: 99px;
+    margin-top: 4px;
+  }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -85,7 +91,7 @@
 <body>
 
 <h1>ゲームプレイテスト</h1>
-<p class="meta">73本フルコンプリート — 実ブラウザ確認用インデックス / 「要確認」= 設計評価のみ（Playwright未通過）</p>
+<p class="meta">84本（73本 + Gap 10追加11本）— 実ブラウザ確認用インデックス / 「要確認」= 設計評価のみ（Playwright未通過）</p>
 <div style="background:#1a1a20;border:1px solid #2a2a34;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;line-height:2;">
   <strong style="color:#aaa;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">William FB 修正バッジ凡例（39本中31本修正済）</strong><br>
   <span style="display:inline-block;padding:1px 8px;background:#450a0a;color:#ef4444;border-radius:99px;font-size:10px;font-weight:600;">Cat A 修正</span>
@@ -236,6 +242,27 @@
     <a class="card priority" href="g4_05_まちスタ.html" target="_blank"><div class="num">poikatsu</div>まちスタ</a>
     <a class="card" href="g4_06_完璧帳.html" target="_blank"><div class="num">study_game</div>完璧帳</a>
     <a class="card" href="g4_07_こもり師.html" target="_blank"><div class="num">asmr</div>こもり師</a>
+  </div>
+</div>
+
+<!-- Gap 10 -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-gap">Gap 10</span>
+    desire補完 — 11本（Layer 1完成）
+  </div>
+  <div class="grid">
+    <a class="card" href="01_おならロケット選手権.html" target="_blank"><div class="num">physics</div>おならロケット選手権<br><span class="desire-tag">laugh</span></a>
+    <a class="card" href="02_ズルい問題ばかり.html" target="_blank"><div class="num">escape</div>ズルい問題ばかり<br><span class="desire-tag">laugh</span></a>
+    <a class="card" href="05_おじさんぶつかり王.html" target="_blank"><div class="num">minigame_party</div>おじさんぶつかり王<br><span class="desire-tag">laugh</span></a>
+    <a class="card" href="03_ビートぬりえ.html" target="_blank"><div class="num">color_by_num</div>ビートぬりえ<br><span class="desire-tag">groove</span></a>
+    <a class="card" href="06_ビートジャンプ.html" target="_blank"><div class="num">platform</div>ビートジャンプ<br><span class="desire-tag">groove</span></a>
+    <a class="card" href="07_ビートスライス.html" target="_blank"><div class="num">slice</div>ビートスライス<br><span class="desire-tag">groove</span></a>
+    <a class="card" href="04_スライムせんせい.html" target="_blank"><div class="num">pet</div>スライムせんせい<br><span class="desire-tag">nurture</span></a>
+    <a class="card" href="08_ぷちガーデン.html" target="_blank"><div class="num">farm</div>ぷちガーデン<br><span class="desire-tag">nurture</span></a>
+    <a class="card" href="09_さよなら宇宙犬.html" target="_blank"><div class="num">interactive_story</div>さよなら宇宙犬<br><span class="desire-tag">feel</span></a>
+    <a class="card" href="12_運命の木.html" target="_blank"><div class="num">interactive_story</div>運命の木（再生成）<br><span class="desire-tag">feel</span></a>
+    <a class="card" href="15_連打皇帝.html" target="_blank"><div class="num">reflex</div>連打皇帝（再生成）<br><span class="desire-tag">beat</span></a>
   </div>
 </div>
 
