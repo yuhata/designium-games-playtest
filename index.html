@@ -3,266 +3,234 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ゲームプレイテスト — 84本</title>
+<title>ゲームプレイテスト — 50本 Layer 1完成</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, sans-serif; background: #0f0f13; color: #eee; padding: 24px; }
   h1 { font-size: 20px; margin-bottom: 6px; color: #fff; }
-  .meta { font-size: 13px; color: #888; margin-bottom: 32px; }
-  .section { margin-bottom: 36px; }
+  .meta { font-size: 13px; color: #888; margin-bottom: 28px; }
+  .section { margin-bottom: 32px; }
   .section-title {
-    font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
-    color: #aaa; text-transform: uppercase; margin-bottom: 12px;
-    padding-bottom: 6px; border-bottom: 1px solid #222;
-    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+    color: #fff; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px solid #2a2a34;
+    display: flex; align-items: baseline; gap: 10px;
   }
-  .badge {
-    font-size: 11px; padding: 2px 8px; border-radius: 99px;
-    font-weight: 600; letter-spacing: 0;
-  }
-  .badge-p { background: #1e3a5f; color: #60a5fa; }
-  .badge-g1 { background: #1a3a2a; color: #4ade80; }
-  .badge-g2 { background: #3a2a1a; color: #fb923c; }
-  .badge-g3 { background: #2a1a3a; color: #c084fc; }
-  .badge-g4 { background: #3a1a1a; color: #f87171; }
-  .badge-gap { background: #1a2a3a; color: #38bdf8; }
-  .desire-tag {
-    display: inline-block; font-size: 10px; padding: 1px 6px;
-    background: #1a2a1a; color: #86efac; border-radius: 99px;
-    margin-top: 4px;
-  }
+  .desire-label { font-size: 18px; font-weight: 800; color: #fff; }
+  .desire-en { font-size: 11px; color: #666; font-weight: 400; letter-spacing: 0.1em; text-transform: uppercase; }
+  .count { font-size: 11px; color: #555; margin-left: auto; }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 8px;
   }
   a.card {
-    display: block; padding: 12px 14px;
+    display: block; padding: 11px 13px;
     background: #1a1a20; border: 1px solid #2a2a34;
     border-radius: 8px; text-decoration: none;
     color: #ddd; font-size: 14px; line-height: 1.4;
-    transition: background 0.15s, border-color 0.15s;
-    position: relative;
+    transition: background 0.12s, border-color 0.12s;
   }
   a.card:hover { background: #22222c; border-color: #444; color: #fff; }
-  a.card.priority { border-color: #f87171; }
-  a.card.priority::after {
-    content: "要確認";
-    position: absolute; top: 8px; right: 8px;
-    font-size: 10px; padding: 1px 6px;
-    background: #7f1d1d; color: #f87171; border-radius: 99px;
-  }
-  /* Cat A: 致命的バグ修正 — 赤 */
-  a.card.fixed-a { border-color: #ef4444; }
-  a.card.fixed-a::after {
-    content: "Cat A 修正";
-    position: absolute; top: 8px; right: 8px;
-    font-size: 10px; padding: 1px 6px;
-    background: #450a0a; color: #ef4444; border-radius: 99px;
-  }
-  /* Cat B: バグあるが遊べる — オレンジ */
-  a.card.fixed-b { border-color: #f97316; }
-  a.card.fixed-b::after {
-    content: "Cat B 修正";
-    position: absolute; top: 8px; right: 8px;
-    font-size: 10px; padding: 1px 6px;
-    background: #431407; color: #f97316; border-radius: 99px;
-  }
-  /* Cat C: バランス問題 — 青 */
-  a.card.fixed-c { border-color: #3b82f6; }
-  a.card.fixed-c::after {
-    content: "Cat C 修正";
-    position: absolute; top: 8px; right: 8px;
-    font-size: 10px; padding: 1px 6px;
-    background: #1e1b4b; color: #60a5fa; border-radius: 99px;
-  }
-  /* Cat D: UX問題 — 緑 */
-  a.card.fixed-d { border-color: #22c55e; }
-  a.card.fixed-d::after {
-    content: "Cat D 修正";
-    position: absolute; top: 8px; right: 8px;
-    font-size: 10px; padding: 1px 6px;
-    background: #14532d; color: #4ade80; border-radius: 99px;
-  }
-  .num { font-size: 11px; color: #555; margin-bottom: 2px; }
-  .note { font-size: 11px; color: #666; margin-top: 4px; }
+  a.card.gap { border-color: #1e3a4a; }
+  a.card.gap:hover { border-color: #38bdf8; }
 </style>
 </head>
 <body>
 
 <h1>ゲームプレイテスト</h1>
-<p class="meta">84本（73本 + Gap 10追加11本）— 実ブラウザ確認用インデックス / 「要確認」= 設計評価のみ（Playwright未通過）</p>
-<div style="background:#1a1a20;border:1px solid #2a2a34;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;line-height:2;">
-  <strong style="color:#aaa;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">William FB 修正バッジ凡例（39本中31本修正済）</strong><br>
-  <span style="display:inline-block;padding:1px 8px;background:#450a0a;color:#ef4444;border-radius:99px;font-size:10px;font-weight:600;">Cat A 修正</span>
-  <span style="color:#ccc;margin:0 8px 0 4px;">致命的バグ修正（6本）— 最優先テスト</span>
-  <span style="display:inline-block;padding:1px 8px;background:#431407;color:#f97316;border-radius:99px;font-size:10px;font-weight:600;">Cat B 修正</span>
-  <span style="color:#ccc;margin:0 8px 0 4px;">バグ修正（7本）— 優先テスト</span><br>
-  <span style="display:inline-block;padding:1px 8px;background:#1e1b4b;color:#60a5fa;border-radius:99px;font-size:10px;font-weight:600;">Cat C 修正</span>
-  <span style="color:#ccc;margin:0 8px 0 4px;">バランス調整（5本）</span>
-  <span style="display:inline-block;padding:1px 8px;background:#14532d;color:#4ade80;border-radius:99px;font-size:10px;font-weight:600;">Cat D 修正</span>
-  <span style="color:#ccc;margin:0 4px;">UX改善（13本）</span>
-</div>
-<div style="margin-bottom:28px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-  <a href="https://www.notion.so/d24dce3085f041dab1d43a7ba055abd9" target="_blank"
-     style="display:inline-block;padding:8px 18px;background:#2d2d3a;border:1px solid #444;border-radius:8px;
-            color:#c084fc;text-decoration:none;font-size:13px;font-weight:600;">
-    📝 フィードバックを記入する（Notion DB）
-  </a>
-  <span style="font-size:12px;color:#555;">← ゲームを遊んだらこちらに記入してください</span>
-</div>
-<div style="background:#1a1a20;border:1px solid #2a2a34;border-radius:8px;padding:14px 18px;margin-bottom:28px;font-size:13px;line-height:1.8;">
-  <strong style="color:#aaa;">担当割り当て（A案）</strong><br>
-  <span style="color:#60a5fa;">1人目</span>: Phase 1-2 前半（01〜21）&nbsp;&nbsp;
-  <span style="color:#60a5fa;">2人目</span>: Phase 1-2 後半（22〜30 + g2系）&nbsp;&nbsp;
-  <span style="color:#4ade80;">3人目</span>: γ-1 全9本&nbsp;&nbsp;
-  <span style="color:#fb923c;">4人目</span>: γ-2 全12本&nbsp;&nbsp;
-  <span style="color:#c084fc;">5人目</span>: γ-3 + γ-4 全14本<br>
-  <span style="color:#f87171;">⚠ 全員必須</span>: γ-4「要確認」3本（アヤカシ狩 / 瞬答バトル / まちスタ）
-</div>
+<p class="meta">50本 — desire別 / Layer 1完成（全13 desire × 最低2本以上）/ 2026-05-13</p>
 
-<!-- Phase 1/2 -->
+<!-- scale -->
 <div class="section">
   <div class="section-title">
-    <span class="badge badge-p">Phase 1/2</span>
-    v2/v3 Gate合格 — 39本
+    <span class="desire-label">増やす</span>
+    <span class="desire-en">scale</span>
+    <span class="count">4本</span>
   </div>
   <div class="grid">
-    <a class="card fixed-a" href="01_クラッシュドロップ.html" target="_blank"><div class="num">01</div>クラッシュドロップ</a>
-    <a class="card" href="01_ニャン突破.html" target="_blank"><div class="num">01</div>ニャン突破</a>
-    <a class="card fixed-d" href="01_パーク帝王.html" target="_blank"><div class="num">01</div>パーク帝王</a>
-    <a class="card fixed-d" href="01_工場帝国.html" target="_blank"><div class="num">01</div>工場帝国</a>
-    <a class="card fixed-c" href="01_砦の最終夜.html" target="_blank"><div class="num">01</div>砦の最終夜</a>
-    <a class="card" href="01_残光バトル.html" target="_blank"><div class="num">01</div>残光バトル</a>
-    <a class="card fixed-d" href="01_秒速スポーツ王.html" target="_blank"><div class="num">01</div>秒速スポーツ王</a>
-    <a class="card" href="01_墨弾幕レター.html" target="_blank"><div class="num">01</div>墨弾幕レター</a>
-    <a class="card fixed-b" href="01_妖怪図鑑ガチャ.html" target="_blank"><div class="num">01</div>妖怪図鑑ガチャ</a>
-    <a class="card fixed-c" href="01_連打皇帝.html" target="_blank"><div class="num">01</div>連打皇帝</a>
-    <a class="card fixed-a" href="02_スシカラー.html" target="_blank"><div class="num">02</div>スシカラー</a>
-    <a class="card fixed-b" href="03_ぶくぶくラン.html" target="_blank"><div class="num">03</div>ぶくぶくラン</a>
-    <a class="card" href="04_墨斬り.html" target="_blank"><div class="num">04</div>墨斬り</a>
-    <a class="card fixed-d" href="05_ニャンクエスト.html" target="_blank"><div class="num">05</div>ニャンクエスト</a>
-    <a class="card fixed-b" href="06_モンスター大合体.html" target="_blank"><div class="num">06</div>モンスター大合体</a>
-    <a class="card fixed-d" href="07_ビル帝国.html" target="_blank"><div class="num">07</div>ビル帝国</a>
-    <a class="card fixed-c" href="08_鍵穴探偵.html" target="_blank"><div class="num">08</div>鍵穴探偵</a>
-    <a class="card fixed-d" href="09_刹那デッキ.html" target="_blank"><div class="num">09</div>刹那デッキ</a>
-    <a class="card fixed-b" href="10_クレーンコレ.html" target="_blank"><div class="num">10</div>クレーンコレ</a>
-    <a class="card fixed-a" href="11_ハジケバブル.html" target="_blank"><div class="num">11</div>ハジケバブル</a>
-    <a class="card" href="12_うみつり館.html" target="_blank"><div class="num">12</div>うみつり館</a>
-    <a class="card fixed-b" href="13_ゾンビ砦.html" target="_blank"><div class="num">13</div>ゾンビ砦</a>
-    <a class="card" href="14_モグラ烈打.html" target="_blank"><div class="num">14</div>モグラ烈打</a>
-    <a class="card fixed-b" href="15_星ビート.html" target="_blank"><div class="num">15</div>星ビート</a>
-    <a class="card" href="16_たねコレ_.html" target="_blank"><div class="num">16</div>たねコレ</a>
-    <a class="card" href="17_グレイズン.html" target="_blank"><div class="num">17</div>グレイズン</a>
-    <a class="card fixed-d" href="18_変異迷宮.html" target="_blank"><div class="num">18</div>変異迷宮</a>
-    <a class="card fixed-d" href="19_メタルフォース.html" target="_blank"><div class="num">19</div>メタルフォース</a>
-    <a class="card fixed-d" href="20_マグナブレイク.html" target="_blank"><div class="num">20</div>マグナブレイク</a>
-    <a class="card fixed-b" href="21_積み逃げ_.html" target="_blank"><div class="num">21</div>積み逃げ</a>
-    <a class="card fixed-a" href="22_まぜいろ.html" target="_blank"><div class="num">22</div>まぜいろ</a>
-    <a class="card fixed-c" href="23_ワンショット.html" target="_blank"><div class="num">23</div>ワンショット</a>
-    <a class="card fixed-d" href="24_フロウパイプ.html" target="_blank"><div class="num">24</div>フロウパイプ</a>
-    <a class="card fixed-d" href="25_スキマゼロ.html" target="_blank"><div class="num">25</div>スキマゼロ</a>
-    <a class="card fixed-a" href="26_コレコイン.html" target="_blank"><div class="num">26</div>コレコイン</a>
-    <a class="card fixed-d" href="27_コトバ探偵.html" target="_blank"><div class="num">27</div>コトバ探偵</a>
-    <a class="card fixed-d" href="28_ピタジャンプ.html" target="_blank"><div class="num">28</div>ピタジャンプ</a>
-    <a class="card fixed-a" href="29_カゲミチ.html" target="_blank"><div class="num">29</div>カゲミチ</a>
-    <a class="card fixed-c" href="30_爆破清掃隊.html" target="_blank"><div class="num">30</div>爆破清掃隊</a>
+    <a class="card" href="01_ニャン突破.html" target="_blank">ニャン突破</a>
+    <a class="card" href="05_ニャンクエスト.html" target="_blank">ニャンクエスト</a>
+    <a class="card" href="07_ビル帝国.html" target="_blank">ビル帝国</a>
+    <a class="card" href="regen_頂上ドラッグ.html" target="_blank">頂上ドラッグ</a>
   </div>
 </div>
 
-<!-- γ-1 -->
+<!-- destroy -->
 <div class="section">
   <div class="section-title">
-    <span class="badge badge-g1">γ-1</span>
-    精密タップ / UIタップ — 9本
+    <span class="desire-label">壊す</span>
+    <span class="desire-en">destroy</span>
+    <span class="count">6本</span>
   </div>
   <div class="grid">
-    <a class="card" href="g1_01_牌花散らし.html" target="_blank"><div class="num">mahjong_tile</div>牌花散らし</a>
-    <a class="card" href="g1_02_幻画合わせ.html" target="_blank"><div class="num">memory</div>幻画合わせ</a>
-    <a class="card" href="g1_03_かくれんぼ部屋.html" target="_blank"><div class="num">hidden</div>かくれんぼ部屋</a>
-    <a class="card" href="g1_04_破壊ピン.html" target="_blank"><div class="num">pinball</div>破壊ピン</a>
-    <a class="card" href="g1_05_DEAD_BEAT.html" target="_blank"><div class="num">music_hardcore</div>DEAD BEAT</a>
-    <a class="card" href="g1_01_封魔戦記.html" target="_blank"><div class="num">card_game</div>封魔戦記</a>
-    <a class="card" href="g1_01_絵結び.html" target="_blank"><div class="num">tile_match</div>絵結び</a>
-    <a class="card" href="g1_01_もふもふごはん.html" target="_blank"><div class="num">pet</div>もふもふごはん</a>
-    <a class="card" href="g1_01_コスモズーム.html" target="_blank"><div class="num">infinite_zoom</div>コスモズーム</a>
+    <a class="card" href="04_墨斬り.html" target="_blank">墨斬り</a>
+    <a class="card" href="14_モグラ烈打.html" target="_blank">モグラ烈打</a>
+    <a class="card" href="01_墨弾幕レター.html" target="_blank">墨弾幕レター</a>
+    <a class="card" href="23_ワンショット.html" target="_blank">ワンショット</a>
+    <a class="card" href="30_爆破清掃隊.html" target="_blank">爆破清掃隊</a>
+    <a class="card" href="regen_破壊ピン.html" target="_blank">破壊ピン</a>
   </div>
 </div>
 
-<!-- γ-2 -->
+<!-- tidy -->
 <div class="section">
   <div class="section-title">
-    <span class="badge badge-g2">γ-2</span>
-    ドラッグ / 落下 / 描画 — 12本
+    <span class="desire-label">整える</span>
+    <span class="desire-en">tidy</span>
+    <span class="count">6本</span>
   </div>
   <div class="grid">
-    <a class="card" href="g2_01_タワーソート.html" target="_blank"><div class="num">solitaire</div>タワーソート</a>
-    <a class="card" href="g2_01_完全駐車.html" target="_blank"><div class="num">parking</div>完全駐車</a>
-    <a class="card" href="g2_retry_dress_01_コーデバトル.html" target="_blank"><div class="num">dress_up</div>コーデバトル</a>
-    <a class="card" href="g2_01_ドタバタシェフ.html" target="_blank"><div class="num">cooking_action</div>ドタバタシェフ</a>
-    <a class="card" href="g2_retry_scratch_01_スクラッチ運命.html" target="_blank"><div class="num">scratch_luck</div>スクラッチ運命</a>
-    <a class="card" href="g2_01_なぞリン.html" target="_blank"><div class="num">drawing</div>なぞリン</a>
-    <a class="card" href="g2_01_ぬり絵師.html" target="_blank"><div class="num">color_by_num</div>ぬり絵師</a>
-    <a class="card" href="g2_retry_suika_01_フルーツタワー.html" target="_blank"><div class="num">suika</div>フルーツタワー</a>
-    <a class="card" href="g2_01_頂上ドラッグ.html" target="_blank"><div class="num">g2</div>頂上ドラッグ</a>
-    <a class="card" href="g2_02_神引き編成バトル.html" target="_blank"><div class="num">g2</div>神引き編成バトル</a>
-    <a class="card" href="g2_03_三柱図鑑.html" target="_blank"><div class="num">g2</div>三柱図鑑</a>
-    <a class="card" href="g2_04_駿馬伝説GI.html" target="_blank"><div class="num">g2</div>駿馬伝説GI</a>
+    <a class="card" href="21_積み逃げ_.html" target="_blank">積み逃げ</a>
+    <a class="card" href="regen_牌花散らし.html" target="_blank">牌花散らし</a>
+    <a class="card" href="regen_タワーソート.html" target="_blank">タワーソート</a>
+    <a class="card" href="regen_完全駐車.html" target="_blank">完全駐車</a>
+    <a class="card" href="regen_ぬり絵師.html" target="_blank">ぬり絵師</a>
+    <a class="card" href="regen_ドットロジ.html" target="_blank">ドットロジ</a>
   </div>
 </div>
 
-<!-- γ-3 -->
+<!-- nurture -->
 <div class="section">
   <div class="section-title">
-    <span class="badge badge-g3">γ-3</span>
-    静的AI評価 (Playwright不要) — 7本
+    <span class="desire-label">育てる</span>
+    <span class="desire-en">nurture</span>
+    <span class="count">3本</span>
   </div>
   <div class="grid">
-    <a class="card" href="g3_01_運命の木.html" target="_blank"><div class="num">interactive_story</div>運命の木</a>
-    <a class="card" href="g3_02_迷宮通信.html" target="_blank"><div class="num">text_adventure</div>迷宮通信</a>
-    <a class="card" href="g3_03_記憶の栞.html" target="_blank"><div class="num">visual_novel</div>記憶の栞</a>
-    <a class="card" href="g3_04_陣奪い.html" target="_blank"><div class="num">board_game</div>陣奪い</a>
-    <a class="card" href="g3_05_ドットロジ.html" target="_blank"><div class="num">pencil_puzzle</div>ドットロジ</a>
-    <a class="card" href="g3_06_夜の審問.html" target="_blank"><div class="num">social_deduction</div>夜の審問</a>
-    <a class="card" href="g3_07_バカパーティ.html" target="_blank"><div class="num">minigame_party</div>バカパーティ</a>
+    <a class="card" href="regen_駿馬伝説GI.html" target="_blank">駿馬伝説GI</a>
+    <a class="card gap" href="04_スライムせんせい.html" target="_blank">スライムせんせい</a>
+    <a class="card gap" href="08_ぷちガーデン.html" target="_blank">ぷちガーデン</a>
   </div>
 </div>
 
-<!-- γ-4 -->
+<!-- collect -->
 <div class="section">
   <div class="section-title">
-    <span class="badge badge-g4">γ-4</span>
-    構造評価 — 7本 (うち3本は「要確認」= 設計評価のみ)
+    <span class="desire-label">集める</span>
+    <span class="desire-en">collect</span>
+    <span class="count">3本</span>
   </div>
   <div class="grid">
-    <a class="card" href="g4_01_開拓皇帝.html" target="_blank"><div class="num">city_builder</div>開拓皇帝</a>
-    <a class="card" href="g4_02_荒野の王.html" target="_blank"><div class="num">survival_craft</div>荒野の王</a>
-    <a class="card priority" href="g4_03_アヤカシ狩.html" target="_blank"><div class="num">ar_location</div>アヤカシ狩</a>
-    <a class="card priority" href="g4_04_瞬答バトル.html" target="_blank"><div class="num">live_quiz</div>瞬答バトル</a>
-    <a class="card priority" href="g4_05_まちスタ.html" target="_blank"><div class="num">poikatsu</div>まちスタ</a>
-    <a class="card" href="g4_06_完璧帳.html" target="_blank"><div class="num">study_game</div>完璧帳</a>
-    <a class="card" href="g4_07_こもり師.html" target="_blank"><div class="num">asmr</div>こもり師</a>
+    <a class="card" href="16_たねコレ_.html" target="_blank">たねコレ！</a>
+    <a class="card" href="01_妖怪図鑑ガチャ.html" target="_blank">妖怪図鑑ガチャ</a>
+    <a class="card" href="regen_アヤカシ狩.html" target="_blank">アヤカシ狩</a>
   </div>
 </div>
 
-<!-- Gap 10 -->
+<!-- build -->
 <div class="section">
   <div class="section-title">
-    <span class="badge badge-gap">Gap 10</span>
-    desire補完 — 11本（Layer 1完成）
+    <span class="desire-label">作る</span>
+    <span class="desire-en">build</span>
+    <span class="count">3本</span>
   </div>
   <div class="grid">
-    <a class="card" href="01_おならロケット選手権.html" target="_blank"><div class="num">physics</div>おならロケット選手権<br><span class="desire-tag">laugh</span></a>
-    <a class="card" href="02_ズルい問題ばかり.html" target="_blank"><div class="num">escape</div>ズルい問題ばかり<br><span class="desire-tag">laugh</span></a>
-    <a class="card" href="05_おじさんぶつかり王.html" target="_blank"><div class="num">minigame_party</div>おじさんぶつかり王<br><span class="desire-tag">laugh</span></a>
-    <a class="card" href="03_ビートぬりえ.html" target="_blank"><div class="num">color_by_num</div>ビートぬりえ<br><span class="desire-tag">groove</span></a>
-    <a class="card" href="06_ビートジャンプ.html" target="_blank"><div class="num">platform</div>ビートジャンプ<br><span class="desire-tag">groove</span></a>
-    <a class="card" href="07_ビートスライス.html" target="_blank"><div class="num">slice</div>ビートスライス<br><span class="desire-tag">groove</span></a>
-    <a class="card" href="04_スライムせんせい.html" target="_blank"><div class="num">pet</div>スライムせんせい<br><span class="desire-tag">nurture</span></a>
-    <a class="card" href="08_ぷちガーデン.html" target="_blank"><div class="num">farm</div>ぷちガーデン<br><span class="desire-tag">nurture</span></a>
-    <a class="card" href="09_さよなら宇宙犬.html" target="_blank"><div class="num">interactive_story</div>さよなら宇宙犬<br><span class="desire-tag">feel</span></a>
-    <a class="card" href="12_運命の木.html" target="_blank"><div class="num">interactive_story</div>運命の木（再生成）<br><span class="desire-tag">feel</span></a>
-    <a class="card" href="15_連打皇帝.html" target="_blank"><div class="num">reflex</div>連打皇帝（再生成）<br><span class="desire-tag">beat</span></a>
+    <a class="card" href="regen_なぞリン.html" target="_blank">なぞリン</a>
+    <a class="card" href="regen_開拓皇帝.html" target="_blank">開拓皇帝</a>
+    <a class="card" href="regen_荒野の王.html" target="_blank">荒野の王</a>
+  </div>
+</div>
+
+<!-- solve -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">解く</span>
+    <span class="desire-en">solve</span>
+    <span class="count">5本</span>
+  </div>
+  <div class="grid">
+    <a class="card" href="08_鍵穴探偵.html" target="_blank">鍵穴探偵</a>
+    <a class="card" href="24_フロウパイプ.html" target="_blank">フロウパイプ</a>
+    <a class="card" href="29_カゲミチ.html" target="_blank">カゲミチ</a>
+    <a class="card" href="regen_幻画合わせ.html" target="_blank">幻画合わせ</a>
+    <a class="card" href="regen_かくれんぼ部屋.html" target="_blank">かくれんぼ部屋</a>
+  </div>
+</div>
+
+<!-- beat -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">勝つ</span>
+    <span class="desire-en">beat</span>
+    <span class="count">2本</span>
+  </div>
+  <div class="grid">
+    <a class="card" href="regen_ドタバタシェフ.html" target="_blank">ドタバタシェフ</a>
+    <a class="card gap" href="15_連打皇帝.html" target="_blank">連打皇帝</a>
+  </div>
+</div>
+
+<!-- survive -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">生き延びる</span>
+    <span class="desire-en">survive</span>
+    <span class="count">5本</span>
+  </div>
+  <div class="grid">
+    <a class="card" href="01_クラッシュドロップ.html" target="_blank">クラッシュドロップ</a>
+    <a class="card" href="03_ぶくぶくラン.html" target="_blank">ぶくぶくラン</a>
+    <a class="card" href="13_ゾンビ砦.html" target="_blank">ゾンビ砦</a>
+    <a class="card" href="17_グレイズン.html" target="_blank">グレイズン</a>
+    <a class="card" href="01_残光バトル.html" target="_blank">残光バトル</a>
+  </div>
+</div>
+
+<!-- feel -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">没入する</span>
+    <span class="desire-en">feel</span>
+    <span class="count">4本</span>
+  </div>
+  <div class="grid">
+    <a class="card" href="regen_コスモズーム.html" target="_blank">コスモズーム</a>
+    <a class="card" href="regen_迷宮通信.html" target="_blank">迷宮通信</a>
+    <a class="card gap" href="09_さよなら宇宙犬.html" target="_blank">さよなら宇宙犬</a>
+    <a class="card gap" href="12_運命の木.html" target="_blank">運命の木</a>
+  </div>
+</div>
+
+<!-- relax -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">癒される</span>
+    <span class="desire-en">relax</span>
+    <span class="count">3本</span>
+  </div>
+  <div class="grid">
+    <a class="card" href="12_うみつり館.html" target="_blank">うみつり館</a>
+    <a class="card" href="26_コレコイン.html" target="_blank">コレコイン</a>
+    <a class="card" href="regen_スクラッチ運命.html" target="_blank">スクラッチ運命</a>
+  </div>
+</div>
+
+<!-- groove -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">乗る</span>
+    <span class="desire-en">groove</span>
+    <span class="count">3本</span>
+  </div>
+  <div class="grid">
+    <a class="card gap" href="03_ビートぬりえ.html" target="_blank">ビートぬりえ</a>
+    <a class="card gap" href="06_ビートジャンプ.html" target="_blank">ビートジャンプ</a>
+    <a class="card gap" href="07_ビートスライス.html" target="_blank">ビートスライス</a>
+  </div>
+</div>
+
+<!-- laugh -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">笑う</span>
+    <span class="desire-en">laugh</span>
+    <span class="count">3本</span>
+  </div>
+  <div class="grid">
+    <a class="card gap" href="01_おならロケット選手権.html" target="_blank">おならロケット選手権</a>
+    <a class="card gap" href="02_ズルい問題ばかり.html" target="_blank">ズルい問題ばかり</a>
+    <a class="card gap" href="05_おじさんぶつかり王.html" target="_blank">おじさんぶつかり王</a>
   </div>
 </div>
 
