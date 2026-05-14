@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簡易麻雀</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: #0a1a0a; font-family: Arial, sans-serif;
+        }
+        #gameContainer { position: relative; }
+        canvas { display: block; cursor: pointer; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92);
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #fff; gap: 14px; z-index: 100; text-align: center; padding: 20px;
+        }
+        .screen h1 { font-size: 40px; color: #f6e05e; }
+        .screen p { font-size: 13px; line-height: 1.8; max-width: 340px; }
+        .screen button {
+            padding: 10px 30px; font-size: 15px; border: none;
+            border-radius: 6px; cursor: pointer; background: #276749; color: #fff;
+        }
+        .screen button:hover { background: #38a169; }
+        #discardPrompt {
+            position: absolute; bottom: 8px; left: 0; width: 100%;
+            text-align: center; display: none; z-index: 60;
+        }
+        #discardMsg { color: #f6e05e; font-size: 14px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>🀄 簡易麻雀</h1>
+        <p>手牌14枚 + ツモ1枚 = 15枚構成。<br>
+        不要な牌をクリックして捨てよう。<br><br>
+        <strong>和了条件:</strong> 雀頭1組 + 面子4組の形<br>
+        （タンヤオ: 1/9/字牌なし で+ボーナス）<br><br>
+        ツモ和了5回でクリア！<br>
+        （山牌が尽きたらゲームオーバー）</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">5回和了！麻雀マスター！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">GAME OVER</h1>
+        <p id="overMsg">山牌が尽きました…</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="discardPrompt">
+        <div id="discardMsg">ツモ牌が来た！不要な牌をクリックして捨てる</div>
+    </div>
+</div>
+<script>
+const W = 640, H = 480;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+
+// Tiles: man(m) 1-9, pin(p) 1-9, sou(s) 1-9
+// Create full set of 36 tiles x4 = 144 tiles (simplified: use 27 types x4 = 108)
+function makeDeck() {
+    const deck = [];
+    const suits = ['m','p','s'];
+    for (const suit of suits) {
+        for (let n = 1; n <= 9; n++) {
+            for (let copy = 0; copy < 4; copy++) {
+                deck.push({ suit, n, id: suit + n + '_' + copy });
+            }
+        }
+    }
+    return deck;
+}
+
+function shuffleDeck(deck) {
+    const a = [...deck];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+function tileName(t) {
+    const suitNames = { m:'万', p:'筒', s:'索' };
+    return t.n + suitNames[t.suit];
+}
+
+function tileColor(t) {
+    if (t.suit === 'm') return '#c53030';
+    if (t.suit === 'p') return '#2b6cb0';
+    return '#276749';
+}
+
+// Sort hand
+function sortHand(hand) {
+    return [...hand].sort((a, b) => {
+        const suitOrder = { m: 0, p: 1, s: 2 };
+        return suitOrder[a.suit] - suitOrder[b.suit] || a.n - b.n;
+    });
+}
+
+// Check if a set of tiles forms a complete hand (4 mentsu + 1 jantai)
+function isComplete(tiles) {
+    if (tiles.length !== 14) return false;
+    const key = tiles.map(t => t.suit + t.n).sort().join(',');
+    return checkWin(tiles.map(t => ({ suit: t.suit, n: t.n })));
+}
+
+function checkWin(tiles) {
+    // Try each tile as jantai (pair)
+    const seen = new Set();
+    for (let i = 0; i < tiles.length; i++) {
+        const t = tiles[i];
+        const key = t.suit + t.n;
+        if (seen.has(key + '_' + i)) continue;
+        // Try to use tiles[i] and another matching tile as jantai
+        for (let j = i + 1; j < tiles.length; j++) {
+            if (tiles[j].suit === t.suit && tiles[j].n === t.n) {
+                seen.add(key + '_' + i);
+                // Remove these two, try to form 4 mentsu from the rest
+                const rest = tiles.filter((_, idx) => idx !== i && idx !== j);
+                if (canFormMentsu(rest, 4)) return true;
+                break;
+            }
+        }
+    }
+    return false;
+}
+
+function canFormMentsu(tiles, needed) {
+    if (needed === 0) return tiles.length === 0;
+    if (tiles.length === 0) return needed === 0;
+    const sorted = [...tiles].sort((a, b) => {
+        const so = { m:0, p:1, s:2 };
+        return so[a.suit] - so[b.suit] || a.n - b.n;
+    });
+    const first = sorted[0];
+    // Try kootsu (triplet)
+    const matches = sorted.filter(t => t.suit === first.suit && t.n === first.n);
+    if (matches.length >= 3) {
+        const used = [matches[0], matches[1], matches[2]];
+        const remaining = removeUsed(sorted, used);
+        if (canFormMentsu(remaining, needed - 1)) return true;
+    }
+    // Try shuntsu (sequence)
+    const t2 = sorted.find(t => t.suit === first.suit && t.n === first.n + 1);
+    const t3 = sorted.find(t => t.suit === first.suit && t.n === first.n + 2);
+    if (t2 && t3) {
+        const remaining = removeUsed(sorted, [first, t2, t3]);
+        if (canFormMentsu(remaining, needed - 1)) return true;
+    }
+    return false;
+}
+
+function removeUsed(tiles, used) {
+    const result = [...tiles];
+    for (const u of used) {
+        const idx = result.findIndex(t => t === u);
+        if (idx >= 0) result.splice(idx, 1);
+    }
+    return result;
+}
+
+function isTanyao(tiles) {
+    return tiles.every(t => t.n >= 2 && t.n <= 8);
+}
+
+const gameState = {
+    running: false,
+    deck: [],
+    hand: [],
+    tsumoTile: null,
+    winCount: 0,
+    discardPile: [],
+    phase: 'wait', // wait | discard | win
+    selectedDiscard: null,
+    tsumoFlash: 0,
+    winMsg: '',
+    winMsgTimer: 0,
+};
+let gameLoop = null;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    const deck = shuffleDeck(makeDeck());
+    gameState.running = true;
+    gameState.deck = deck.slice(14);
+    gameState.hand = sortHand(deck.slice(0, 14));
+    gameState.tsumoTile = null;
+    gameState.winCount = 0;
+    gameState.discardPile = [];
+    gameState.phase = 'wait';
+    gameState.selectedDiscard = null;
+    gameState.tsumoFlash = 0;
+    gameState.winMsg = '';
+    gameState.winMsgTimer = 0;
+    document.getElementById('discardPrompt').style.display = 'none';
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+    draw();
+}
+
+function retryGame() {
+    gameState.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+    document.getElementById('discardPrompt').style.display = 'none';
+}
+
+function doTsumo() {
+    if (!gameState.running || gameState.phase !== 'wait') return;
+    if (gameState.deck.length === 0) {
+        endGame('山牌が尽きました…' + gameState.winCount + '回和了');
+        return;
+    }
+    gameState.tsumoTile = gameState.deck.shift();
+    gameState.tsumoFlash = 40;
+
+    // Check tsumo win (14 hand + tsumo = 15 → check with tsumo as 15th)
+    const testHand = [...gameState.hand, gameState.tsumoTile];
+    if (isComplete(testHand)) {
+        // Win!
+        const tanStr = isTanyao(testHand) ? ' ✨タンヤオ' : '';
+        gameState.winMsg = 'ツモ！' + tanStr;
+        gameState.winMsgTimer = 120;
+        gameState.winCount++;
+        gameState.hand = sortHand(testHand.slice(0, 13)); // discard one implicitly
+        gameState.tsumoTile = null;
+        if (gameState.winCount >= 5) {
+            setTimeout(() => {
+                clearGame();
+            }, 1000);
+            return;
+        }
+        // New hand
+        setTimeout(() => {
+            if (gameState.deck.length < 14) {
+                endGame('山牌が残り少ない…' + gameState.winCount + '回和了');
+                return;
+            }
+            const newDeck = shuffleDeck(makeDeck());
+            gameState.deck = newDeck.slice(14);
+            gameState.hand = sortHand(newDeck.slice(0, 14));
+            gameState.tsumoTile = null;
+            gameState.phase = 'wait';
+            document.getElementById('discardPrompt').style.display = 'none';
+            draw();
+        }, 1200);
+        return;
+    }
+
+    // No win, need to discard
+    gameState.phase = 'discard';
+    document.getElementById('discardPrompt').style.display = 'block';
+    document.getElementById('discardMsg').innerText = '「' + tileName(gameState.tsumoTile) + '」をツモ！捨てる牌をクリック（ツモ牌は右端）';
+    draw();
+}
+
+function discardTile(tileIdx, isTsumoTile) {
+    if (!gameState.running || gameState.phase !== 'discard') return;
+    let discarded;
+    if (isTsumoTile) {
+        discarded = gameState.tsumoTile;
+        gameState.tsumoTile = null;
+    } else {
+        discarded = gameState.hand[tileIdx];
+        gameState.hand.splice(tileIdx, 1);
+        gameState.hand.push(gameState.tsumoTile);
+        gameState.hand = sortHand(gameState.hand);
+        gameState.tsumoTile = null;
+    }
+    gameState.discardPile.push(discarded);
+    gameState.phase = 'wait';
+    document.getElementById('discardPrompt').style.display = 'none';
+    draw();
+}
+
+function clearGame() {
+    gameState.running = false;
+    clearInterval(gameLoop);
+    document.getElementById('discardPrompt').style.display = 'none';
+    document.getElementById('clearMsg').innerText = '5回ツモ和了！完璧！';
+    document.getElementById('clearScreen').style.display = 'flex';
+}
+
+function endGame(msg) {
+    gameState.running = false;
+    clearInterval(gameLoop);
+    document.getElementById('discardPrompt').style.display = 'none';
+    document.getElementById('overMsg').innerText = msg;
+    document.getElementById('gameOverScreen').style.display = 'flex';
+}
+
+function update() {
+    if (!gameState.running) return;
+    if (gameState.tsumoFlash > 0) gameState.tsumoFlash--;
+    if (gameState.winMsgTimer > 0) gameState.winMsgTimer--;
+    draw();
+}
+
+const TILE_W = 38, TILE_H = 52;
+function tileX(i, total, startX) {
+    return startX + i * (TILE_W + 3);
+}
+
+canvas.addEventListener('click', function(e) {
+    if (!gameState.running) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    if (gameState.phase === 'wait') {
+        // Tsumo button area
+        if (mx > W/2 - 60 && mx < W/2 + 60 && my > H/2 - 20 && my < H/2 + 20) {
+            doTsumo();
+        }
+    } else if (gameState.phase === 'discard') {
+        const handY = H - 80;
+        const handStartX = (W - (14 * (TILE_W + 3) - 3)) / 2;
+        // Check hand tiles
+        for (let i = 0; i < gameState.hand.length; i++) {
+            const tx = handStartX + i * (TILE_W + 3);
+            if (mx >= tx && mx <= tx + TILE_W && my >= handY && my <= handY + TILE_H) {
+                discardTile(i, false);
+                return;
+            }
+        }
+        // Check tsumo tile (after gap)
+        if (gameState.tsumoTile) {
+            const tsumoX = handStartX + gameState.hand.length * (TILE_W + 3) + 10;
+            if (mx >= tsumoX && mx <= tsumoX + TILE_W && my >= handY && my <= handY + TILE_H) {
+                discardTile(-1, true);
+            }
+        }
+    }
+});
+
+function drawTile(tile, x, y, highlight, flash) {
+    const tileColor2 = tileColor(tile);
+    const bg = highlight ? '#fefcbf' : (flash ? '#fef3c7' : '#fffef0');
+    ctx.fillStyle = bg;
+    ctx.strokeStyle = highlight ? '#d69e2e' : (flash ? '#f6e05e' : '#a0916a');
+    ctx.lineWidth = highlight ? 2.5 : 1.5;
+    ctx.fillRect(x, y, TILE_W, TILE_H);
+    ctx.strokeRect(x, y, TILE_W, TILE_H);
+
+    ctx.fillStyle = tileColor2;
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(tile.n, x + TILE_W/2, y + TILE_H/2 - 6);
+
+    ctx.font = '10px Arial';
+    ctx.fillStyle = tileColor2;
+    const suitChars = { m:'万', p:'筒', s:'索' };
+    ctx.fillText(suitChars[tile.suit], x + TILE_W/2, y + TILE_H/2 + 10);
+}
+
+function draw() {
+    ctx.fillStyle = '#1a2e1a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.fillStyle = '#f6e05e';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('簡易麻雀 — ツモ和了 ' + gameState.winCount + ' / 5', W/2, 10);
+
+    // Deck count
+    ctx.fillStyle = '#90cdf4';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('山牌残り: ' + gameState.deck.length + '枚', 10, 14);
+
+    // Discard pile (recent)
+    ctx.fillStyle = '#a0aec0';
+    ctx.textAlign = 'right';
+    ctx.fillText('捨て牌: ' + gameState.discardPile.map(t => tileName(t)).slice(-8).join(' '), W - 10, 14);
+
+    // Hand tiles
+    const handY = H - 80;
+    const handStartX = (W - (gameState.hand.length * (TILE_W + 3) - 3)) / 2;
+    for (let i = 0; i < gameState.hand.length; i++) {
+        const tx = handStartX + i * (TILE_W + 3);
+        drawTile(gameState.hand[i], tx, handY, false, false);
+    }
+
+    // Tsumo tile
+    if (gameState.tsumoTile) {
+        const tsumoX = handStartX + gameState.hand.length * (TILE_W + 3) + 10;
+        const flash = gameState.tsumoFlash > 0 && Math.floor(gameState.tsumoFlash / 5) % 2 === 0;
+        drawTile(gameState.tsumoTile, tsumoX, handY, true, flash);
+        ctx.fillStyle = '#f6e05e';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('ツモ', tsumoX + TILE_W/2, handY - 2);
+    }
+
+    // Hand label
+    ctx.fillStyle = '#68d391';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('あなたの手牌（14枚）', W/2, handY - 4);
+
+    // Win message
+    if (gameState.winMsgTimer > 0) {
+        ctx.globalAlpha = Math.min(1, gameState.winMsgTimer / 30);
+        ctx.fillStyle = '#f6e05e';
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(gameState.winMsg, W/2, H/2 - 60);
+        ctx.globalAlpha = 1;
+    }
+
+    // Middle status / tsumo button
+    if (gameState.phase === 'wait' && gameState.winMsgTimer === 0) {
+        ctx.fillStyle = '#38a169';
+        ctx.beginPath();
+        ctx.roundRect(W/2 - 80, H/2 - 24, 160, 48, 8);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🀄 ツモ', W/2, H/2);
+
+        // Check if current hand can tsumo (for hint)
+        ctx.fillStyle = '#a0aec0';
+        ctx.font = '12px Arial';
+        ctx.textBaseline = 'top';
+        ctx.fillText('クリックで山牌から1枚引く', W/2, H/2 + 30);
+
+        // Hand analysis hint
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#90cdf4';
+        ctx.font = '11px Arial';
+        const tanyao = isTanyao(gameState.hand);
+        ctx.fillText('現在の手: ' + (tanyao ? 'タンヤオ形' : '混合形'), W/2, H/2 - 30);
+    }
+
+    // Discard instruction overlay
+    if (gameState.phase === 'discard') {
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(0, H - 100, W, 20);
+    }
+}
+</script>
+</body>
+</html>

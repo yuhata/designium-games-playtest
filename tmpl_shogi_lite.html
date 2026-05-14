@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ミニ将棋 5×5</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: #1a1000; font-family: Arial, sans-serif;
+        }
+        #gameContainer { position: relative; }
+        canvas { display: block; cursor: pointer; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #fff; gap: 14px; z-index: 100; text-align: center; padding: 20px;
+        }
+        .screen h1 { font-size: 40px; color: #f6e05e; }
+        .screen p { font-size: 14px; line-height: 1.7; max-width: 320px; }
+        .screen button {
+            padding: 12px 36px; font-size: 16px; border: none;
+            border-radius: 6px; cursor: pointer; background: #d69e2e; color: #1a1000;
+        }
+        .screen button:hover { background: #f6ad55; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>ミニ将棋 5×5</h1>
+        <p>5×5の簡易将棋。<br>
+        駒: 王・飛・角・金・銀<br>
+        相手の王を詰ませよう！<br><br>
+        クリックで駒を選択→移動先クリック<br>CPUはランダム移動</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p>相手の王を詰めた！<br>将棋マスター！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">GAME OVER</h1>
+        <p>王が取られた…</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+<script>
+const COLS = 5, ROWS = 5;
+const SQ = 82;
+const W = COLS * SQ + 60, H = ROWS * SQ + 100;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+const BOARD_X = 30, BOARD_Y = 50;
+
+// Pieces: type, owner(0=player/bottom, 1=cpu/top)
+// type: K=king, R=rook, B=bishop, G=gold, S=silver
+// Initial layout (5×5 mini shogi standard)
+// Row 0 (top/cpu):   K G S B R   (owner=1, facing down)
+// Row 4 (bottom/player): R B S G K (owner=0, facing up)
+
+function makeInitBoard() {
+    const board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    // CPU (top, row 0): R B S G K  (from col 0)
+    board[0][4] = { type: 'K', owner: 1 };
+    board[0][3] = { type: 'G', owner: 1 };
+    board[0][2] = { type: 'S', owner: 1 };
+    board[0][1] = { type: 'B', owner: 1 };
+    board[0][0] = { type: 'R', owner: 1 };
+    // Player (bottom, row 4): K G S B R (from col 0)
+    board[4][0] = { type: 'K', owner: 0 };
+    board[4][1] = { type: 'G', owner: 0 };
+    board[4][2] = { type: 'S', owner: 0 };
+    board[4][3] = { type: 'B', owner: 0 };
+    board[4][4] = { type: 'R', owner: 0 };
+    return board;
+}
+
+const PIECE_NAMES = { K: '王', R: '飛', B: '角', G: '金', S: '銀' };
+
+function getMoves(board, row, col) {
+    const piece = board[row][col];
+    if (!piece) return [];
+    const moves = [];
+    const dir = piece.owner === 0 ? -1 : 1; // player moves up (-1), cpu moves down (+1)
+    const add = (r, c) => {
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+        const target = board[r][c];
+        if (target && target.owner === piece.owner) return false;
+        moves.push([r, c]);
+        return !target; // can continue sliding if no capture
+    };
+    switch (piece.type) {
+        case 'K':
+            for (let dr = -1; dr <= 1; dr++)
+                for (let dc = -1; dc <= 1; dc++)
+                    if (dr !== 0 || dc !== 0) add(row + dr, col + dc);
+            break;
+        case 'R': // rook slides
+            for (let i = 1; i < 5; i++) { if (!add(row - i, col)) break; }
+            for (let i = 1; i < 5; i++) { if (!add(row + i, col)) break; }
+            for (let i = 1; i < 5; i++) { if (!add(row, col - i)) break; }
+            for (let i = 1; i < 5; i++) { if (!add(row, col + i)) break; }
+            break;
+        case 'B': // bishop slides diagonals
+            for (let i = 1; i < 5; i++) { if (!add(row - i, col - i)) break; }
+            for (let i = 1; i < 5; i++) { if (!add(row - i, col + i)) break; }
+            for (let i = 1; i < 5; i++) { if (!add(row + i, col - i)) break; }
+            for (let i = 1; i < 5; i++) { if (!add(row + i, col + i)) break; }
+            break;
+        case 'G': // gold: all adjacent except backward diagonals
+            [[dir,0],[dir,-1],[dir,1],[0,-1],[0,1],[-dir,0]].forEach(([dr,dc]) => add(row+dr, col+dc));
+            break;
+        case 'S': // silver: forward + 4 diagonals
+            [[dir,0],[dir,-1],[dir,1],[-dir,-1],[-dir,1]].forEach(([dr,dc]) => add(row+dr, col+dc));
+            break;
+    }
+    return moves;
+}
+
+const gameState = {
+    running: false,
+    board: null,
+    selected: null,
+    validMoves: [],
+    turn: 0,
+    status: '',
+    cpuThinking: false,
+};
+let gameLoop = null;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    gameState.running = true;
+    gameState.board = makeInitBoard();
+    gameState.selected = null;
+    gameState.validMoves = [];
+    gameState.turn = 0;
+    gameState.status = 'あなたの番（下の駒）';
+    gameState.cpuThinking = false;
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+    draw();
+}
+
+function retryGame() {
+    gameState.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function boardCoord(px, py) {
+    const col = Math.floor((px - BOARD_X) / SQ);
+    const row = Math.floor((py - BOARD_Y) / SQ);
+    if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
+    return [row, col];
+}
+
+canvas.addEventListener('click', function(e) {
+    if (!gameState.running || gameState.turn !== 0 || gameState.cpuThinking) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    const coord = boardCoord(px, py);
+    if (!coord) return;
+    const [row, col] = coord;
+
+    if (gameState.selected) {
+        // Try move
+        const isValid = gameState.validMoves.some(([r, c]) => r === row && c === col);
+        if (isValid) {
+            doMove(gameState.board, gameState.selected[0], gameState.selected[1], row, col);
+            gameState.selected = null;
+            gameState.validMoves = [];
+            const res = checkEndCondition();
+            if (res) return;
+            gameState.turn = 1;
+            gameState.status = 'CPUの番…';
+            gameState.cpuThinking = true;
+            setTimeout(cpuMove, 600);
+        } else {
+            // Re-select
+            const piece = gameState.board[row][col];
+            if (piece && piece.owner === 0) {
+                gameState.selected = [row, col];
+                gameState.validMoves = getMoves(gameState.board, row, col);
+            } else {
+                gameState.selected = null;
+                gameState.validMoves = [];
+            }
+        }
+    } else {
+        const piece = gameState.board[row][col];
+        if (piece && piece.owner === 0) {
+            gameState.selected = [row, col];
+            gameState.validMoves = getMoves(gameState.board, row, col);
+        }
+    }
+    draw();
+});
+
+function doMove(board, fr, fc, tr, tc) {
+    board[tr][tc] = board[fr][fc];
+    board[fr][fc] = null;
+}
+
+function findKing(board, owner) {
+    for (let r = 0; r < ROWS; r++)
+        for (let c = 0; c < COLS; c++)
+            if (board[r][c] && board[r][c].type === 'K' && board[r][c].owner === owner)
+                return [r, c];
+    return null;
+}
+
+function checkEndCondition() {
+    if (!findKing(gameState.board, 1)) {
+        // CPU king captured
+        gameState.running = false;
+        clearInterval(gameLoop);
+        document.getElementById('clearScreen').style.display = 'flex';
+        return true;
+    }
+    if (!findKing(gameState.board, 0)) {
+        gameState.running = false;
+        clearInterval(gameLoop);
+        document.getElementById('gameOverScreen').style.display = 'flex';
+        return true;
+    }
+    return false;
+}
+
+function cpuMove() {
+    if (!gameState.running) return;
+    // Collect all valid moves for CPU
+    const allMoves = [];
+    for (let r = 0; r < ROWS; r++)
+        for (let c = 0; c < COLS; c++) {
+            const p = gameState.board[r][c];
+            if (!p || p.owner !== 1) continue;
+            const mvs = getMoves(gameState.board, r, c);
+            mvs.forEach(([tr, tc]) => allMoves.push([r, c, tr, tc]));
+        }
+    if (allMoves.length === 0) {
+        // No moves = player wins
+        gameState.running = false;
+        clearInterval(gameLoop);
+        document.getElementById('clearScreen').style.display = 'flex';
+        return;
+    }
+    // Prefer captures (especially player king)
+    let chosen = null;
+    const captures = allMoves.filter(([,, tr, tc]) => gameState.board[tr][tc] !== null);
+    if (captures.length > 0) chosen = captures[Math.floor(Math.random() * captures.length)];
+    else chosen = allMoves[Math.floor(Math.random() * allMoves.length)];
+    doMove(gameState.board, chosen[0], chosen[1], chosen[2], chosen[3]);
+    const res = checkEndCondition();
+    if (!res) {
+        gameState.turn = 0;
+        gameState.status = 'あなたの番（下の駒）';
+        gameState.cpuThinking = false;
+    }
+    draw();
+}
+
+function update() { if (!gameState.running) return; }
+
+function draw() {
+    ctx.fillStyle = '#2d1a00';
+    ctx.fillRect(0, 0, W, H);
+
+    // Board
+    ctx.fillStyle = '#f0d890';
+    ctx.fillRect(BOARD_X, BOARD_Y, COLS * SQ, ROWS * SQ);
+
+    // Grid
+    ctx.strokeStyle = '#8b6914';
+    ctx.lineWidth = 1;
+    for (let r = 0; r <= ROWS; r++) {
+        ctx.beginPath();
+        ctx.moveTo(BOARD_X, BOARD_Y + r * SQ);
+        ctx.lineTo(BOARD_X + COLS * SQ, BOARD_Y + r * SQ);
+        ctx.stroke();
+    }
+    for (let c = 0; c <= COLS; c++) {
+        ctx.beginPath();
+        ctx.moveTo(BOARD_X + c * SQ, BOARD_Y);
+        ctx.lineTo(BOARD_X + c * SQ, BOARD_Y + ROWS * SQ);
+        ctx.stroke();
+    }
+
+    // Valid move highlights
+    for (const [r, c] of gameState.validMoves) {
+        ctx.fillStyle = 'rgba(56,161,105,0.45)';
+        ctx.fillRect(BOARD_X + c * SQ + 2, BOARD_Y + r * SQ + 2, SQ - 4, SQ - 4);
+    }
+    // Selected highlight
+    if (gameState.selected) {
+        const [sr, sc] = gameState.selected;
+        ctx.fillStyle = 'rgba(246,224,94,0.45)';
+        ctx.fillRect(BOARD_X + sc * SQ + 2, BOARD_Y + sr * SQ + 2, SQ - 4, SQ - 4);
+    }
+
+    // Pieces
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const p = gameState.board[r][c];
+            if (!p) continue;
+            const px = BOARD_X + c * SQ + SQ / 2;
+            const py = BOARD_Y + r * SQ + SQ / 2;
+            const isPlayer = p.owner === 0;
+
+            ctx.save();
+            ctx.translate(px, py);
+            if (!isPlayer) ctx.rotate(Math.PI);
+
+            // Pentagon piece shape
+            ctx.fillStyle = isPlayer ? '#fff8dc' : '#ffd0d0';
+            ctx.strokeStyle = isPlayer ? '#8b6914' : '#8b1414';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const hw = SQ * 0.38, hh = SQ * 0.42;
+            ctx.moveTo(0, -hh);
+            ctx.lineTo(hw * 0.7, -hh * 0.3);
+            ctx.lineTo(hw, hh);
+            ctx.lineTo(-hw, hh);
+            ctx.lineTo(-hw * 0.7, -hh * 0.3);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+
+            ctx.fillStyle = isPlayer ? '#2d1a00' : '#8b1414';
+            ctx.font = 'bold ' + (p.type === 'K' ? 22 : 18) + 'px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(PIECE_NAMES[p.type], 0, 3);
+            ctx.restore();
+        }
+    }
+
+    // Status
+    ctx.fillStyle = '#f6e05e';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(gameState.status, W / 2, BOARD_Y - 6);
+
+    // Labels
+    ctx.fillStyle = '#a0aec0';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('CPU (上)', BOARD_X, BOARD_Y + 2);
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('あなた (下)', BOARD_X, BOARD_Y + ROWS * SQ - 2);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>漢字クイズ</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: #1a1a2e; font-family: 'Arial', sans-serif;
+        }
+        #gameContainer { position: relative; }
+        canvas { display: block; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #fff; gap: 16px; z-index: 100; text-align: center; padding: 20px;
+        }
+        .screen h1 { font-size: 42px; color: #f6e05e; }
+        .screen p { font-size: 16px; line-height: 1.7; max-width: 340px; }
+        .screen button {
+            padding: 12px 40px; font-size: 17px; border: none;
+            border-radius: 6px; cursor: pointer; background: #9f7aea; color: #fff;
+        }
+        .screen button:hover { background: #b39ddb; }
+        #quizPanel {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column;
+            align-items: center; padding: 20px; gap: 14px; z-index: 50;
+        }
+        #progressBar {
+            width: 90%; height: 8px; background: #2d2d5e;
+            border-radius: 4px; overflow: hidden;
+        }
+        #progressFill { height: 100%; background: #9f7aea; transition: width 0.3s; width: 0%; }
+        #qNum { color: #aaa; font-size: 13px; }
+        #kanjiDisplay {
+            font-size: 96px; color: #f6e05e; text-align: center;
+            text-shadow: 0 0 20px rgba(246,224,94,0.4); line-height: 1;
+        }
+        #hintBox {
+            background: rgba(255,255,255,0.08); border-radius: 6px;
+            padding: 6px 14px; color: #90cdf4; font-size: 13px;
+            min-height: 28px; text-align: center;
+        }
+        #choicesGrid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 10px; width: 90%; max-width: 380px;
+        }
+        .choiceBtn {
+            padding: 14px 8px; font-size: 16px; border: 2px solid #4a4a8a;
+            border-radius: 8px; cursor: pointer; background: #2d2b6e; color: #fff;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .choiceBtn:hover { background: #3d3b8e; border-color: #9f7aea; }
+        .choiceBtn.correct { background: #276749; border-color: #38a169; }
+        .choiceBtn.wrong { background: #742a2a; border-color: #e53e3e; }
+        #hintBtn {
+            padding: 6px 20px; font-size: 13px; border: 1px solid #4a4a8a;
+            border-radius: 4px; cursor: pointer; background: transparent; color: #90cdf4;
+        }
+        #hintBtn:hover { background: rgba(144,205,244,0.1); }
+        #feedback { color: #f6e05e; font-size: 16px; font-weight: bold; min-height: 24px; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>漢字クイズ</h1>
+        <p>漢字の読みを選べ！<br>
+        全10問・8問正解でクリア。<br>
+        ヒントボタンで部首のヒントを表示できるよ。</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">全問正解！さすが！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">GAME OVER</h1>
+        <p id="overMsg">残念… 不正解が多すぎました</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <canvas id="gameCanvas" style="display:none"></canvas>
+    <div id="quizPanel">
+        <div id="progressBar"><div id="progressFill"></div></div>
+        <div id="qNum">問題 1 / 10</div>
+        <div id="kanjiDisplay">漢</div>
+        <div id="hintBox">ヒントはこちら</div>
+        <div id="choicesGrid">
+            <button class="choiceBtn" id="choice0" onclick="answer(0)"></button>
+            <button class="choiceBtn" id="choice1" onclick="answer(1)"></button>
+            <button class="choiceBtn" id="choice2" onclick="answer(2)"></button>
+            <button class="choiceBtn" id="choice3" onclick="answer(3)"></button>
+        </div>
+        <button id="hintBtn" onclick="showHint()">💡 部首ヒント</button>
+        <div id="feedback"></div>
+    </div>
+</div>
+<script>
+const W = 480, H = 540;
+const canvas = document.getElementById('gameCanvas');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+
+const QUESTIONS = [
+    { kanji: '憂', correct: 'うれい', choices: ['うれい','さびし','なやみ','かなし'], hint: '部首: 心（こころ）' },
+    { kanji: '謹', correct: 'つつし', choices: ['つつし','おごそ','やはら','おだや'], hint: '部首: 言（ごんべん）' },
+    { kanji: '醸', correct: 'かも',   choices: ['かも','にお','はぐく','つちか'], hint: '部首: 酉（とりへん）' },
+    { kanji: '暁', correct: 'あかつき', choices: ['あかつき','たそがれ','まぼろし','たちまち'], hint: '部首: 日（にちへん）' },
+    { kanji: '碑', correct: 'いしぶみ', choices: ['いしぶみ','ふみいし','とおいし','きざみ'], hint: '部首: 石（いしへん）' },
+    { kanji: '嗜', correct: 'たしな', choices: ['たしな','たくわ','たずさ','たがや'], hint: '部首: 口（くちへん）' },
+    { kanji: '憫', correct: 'あわれ', choices: ['あわれ','ちから','いのり','おそれ'], hint: '部首: 心（りっしんべん）' },
+    { kanji: '燦', correct: 'きらめ', choices: ['きらめ','しずか','あかる','たかぶ'], hint: '部首: 火（ひへん）' },
+    { kanji: '漣', correct: 'さざなみ', choices: ['さざなみ','みなかみ','さかしら','かわかみ'], hint: '部首: 水（さんずい）' },
+    { kanji: '閑', correct: 'しずか', choices: ['しずか','にぎやか','あらたか','のどか'], hint: '部首: 門（もんがまえ）' },
+];
+
+const gameState = {
+    running: false,
+    qIdx: 0,
+    correct: 0,
+    wrong: 0,
+    answered: false,
+    order: [],
+};
+let gameLoop = null;
+
+function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('quizPanel').style.display = 'flex';
+    gameState.running = true;
+    gameState.qIdx = 0;
+    gameState.correct = 0;
+    gameState.wrong = 0;
+    gameState.answered = false;
+    gameState.order = shuffle([...Array(QUESTIONS.length).keys()]);
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+    showQuestion();
+}
+
+function showQuestion() {
+    const q = QUESTIONS[gameState.order[gameState.qIdx]];
+    gameState.answered = false;
+    document.getElementById('qNum').innerText = '問題 ' + (gameState.qIdx + 1) + ' / ' + QUESTIONS.length;
+    document.getElementById('progressFill').style.width = (gameState.qIdx / QUESTIONS.length * 100) + '%';
+    document.getElementById('kanjiDisplay').innerText = q.kanji;
+    document.getElementById('hintBox').innerText = '「💡 部首ヒント」を押してヒントを見る';
+    document.getElementById('feedback').innerText = '';
+    const shuffled = shuffle(q.choices);
+    for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById('choice' + i);
+        btn.innerText = shuffled[i];
+        btn.className = 'choiceBtn';
+        btn.disabled = false;
+        btn.dataset.val = shuffled[i];
+    }
+}
+
+function showHint() {
+    const q = QUESTIONS[gameState.order[gameState.qIdx]];
+    document.getElementById('hintBox').innerText = q.hint;
+}
+
+function answer(idx) {
+    if (!gameState.running || gameState.answered) return;
+    gameState.answered = true;
+    const q = QUESTIONS[gameState.order[gameState.qIdx]];
+    const chosen = document.getElementById('choice' + idx).dataset.val;
+    const isCorrect = (chosen === q.correct);
+    document.getElementById('choice' + idx).className = 'choiceBtn ' + (isCorrect ? 'correct' : 'wrong');
+    if (!isCorrect) {
+        for (let i = 0; i < 4; i++) {
+            if (document.getElementById('choice' + i).dataset.val === q.correct) {
+                document.getElementById('choice' + i).className = 'choiceBtn correct';
+            }
+        }
+        gameState.wrong++;
+    } else {
+        gameState.correct++;
+    }
+    document.getElementById('feedback').innerText = isCorrect ? '✅ 正解！' : '❌ 不正解。正解は「' + q.correct + '」';
+    for (let i = 0; i < 4; i++) document.getElementById('choice' + i).disabled = true;
+
+    setTimeout(() => {
+        gameState.qIdx++;
+        if (gameState.qIdx >= QUESTIONS.length) {
+            endQuiz();
+        } else {
+            showQuestion();
+        }
+    }, 1200);
+}
+
+function endQuiz() {
+    gameState.running = false;
+    clearInterval(gameLoop);
+    document.getElementById('quizPanel').style.display = 'none';
+    const passed = gameState.correct >= 8;
+    if (passed) {
+        document.getElementById('clearMsg').innerText = gameState.correct + '問正解！合格！';
+        document.getElementById('clearScreen').style.display = 'flex';
+    } else {
+        document.getElementById('overMsg').innerText = gameState.correct + '問正解。8問以上で合格です';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+}
+
+function retryGame() {
+    gameState.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('quizPanel').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function update() { if (!gameState.running) return; }
+</script>
+</body>
+</html>

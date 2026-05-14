@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太鼓リズム</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: #1a0505; font-family: Arial, sans-serif;
+        }
+        #gameContainer { position: relative; }
+        canvas { display: block; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #fff; gap: 14px; z-index: 100; text-align: center; padding: 20px;
+        }
+        .screen h1 { font-size: 42px; color: #f6e05e; }
+        .screen p { font-size: 15px; line-height: 1.7; max-width: 320px; }
+        .screen button {
+            padding: 12px 36px; font-size: 16px; border: none;
+            border-radius: 6px; cursor: pointer; background: #e53e3e; color: #fff;
+        }
+        .screen button:hover { background: #fc5c5c; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>🥁 太鼓リズム</h1>
+        <p>赤ノーツ（ドン）: D / F キー<br>
+        青ノーツ（カツ）: J / K キー<br><br>
+        判定ラインに合わせて叩け！<br>
+        全32ノーツ・70%ヒットでクリア</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">全クリア！太鼓の達人！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">GAME OVER</h1>
+        <p id="overMsg">もう少し！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+<script>
+const W = 560, H = 400;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+
+const JUDGE_X = 120;
+const NOTE_Y = H / 2;
+const HIT_WINDOW = 38;
+const NOTE_SPEED = 4.5;
+const TOTAL_NOTES = 32;
+
+// Generate note pattern: 0=don(red), 1=katsu(blue)
+function genNotes() {
+    const pattern = [];
+    const bpm = 120, beatMs = (60000 / bpm);
+    const startDelay = 1200;
+    // 32 notes, alternating with occasional doubles
+    const seq = [0,1,0,0,1,0,1,1,0,1,0,0,1,0,0,1,
+                 0,0,1,0,1,0,1,1,0,1,0,1,0,0,1,0];
+    for (let i = 0; i < TOTAL_NOTES; i++) {
+        // travel time = distance / speed * 16ms/frame
+        const spawnT = startDelay + i * beatMs * 0.75;
+        const travelT = (W - JUDGE_X) / NOTE_SPEED * 16;
+        pattern.push({
+            type: seq[i % seq.length],
+            spawnTime: spawnT,
+            x: W + 30,
+            active: true,
+            hit: false,
+            miss: false,
+            flashTimer: 0,
+        });
+    }
+    return pattern;
+}
+
+const gameState = {
+    running: false,
+    notes: [],
+    spawnIdx: 0,
+    elapsed: 0,
+    hits: 0,
+    misses: 0,
+    combo: 0,
+    maxCombo: 0,
+    totalSpawned: 0,
+    activeNotes: [],
+    feedback: '',
+    feedbackTimer: 0,
+    feedbackColor: '#fff',
+    drumFlash: { left: 0, right: 0 },
+};
+let gameLoop = null;
+let lastTime = 0;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    gameState.running = true;
+    gameState.notes = genNotes();
+    gameState.spawnIdx = 0;
+    gameState.elapsed = 0;
+    gameState.hits = 0;
+    gameState.misses = 0;
+    gameState.combo = 0;
+    gameState.maxCombo = 0;
+    gameState.totalSpawned = 0;
+    gameState.activeNotes = [];
+    gameState.feedback = '';
+    gameState.feedbackTimer = 0;
+    gameState.drumFlash = { left: 0, right: 0 };
+    lastTime = Date.now();
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+}
+
+function retryGame() {
+    gameState.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function hitDon() {
+    if (!gameState.running) return;
+    gameState.drumFlash.left = 8;
+    tryHit(0);
+}
+function hitKatsu() {
+    if (!gameState.running) return;
+    gameState.drumFlash.right = 8;
+    tryHit(1);
+}
+
+function tryHit(type) {
+    // Find closest note in window matching type
+    let best = null, bestDist = Infinity;
+    for (const n of gameState.activeNotes) {
+        if (!n.active || n.hit || n.type !== type) continue;
+        const dist = Math.abs(n.x - JUDGE_X);
+        if (dist < HIT_WINDOW && dist < bestDist) {
+            best = n; bestDist = dist;
+        }
+    }
+    if (best) {
+        best.hit = true;
+        best.active = false;
+        gameState.hits++;
+        gameState.combo++;
+        if (gameState.combo > gameState.maxCombo) gameState.maxCombo = gameState.combo;
+        const grade = bestDist < 16 ? '🔥 PERFECT' : '✅ GOOD';
+        setFeedback(grade, '#f6e05e');
+    } else {
+        // Empty hit
+        setFeedback('空振り', '#aaa');
+    }
+}
+
+function setFeedback(msg, color) {
+    gameState.feedback = msg;
+    gameState.feedbackColor = color;
+    gameState.feedbackTimer = 45;
+}
+
+function update() {
+    if (!gameState.running) return;
+    const now = Date.now();
+    const dt = now - lastTime;
+    lastTime = now;
+    gameState.elapsed += dt;
+
+    // Spawn notes
+    while (gameState.spawnIdx < gameState.notes.length &&
+           gameState.notes[gameState.spawnIdx].spawnTime <= gameState.elapsed) {
+        const n = gameState.notes[gameState.spawnIdx];
+        gameState.activeNotes.push(n);
+        gameState.totalSpawned++;
+        gameState.spawnIdx++;
+    }
+
+    // Move notes
+    for (const n of gameState.activeNotes) {
+        if (!n.active) continue;
+        n.x -= NOTE_SPEED;
+        if (n.x < JUDGE_X - HIT_WINDOW - 20 && !n.hit) {
+            n.active = false;
+            n.miss = true;
+            gameState.misses++;
+            gameState.combo = 0;
+            setFeedback('MISS', '#e53e3e');
+        }
+    }
+
+    // Remove very old notes
+    gameState.activeNotes = gameState.activeNotes.filter(n => n.x > -60);
+
+    if (gameState.feedbackTimer > 0) gameState.feedbackTimer--;
+    if (gameState.drumFlash.left > 0) gameState.drumFlash.left--;
+    if (gameState.drumFlash.right > 0) gameState.drumFlash.right--;
+
+    // Check end
+    if (gameState.spawnIdx >= gameState.notes.length && gameState.activeNotes.every(n => !n.active)) {
+        endGame();
+        return;
+    }
+
+    draw();
+}
+
+function endGame() {
+    gameState.running = false;
+    clearInterval(gameLoop);
+    const hitRate = gameState.hits / TOTAL_NOTES;
+    if (hitRate >= 0.7) {
+        document.getElementById('clearMsg').innerText =
+            gameState.hits + '/' + TOTAL_NOTES + 'ヒット（' + Math.round(hitRate * 100) + '%）最大コンボ:' + gameState.maxCombo;
+        document.getElementById('clearScreen').style.display = 'flex';
+    } else {
+        document.getElementById('overMsg').innerText =
+            gameState.hits + '/' + TOTAL_NOTES + 'ヒット（' + Math.round(hitRate * 100) + '%）70%以上でクリア';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+}
+
+function draw() {
+    // BG
+    ctx.fillStyle = '#2d0505';
+    ctx.fillRect(0, 0, W, H);
+
+    // Lane
+    ctx.fillStyle = '#3d1010';
+    ctx.fillRect(0, NOTE_Y - 50, W, 100);
+    ctx.strokeStyle = '#7b2d2d';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, NOTE_Y - 50); ctx.lineTo(W, NOTE_Y - 50); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, NOTE_Y + 50); ctx.lineTo(W, NOTE_Y + 50); ctx.stroke();
+
+    // Judgment line
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(JUDGE_X, NOTE_Y - 55);
+    ctx.lineTo(JUDGE_X, NOTE_Y + 55);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(JUDGE_X - HIT_WINDOW, NOTE_Y - 52, HIT_WINDOW * 2, 104);
+
+    // Notes
+    for (const n of gameState.activeNotes) {
+        if (!n.active || n.x < 0 || n.x > W) continue;
+        const isRed = n.type === 0;
+        ctx.fillStyle = isRed ? '#e53e3e' : '#3182ce';
+        ctx.strokeStyle = isRed ? '#fc5c5c' : '#63b3ed';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(n.x, NOTE_Y, 26, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isRed ? 'ド' : 'カ', n.x, NOTE_Y);
+    }
+
+    // Drum (taiko) at left
+    const drumX = JUDGE_X - 10, drumY = NOTE_Y;
+    const flashL = gameState.drumFlash.left > 0;
+    const flashR = gameState.drumFlash.right > 0;
+    ctx.fillStyle = flashL ? '#fc8181' : '#c53030';
+    ctx.beginPath();
+    ctx.arc(drumX - 22, drumY, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = flashR ? '#63b3ed' : '#2b6cb0';
+    ctx.beginPath();
+    ctx.arc(drumX + 22, drumY, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(drumX - 22, drumY, 20, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(drumX + 22, drumY, 20, 0, Math.PI * 2); ctx.stroke();
+
+    // HUD
+    ctx.fillStyle = '#f6e05e';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('HIT: ' + gameState.hits + ' / ' + TOTAL_NOTES, 10, 10);
+    ctx.fillStyle = '#90cdf4';
+    ctx.fillText('COMBO: ' + gameState.combo, 10, 32);
+    ctx.fillStyle = '#fc8181';
+    ctx.fillText('MISS: ' + gameState.misses, 10, 54);
+
+    // Progress
+    const prog = gameState.spawnIdx / TOTAL_NOTES;
+    ctx.fillStyle = '#2d3748';
+    ctx.fillRect(W - 170, 10, 160, 12);
+    ctx.fillStyle = '#e53e3e';
+    ctx.fillRect(W - 170, 10, 160 * prog, 12);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(W - 170, 10, 160, 12);
+
+    // Key hints
+    ctx.fillStyle = '#e53e3e';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('D / F ドン', W / 2 - 80, H - 8);
+    ctx.fillStyle = '#3182ce';
+    ctx.fillText('J / K カツ', W / 2 + 80, H - 8);
+
+    // Feedback
+    if (gameState.feedbackTimer > 0) {
+        ctx.globalAlpha = Math.min(1, gameState.feedbackTimer / 20);
+        ctx.fillStyle = gameState.feedbackColor;
+        ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(gameState.feedback, JUDGE_X + 60, NOTE_Y - 70);
+        ctx.globalAlpha = 1;
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    if (!gameState.running) return;
+    switch (e.key) {
+        case 'd': case 'f': case 'D': case 'F': hitDon(); break;
+        case 'j': case 'k': case 'J': case 'K': hitKatsu(); break;
+    }
+});
+</script>
+</body>
+</html>

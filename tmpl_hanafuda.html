@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花札 こいこい</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: #1a0a00; font-family: Arial, sans-serif;
+        }
+        #gameContainer { position: relative; }
+        canvas { display: block; cursor: pointer; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92);
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #fff; gap: 14px; z-index: 100; text-align: center; padding: 24px;
+        }
+        .screen h1 { font-size: 42px; color: #f6e05e; }
+        .screen p { font-size: 14px; line-height: 1.8; max-width: 320px; }
+        .screen button {
+            padding: 10px 30px; font-size: 16px; border: none;
+            border-radius: 6px; cursor: pointer; background: #c53030; color: #fff;
+            margin: 4px;
+        }
+        .screen button:hover { background: #fc5c5c; }
+        .screen button.green { background: #276749; }
+        .screen button.green:hover { background: #38a169; }
+        #koikoiDialog {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            background: rgba(26,10,0,0.97); border: 3px solid #d69e2e;
+            border-radius: 12px; padding: 24px; text-align: center;
+            display: none; z-index: 200; min-width: 260px;
+        }
+        #koikoiDialog h2 { color: #f6e05e; font-size: 22px; margin-bottom: 8px; }
+        #koikoiDialog p { color: #fff; font-size: 14px; margin-bottom: 14px; }
+        #koikoiDialog button {
+            padding: 10px 24px; font-size: 15px; border: none;
+            border-radius: 6px; cursor: pointer; margin: 4px;
+        }
+        #btnKoikoi { background: #c53030; color: #fff; }
+        #btnShobu { background: #276749; color: #fff; }
+        #btnKoikoi:hover { background: #fc5c5c; }
+        #btnShobu:hover { background: #38a169; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>🌸 花札 こいこい</h1>
+        <p>花札のこいこいルール。<br>
+        手札から1枚選び → 場の同じ月のカードと合わせよう。<br>
+        役が完成したら「こいこい」か「勝負」を選択。<br><br>
+        役：三光 / 花見 / 月見 / 猪鹿蝶 / 五短冊<br>
+        7点以上獲得でクリア！</p>
+        <button class="green" onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">こいこい勝利！</p>
+        <button class="green" onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">GAME OVER</h1>
+        <p id="overMsg">負けました…</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="koikoiDialog">
+        <h2>🎉 役が完成！</h2>
+        <p id="yakuMsg"></p>
+        <button id="btnKoikoi" onclick="chooseKoikoi()">こいこい（続ける）</button>
+        <button id="btnShobu" onclick="chooseShobu()">勝負（終了）</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+<script>
+const W = 600, H = 540;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+
+// Card definitions: {id, month, type:'hikari'|'tan'|'kasu', name, specials:[]}
+// Specials: 'sanko'(三光), 'hanami'(花見桜), 'tsukimi'(月見), 'sake'(菊の杯), 'ino'(猪), 'shika'(鹿), 'cho'(蝶)
+const ALL_CARDS = [];
+function defCard(id, month, type, name, specials) { ALL_CARDS.push({ id, month, type, name, specials: specials || [] }); }
+
+// Month 1 松
+defCard(0, 1, 'hikari', '松に鶴', ['sanko']);
+defCard(1, 1, 'tan', '松の短冊', ['akatan']);
+defCard(2, 1, 'kasu', '松カス', []);
+defCard(3, 1, 'kasu', '松カス2', []);
+// Month 2 梅
+defCard(4, 2, 'tan', '梅の短冊', ['akatan']);
+defCard(5, 2, 'tan', '梅の短冊2', []);
+defCard(6, 2, 'kasu', '梅カス', []);
+defCard(7, 2, 'kasu', '梅カス2', []);
+// Month 3 桜
+defCard(8, 3, 'hikari', '桜に幕', ['sanko', 'hanami']);
+defCard(9, 3, 'tan', '桜の短冊', ['akatan']);
+defCard(10, 3, 'kasu', '桜カス', []);
+defCard(11, 3, 'kasu', '桜カス2', []);
+// Month 4 藤
+defCard(12, 4, 'tan', '藤の短冊', ['aotan']);
+defCard(13, 4, 'kasu', '藤カス', []);
+defCard(14, 4, 'kasu', '藤カス2', []);
+defCard(15, 4, 'kasu', '藤カス3', []);
+// Month 5 菖蒲
+defCard(16, 5, 'tan', '菖蒲の短冊', ['aotan']);
+defCard(17, 5, 'kasu', '菖蒲カス', []);
+defCard(18, 5, 'kasu', '菖蒲カス2', []);
+defCard(19, 5, 'kasu', '菖蒲カス3', []);
+// Month 6 牡丹
+defCard(20, 6, 'tan', '牡丹の短冊', ['aotan']);
+defCard(21, 6, 'kasu', '牡丹に蝶', ['cho']);
+defCard(22, 6, 'kasu', '牡丹カス', []);
+defCard(23, 6, 'kasu', '牡丹カス2', []);
+// Month 7 萩
+defCard(24, 7, 'tan', '萩の短冊', []);
+defCard(25, 7, 'kasu', '萩に猪', ['ino']);
+defCard(26, 7, 'kasu', '萩カス', []);
+defCard(27, 7, 'kasu', '萩カス2', []);
+// Month 8 芒
+defCard(28, 8, 'hikari', '芒に月', ['sanko', 'tsukimi']);
+defCard(29, 8, 'tan', '芒に雁', []);
+defCard(30, 8, 'kasu', '芒カス', []);
+defCard(31, 8, 'kasu', '芒カス2', []);
+// Month 9 菊
+defCard(32, 9, 'tan', '菊の短冊', ['aotan']);
+defCard(33, 9, 'kasu', '菊に杯', ['sake']);
+defCard(34, 9, 'kasu', '菊カス', []);
+defCard(35, 9, 'kasu', '菊カス2', []);
+// Month 10 紅葉
+defCard(36, 10, 'hikari', '紅葉に鹿', ['sanko', 'shika']);
+defCard(37, 10, 'tan', '紅葉の短冊', ['aotan']);
+defCard(38, 10, 'kasu', '紅葉カス', []);
+defCard(39, 10, 'kasu', '紅葉カス2', []);
+// Month 11 柳
+defCard(40, 11, 'hikari', '柳に小野道風', ['sanko']);
+defCard(41, 11, 'tan', '柳の短冊', []);
+defCard(42, 11, 'kasu', '柳に燕', []);
+defCard(43, 11, 'kasu', '柳カス', []);
+// Month 12 桐
+defCard(44, 12, 'hikari', '桐に鳳凰', ['sanko']);
+defCard(45, 12, 'kasu', '桐カス', []);
+defCard(46, 12, 'kasu', '桐カス2', []);
+defCard(47, 12, 'kasu', '桐カス3', []);
+
+const MONTH_COLORS = {
+    1:'#276749', 2:'#9b2c2c', 3:'#d53f8c', 4:'#553c9a',
+    5:'#2b6cb0', 6:'#b83280', 7:'#c53030', 8:'#b7791f',
+    9:'#4a5568', 10:'#7b341e', 11:'#1a202c', 12:'#d69e2e'
+};
+const MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+const gameState = {
+    running: false,
+    phase: 'start', // player_select | player_field | cpu | koikoi | end
+    deck: [],
+    playerHand: [],
+    cpuHand: [],
+    fieldCards: [],
+    playerCaptures: [],
+    cpuCaptures: [],
+    selectedHandCard: null,
+    playerPoints: 0,
+    cpuPoints: 0,
+    playerKoikoi: false,
+    cpuKoikoi: false,
+    statusMsg: '',
+    pendingYaku: null,
+    lastMsg: '',
+    msgTimer: 0,
+};
+let gameLoop = null;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('koikoiDialog').style.display = 'none';
+
+    const shuffled = shuffle(ALL_CARDS.map(c => c.id));
+    gameState.running = true;
+    gameState.phase = 'player_select';
+    gameState.playerHand = shuffled.slice(0, 8);
+    gameState.cpuHand = shuffled.slice(8, 16);
+    gameState.fieldCards = shuffled.slice(16, 24);
+    gameState.deck = shuffled.slice(24);
+    gameState.playerCaptures = [];
+    gameState.cpuCaptures = [];
+    gameState.selectedHandCard = null;
+    gameState.playerPoints = 0;
+    gameState.cpuPoints = 0;
+    gameState.playerKoikoi = false;
+    gameState.cpuKoikoi = false;
+    gameState.statusMsg = '手札から1枚選んでください';
+    gameState.lastMsg = '';
+    gameState.msgTimer = 0;
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+    draw();
+}
+
+function retryGame() {
+    gameState.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function getCard(id) { return ALL_CARDS.find(c => c.id === id); }
+
+function fieldMatchIds(month) {
+    return gameState.fieldCards.filter(id => getCard(id).month === month);
+}
+
+canvas.addEventListener('click', function(e) {
+    if (!gameState.running) return;
+    if (gameState.phase !== 'player_select' && gameState.phase !== 'player_field') return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    handlePlayerClick(mx, my);
+});
+
+function handlePlayerClick(mx, my) {
+    if (gameState.phase === 'player_select') {
+        const idx = getClickedHandCard(mx, my, gameState.playerHand, true);
+        if (idx >= 0) {
+            gameState.selectedHandCard = gameState.playerHand[idx];
+            gameState.phase = 'player_field';
+            const card = getCard(gameState.selectedHandCard);
+            const matches = fieldMatchIds(card.month);
+            if (matches.length === 0) {
+                gameState.statusMsg = '場に同月カードなし → クリックで捨てる';
+            } else {
+                gameState.statusMsg = '場の同月カードか「捨てる」をクリック';
+            }
+            draw();
+        }
+    } else if (gameState.phase === 'player_field') {
+        // Check if clicked on field card
+        const fieldIdx = getClickedFieldCard(mx, my);
+        if (fieldIdx >= 0) {
+            const fieldCardId = gameState.fieldCards[fieldIdx];
+            const handCard = getCard(gameState.selectedHandCard);
+            const fieldCard = getCard(fieldCardId);
+            if (fieldCard.month === handCard.month) {
+                // Match!
+                playerCapture(gameState.selectedHandCard, fieldCardId);
+            } else {
+                showMsg('月が違います！');
+            }
+        } else if (isDiscardArea(mx, my)) {
+            // Discard
+            playerDiscard();
+        } else {
+            // Re-select
+            gameState.selectedHandCard = null;
+            gameState.phase = 'player_select';
+            gameState.statusMsg = '手札から1枚選んでください';
+            draw();
+        }
+    }
+}
+
+function showMsg(msg) { gameState.lastMsg = msg; gameState.msgTimer = 80; draw(); }
+
+function playerCapture(handId, fieldId) {
+    gameState.playerHand = gameState.playerHand.filter(id => id !== handId);
+    gameState.fieldCards = gameState.fieldCards.filter(id => id !== fieldId);
+    gameState.playerCaptures.push(handId, fieldId);
+    gameState.selectedHandCard = null;
+    // Draw from deck
+    deckDraw(true);
+}
+
+function playerDiscard() {
+    const id = gameState.selectedHandCard;
+    gameState.playerHand = gameState.playerHand.filter(i => i !== id);
+    gameState.fieldCards.push(id);
+    gameState.selectedHandCard = null;
+    // Draw from deck
+    deckDraw(true);
+}
+
+function deckDraw(isPlayer) {
+    if (gameState.deck.length === 0) {
+        endRound();
+        return;
+    }
+    const drawnId = gameState.deck.shift();
+    const drawn = getCard(drawnId);
+    const matches = fieldMatchIds(drawn.month);
+    if (matches.length > 0) {
+        // Auto-pickup first match
+        const matched = matches[0];
+        gameState.fieldCards = gameState.fieldCards.filter(id => id !== matched);
+        if (isPlayer) {
+            gameState.playerCaptures.push(drawnId, matched);
+            showMsg('山札から「' + drawn.name + '」→ 場と合わせた！');
+        } else {
+            gameState.cpuCaptures.push(drawnId, matched);
+        }
+    } else {
+        gameState.fieldCards.push(drawnId);
+        if (isPlayer) showMsg('山札から「' + drawn.name + '」→ 場に追加');
+    }
+
+    if (isPlayer) {
+        // Check yaku
+        const yaku = checkYaku(gameState.playerCaptures);
+        if (yaku.length > 0) {
+            const newPts = calcPoints(yaku);
+            showKoikoiDialog(yaku, newPts);
+        } else {
+            startCpuTurn();
+        }
+    } else {
+        // Check cpu yaku
+        const yaku = checkYaku(gameState.cpuCaptures);
+        if (yaku.length > 0 && !gameState.cpuKoikoi) {
+            // CPU always says こいこい for first yaku, then 勝負
+            gameState.cpuKoikoi = true;
+            const newPts = calcPoints(yaku);
+            gameState.cpuPoints = newPts;
+            showMsg('CPU が役を作った（' + yaku[0].name + '）こいこい！');
+            setTimeout(() => {
+                gameState.statusMsg = '手札から1枚選んでください';
+                gameState.phase = 'player_select';
+                draw();
+            }, 1200);
+        } else if (yaku.length > 0 && gameState.cpuKoikoi) {
+            // CPU declares 勝負
+            const newPts = calcPoints(yaku);
+            gameState.cpuPoints = newPts;
+            cpuWins();
+        } else {
+            gameState.statusMsg = '手札から1枚選んでください';
+            gameState.phase = 'player_select';
+            draw();
+        }
+    }
+}
+
+function startCpuTurn() {
+    gameState.phase = 'cpu';
+    gameState.statusMsg = 'CPU のターン…';
+    draw();
+    setTimeout(doCpuTurn, 900);
+}
+
+function doCpuTurn() {
+    if (!gameState.running || gameState.phase !== 'cpu') return;
+    if (gameState.cpuHand.length === 0) { endRound(); return; }
+
+    // CPU tries to match, else discards first card
+    let chosen = null, chosenField = null;
+    for (const id of gameState.cpuHand) {
+        const card = getCard(id);
+        const matches = fieldMatchIds(card.month);
+        if (matches.length > 0) {
+            chosen = id;
+            chosenField = matches[0];
+            break;
+        }
+    }
+    if (chosen) {
+        gameState.cpuHand = gameState.cpuHand.filter(id => id !== chosen);
+        gameState.fieldCards = gameState.fieldCards.filter(id => id !== chosenField);
+        gameState.cpuCaptures.push(chosen, chosenField);
+    } else {
+        const discardId = gameState.cpuHand[0];
+        gameState.cpuHand = gameState.cpuHand.filter(id => id !== discardId);
+        gameState.fieldCards.push(discardId);
+    }
+    deckDraw(false);
+}
+
+// Yaku definitions
+function checkYaku(captures) {
+    const cards = captures.map(id => getCard(id));
+    const yaku = [];
+
+    const hikari = cards.filter(c => c.type === 'hikari');
+    const tan = cards.filter(c => c.type === 'tan');
+    const hasSpec = (sp) => cards.some(c => c.specials.includes(sp));
+
+    // 三光 (3 hikari)
+    if (hikari.length >= 3) yaku.push({ name: '三光', pts: 5 });
+    // 五光 (5 hikari)
+    if (hikari.length >= 5) yaku.push({ name: '五光', pts: 10 });
+    // 花見 (hanami + sake)
+    if (hasSpec('hanami') && hasSpec('sake')) yaku.push({ name: '花見で一杯', pts: 5 });
+    // 月見 (tsukimi + sake)
+    if (hasSpec('tsukimi') && hasSpec('sake')) yaku.push({ name: '月見で一杯', pts: 5 });
+    // 猪鹿蝶
+    if (hasSpec('ino') && hasSpec('shika') && hasSpec('cho')) yaku.push({ name: '猪鹿蝶', pts: 5 });
+    // 赤短 (3 akatan)
+    if (cards.filter(c => c.specials.includes('akatan')).length >= 3) yaku.push({ name: '赤短', pts: 5 });
+    // 青短 (3 aotan)
+    if (cards.filter(c => c.specials.includes('aotan')).length >= 3) yaku.push({ name: '青短', pts: 5 });
+    // 短冊5枚以上 (たん)
+    if (tan.length >= 5) yaku.push({ name: 'たん（' + tan.length + '枚）', pts: tan.length - 4 });
+
+    return yaku;
+}
+
+function calcPoints(yakuList) {
+    if (yakuList.length === 0) return 0;
+    return yakuList.reduce((sum, y) => sum + y.pts, 0);
+}
+
+function showKoikoiDialog(yaku, pts) {
+    const yakuNames = yaku.map(y => y.name + '(' + y.pts + 'pts)').join('、');
+    document.getElementById('yakuMsg').innerText = yakuNames + '\n' + pts + '点！続ける？終わる？';
+    gameState.pendingYaku = { yaku, pts };
+    gameState.phase = 'koikoi';
+    document.getElementById('koikoiDialog').style.display = 'block';
+    draw();
+}
+
+function chooseKoikoi() {
+    document.getElementById('koikoiDialog').style.display = 'none';
+    gameState.playerKoikoi = true;
+    gameState.playerPoints = gameState.pendingYaku.pts;
+    gameState.pendingYaku = null;
+    gameState.statusMsg = 'こいこい！続けます';
+    draw();
+    setTimeout(() => {
+        startCpuTurn();
+    }, 600);
+}
+
+function chooseShobu() {
+    document.getElementById('koikoiDialog').style.display = 'none';
+    gameState.playerPoints = gameState.pendingYaku.pts;
+    if (gameState.cpuKoikoi) gameState.playerPoints *= 2; // double if cpu had koikoi'd
+    gameState.pendingYaku = null;
+    if (gameState.playerPoints >= 7) {
+        clearGame();
+    } else {
+        gameState.statusMsg = '勝負！' + gameState.playerPoints + '点獲得。次の勝負へ…';
+        // Continue as a new round or end
+        gameState.phase = 'player_select';
+        draw();
+    }
+}
+
+function endRound() {
+    // No more cards - compare points
+    const pPts = calcPoints(checkYaku(gameState.playerCaptures));
+    const cPts = calcPoints(checkYaku(gameState.cpuCaptures));
+    if (pPts > cPts && pPts >= 7) {
+        gameState.playerPoints = pPts;
+        clearGame();
+    } else if (cPts > pPts) {
+        gameState.cpuPoints = cPts;
+        cpuWins();
+    } else {
+        gameState.running = false;
+        clearInterval(gameLoop);
+        document.getElementById('overMsg').innerText = '引き分け…（あなた:' + pPts + '点 CPU:' + cPts + '点）7点未満';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+}
+
+function clearGame() {
+    gameState.running = false;
+    clearInterval(gameLoop);
+    document.getElementById('clearMsg').innerText = gameState.playerPoints + '点獲得！こいこい勝利！';
+    document.getElementById('clearScreen').style.display = 'flex';
+}
+
+function cpuWins() {
+    gameState.running = false;
+    clearInterval(gameLoop);
+    document.getElementById('overMsg').innerText = 'CPUが役を作った…（CPU: ' + gameState.cpuPoints + '点）';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+}
+
+// Layout helpers
+const CARD_W = 42, CARD_H = 58;
+
+function handCardX(i, total) {
+    const spacing = Math.min(CARD_W + 4, (W - 40) / Math.max(1, total));
+    const totalW = spacing * (total - 1) + CARD_W;
+    return (W - totalW) / 2 + i * spacing;
+}
+
+function getClickedHandCard(mx, my, hand, isPlayer) {
+    const y0 = isPlayer ? H - 70 : 10;
+    for (let i = 0; i < hand.length; i++) {
+        const x = handCardX(i, hand.length);
+        if (mx >= x && mx <= x + CARD_W && my >= y0 && my <= y0 + CARD_H) return i;
+    }
+    return -1;
+}
+
+function getClickedFieldCard(mx, my) {
+    const total = gameState.fieldCards.length;
+    for (let i = 0; i < total; i++) {
+        const x = handCardX(i, total);
+        const y = H / 2 - CARD_H / 2 - 10;
+        if (mx >= x && mx <= x + CARD_W && my >= y && my <= y + CARD_H) return i;
+    }
+    return -1;
+}
+
+function isDiscardArea(mx, my) {
+    return my > H - 100 && my < H - 60;
+}
+
+function drawCard(id, x, y, highlight, faceDown) {
+    if (faceDown) {
+        ctx.fillStyle = '#553c9a';
+        ctx.strokeStyle = '#6b46c1';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(x, y, CARD_W, CARD_H);
+        ctx.strokeRect(x, y, CARD_W, CARD_H);
+        ctx.fillStyle = '#7c6fa0';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('☆', x + CARD_W/2, y + CARD_H/2);
+        return;
+    }
+    const card = getCard(id);
+    const col = MONTH_COLORS[card.month];
+    ctx.fillStyle = highlight ? '#f6e05e' : col;
+    ctx.strokeStyle = highlight ? '#fff' : '#000';
+    ctx.lineWidth = highlight ? 2 : 1.5;
+    ctx.fillRect(x, y, CARD_W, CARD_H);
+    ctx.strokeRect(x, y, CARD_W, CARD_H);
+
+    // Month label
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillRect(x + 2, y + 2, CARD_W - 4, 14);
+    ctx.fillStyle = '#000';
+    ctx.font = '8px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(MONTH_NAMES[card.month - 1], x + CARD_W/2, y + 3);
+
+    // Type indicator
+    let typeLabel = card.type === 'hikari' ? '光' : (card.type === 'tan' ? '短' : '');
+    let typeColor = card.type === 'hikari' ? '#f6e05e' : (card.type === 'tan' ? '#fc8181' : 'transparent');
+    if (typeLabel) {
+        ctx.fillStyle = typeColor;
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(typeLabel, x + CARD_W/2, y + CARD_H/2 + 4);
+    }
+
+    // Special indicator
+    const sp = card.specials;
+    let spIcon = '';
+    if (sp.includes('ino')) spIcon = '🐗';
+    else if (sp.includes('shika')) spIcon = '🦌';
+    else if (sp.includes('cho')) spIcon = '🦋';
+    else if (sp.includes('sake')) spIcon = '🍶';
+    if (spIcon) {
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(spIcon, x + CARD_W/2, y + CARD_H - 2);
+    }
+}
+
+function update() { if (!gameState.running) return; if (gameState.msgTimer > 0) gameState.msgTimer--; }
+
+function draw() {
+    ctx.fillStyle = '#1a0500';
+    ctx.fillRect(0, 0, W, H);
+
+    // Deck count
+    ctx.fillStyle = '#d69e2e';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('山札: ' + gameState.deck.length + '枚', 10, 10);
+
+    // CPU hand (face down)
+    ctx.fillStyle = '#a0aec0';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('CPU 手札 (' + gameState.cpuHand.length + '枚)', W/2, 10);
+    for (let i = 0; i < gameState.cpuHand.length; i++) {
+        drawCard(gameState.cpuHand[i], handCardX(i, gameState.cpuHand.length), 26, false, true);
+    }
+
+    // Field cards
+    ctx.fillStyle = '#f6e05e';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('場', W/2, H/2 - CARD_H/2 - 24);
+    for (let i = 0; i < gameState.fieldCards.length; i++) {
+        const x = handCardX(i, gameState.fieldCards.length);
+        const y = H/2 - CARD_H/2 - 10;
+        const isMatch = gameState.selectedHandCard !== null &&
+            getCard(gameState.fieldCards[i]).month === getCard(gameState.selectedHandCard).month;
+        drawCard(gameState.fieldCards[i], x, y, isMatch, false);
+    }
+
+    // Player captures summary
+    const playerYaku = checkYaku(gameState.playerCaptures);
+    const playerPts = calcPoints(playerYaku);
+    ctx.fillStyle = '#90cdf4';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText('獲得: ' + gameState.playerCaptures.length/2 + '合わせ ' + playerPts + 'pts', W - 10, H/2 + CARD_H/2 + 20);
+
+    // Player hand
+    ctx.fillStyle = '#68d391';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('あなたの手札 (' + gameState.playerHand.length + '枚)', W/2, H - 90);
+    for (let i = 0; i < gameState.playerHand.length; i++) {
+        const x = handCardX(i, gameState.playerHand.length);
+        const isSelected = gameState.playerHand[i] === gameState.selectedHandCard;
+        drawCard(gameState.playerHand[i], x, H - 70, isSelected, false);
+    }
+
+    // Status
+    ctx.fillStyle = '#fff';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(gameState.statusMsg, W/2, H/2 + CARD_H/2 + 6);
+
+    // Last message
+    if (gameState.msgTimer > 0) {
+        ctx.globalAlpha = Math.min(1, gameState.msgTimer / 30);
+        ctx.fillStyle = '#f6e05e';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(gameState.lastMsg, W/2, H/2 + CARD_H/2 + 26);
+        ctx.globalAlpha = 1;
+    }
+
+    // Selected card preview
+    if (gameState.selectedHandCard !== null) {
+        const card = getCard(gameState.selectedHandCard);
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('選択中: ' + MONTH_NAMES[card.month-1] + ' ' + card.name, 10, H - 80);
+        ctx.fillStyle = '#aaa';
+        ctx.font = '11px Arial';
+        ctx.fillText('場の同月カードか他の場所をクリック', 10, H - 65);
+    }
+}
+</script>
+</body>
+</html>

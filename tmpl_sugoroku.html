@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>すごろく</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: #1a0a2e; font-family: Arial, sans-serif;
+        }
+        #gameContainer { position: relative; }
+        canvas { display: block; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88);
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #fff; gap: 16px; z-index: 100;
+        }
+        .screen h1 { font-size: 44px; color: #f6e05e; }
+        .screen p { font-size: 16px; text-align: center; line-height: 1.7; max-width: 320px; }
+        .screen button {
+            padding: 12px 40px; font-size: 18px; border: none;
+            border-radius: 5px; cursor: pointer; background: #9f7aea; color: #fff;
+        }
+        .screen button:hover { background: #b39ddb; }
+        #ui {
+            position: absolute; bottom: 12px; left: 50%;
+            transform: translateX(-50%); display: none;
+            flex-direction: column; align-items: center; gap: 8px;
+        }
+        #statusMsg { color: #f6e05e; font-size: 15px; font-weight: bold; }
+        #rollBtn {
+            padding: 10px 36px; font-size: 16px; border: none;
+            border-radius: 5px; cursor: pointer; background: #9f7aea; color: #fff;
+        }
+        #rollBtn:disabled { background: #555; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>すごろく</h1>
+        <p>サイコロを振ってゴールを目指せ！<br>
+        イベントマス（黄・赤・茶）に注意！<br>
+        黄=進む / 赤=戻る / 茶=1回休み</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">ゴールに到達！おめでとう！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div id="statusMsg">サイコロを振ってください</div>
+        <button id="rollBtn" onclick="rollDice()">🎲 サイコロを振る</button>
+    </div>
+</div>
+<script>
+const W = 600, H = 480;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+
+const COLS = 7, ROWS = 4;
+const TOTAL = COLS * ROWS;
+const SQ = 72;
+const PAD_X = (W - COLS * SQ) / 2;
+const PAD_Y = 20;
+
+// Snake-path: row 0 left→right, row 1 right→left, …
+function buildPath() {
+    const pts = [];
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const col = (r % 2 === 0) ? c : (COLS - 1 - c);
+            pts.push({ x: PAD_X + col * SQ + SQ / 2, y: PAD_Y + r * SQ + SQ / 2 });
+        }
+    }
+    return pts;
+}
+const PATH = buildPath();
+
+// Event squares
+const EVENTS = {
+    4:  { type: 'advance', amount: 3,  label: '⭐+3' },
+    8:  { type: 'retreat', amount: 3,  label: '💀-3' },
+    12: { type: 'advance', amount: 5,  label: '⭐+5' },
+    16: { type: 'skip',    amount: 1,  label: '💤休' },
+    20: { type: 'retreat', amount: 5,  label: '💀-5' },
+    24: { type: 'advance', amount: 4,  label: '⭐+4' },
+};
+
+const gameState = {
+    running: false,
+    pos: 0,
+    rolling: false,
+    skipNext: false,
+    diceValue: 0,
+    moveQueue: [],
+};
+let gameLoop = null;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('ui').style.display = 'flex';
+    gameState.running = true;
+    gameState.pos = 0;
+    gameState.rolling = false;
+    gameState.skipNext = false;
+    gameState.diceValue = 0;
+    gameState.moveQueue = [];
+    document.getElementById('rollBtn').disabled = false;
+    setStatus('サイコロを振ってください');
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+    draw();
+}
+
+function rollDice() {
+    if (!gameState.running || gameState.rolling) return;
+    if (gameState.skipNext) {
+        gameState.skipNext = false;
+        setStatus('1回休みが終わりました');
+        document.getElementById('rollBtn').disabled = false;
+        return;
+    }
+    const dice = Math.floor(Math.random() * 6) + 1;
+    gameState.diceValue = dice;
+    gameState.rolling = true;
+    document.getElementById('rollBtn').disabled = true;
+    setStatus('🎲 ' + dice + ' が出た！');
+
+    let steps = 0;
+    const mover = setInterval(() => {
+        if (steps >= dice) {
+            clearInterval(mover);
+            gameState.rolling = false;
+            if (gameState.pos >= TOTAL - 1) { clearGame(); return; }
+            applyEvent(gameState.pos);
+            return;
+        }
+        gameState.pos = Math.min(gameState.pos + 1, TOTAL - 1);
+        steps++;
+        draw();
+        if (gameState.pos >= TOTAL - 1) {
+            clearInterval(mover);
+            clearGame();
+        }
+    }, 180);
+}
+
+function applyEvent(idx) {
+    const ev = EVENTS[idx];
+    if (!ev) {
+        document.getElementById('rollBtn').disabled = false;
+        setStatus('サイコロを振ってください');
+        draw();
+        return;
+    }
+    if (ev.type === 'advance') {
+        setStatus('ラッキー！ ' + ev.amount + 'マス進む！');
+        gameState.pos = Math.min(gameState.pos + ev.amount, TOTAL - 1);
+        if (gameState.pos >= TOTAL - 1) { draw(); clearGame(); return; }
+    } else if (ev.type === 'retreat') {
+        setStatus('残念… ' + ev.amount + 'マス戻る');
+        gameState.pos = Math.max(gameState.pos - ev.amount, 0);
+    } else if (ev.type === 'skip') {
+        setStatus('💤 1回休み！次のターンはボタンを押してスキップ');
+        gameState.skipNext = true;
+    }
+    document.getElementById('rollBtn').disabled = false;
+    draw();
+}
+
+function setStatus(msg) { document.getElementById('statusMsg').innerText = msg; }
+
+function clearGame() {
+    gameState.running = false;
+    clearInterval(gameLoop);
+    document.getElementById('clearScreen').style.display = 'flex';
+    document.getElementById('ui').style.display = 'none';
+}
+
+function retryGame() {
+    gameState.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function update() { if (!gameState.running) return; }
+
+function draw() {
+    ctx.fillStyle = '#2d1b69';
+    ctx.fillRect(0, 0, W, H);
+
+    for (let i = 0; i < TOTAL; i++) {
+        const p = PATH[i];
+        const ev = EVENTS[i];
+        let col = '#3d2b8a';
+        if (i === 0) col = '#276749';
+        else if (i === TOTAL - 1) col = '#9b2c2c';
+        else if (ev) {
+            if (ev.type === 'advance') col = '#744210';
+            else if (ev.type === 'retreat') col = '#63171b';
+            else if (ev.type === 'skip') col = '#4a5568';
+        }
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.roundRect(p.x - SQ/2 + 3, p.y - SQ/2 + 3, SQ - 6, SQ - 6, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#9f7aea';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (i === 0) { ctx.font = '11px Arial'; ctx.fillText('START', p.x, p.y); }
+        else if (i === TOTAL - 1) { ctx.font = '11px Arial'; ctx.fillText('GOAL', p.x, p.y); }
+        else if (ev) { ctx.font = '11px Arial'; ctx.fillText(ev.label, p.x, p.y); }
+        else { ctx.font = '12px Arial'; ctx.fillText(i + 1, p.x, p.y); }
+    }
+
+    // Player
+    const pp = PATH[gameState.pos];
+    ctx.fillStyle = '#f6e05e';
+    ctx.beginPath();
+    ctx.arc(pp.x, pp.y, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a0a2e';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('YOU', pp.x, pp.y);
+
+    // Dice display
+    if (gameState.diceValue > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(W - 80, H - 70, 60, 50);
+        ctx.fillStyle = '#fff';
+        ctx.font = '28px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎲' + gameState.diceValue, W - 50, H - 45);
+    }
+}
+</script>
+</body>
+</html>
