@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MINI MOBA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 1400px;
+            height: 400px;
+            border: 2px solid #999;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 100;
+            gap: 20px;
+        }
+        #startScreen {
+            background: rgba(0, 0, 0, 0.9);
+        }
+        #gameOverScreen {
+            display: none;
+            background: rgba(0, 0, 0, 0.9);
+        }
+        #clearScreen {
+            display: none;
+            background: rgba(0, 0, 0, 0.9);
+        }
+        #startScreen h1, #gameOverScreen h1, #clearScreen h1 {
+            color: #fff;
+            font-size: 48px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #startScreen button, #gameOverScreen button, #clearScreen button {
+            padding: 12px 32px;
+            font-size: 20px;
+            cursor: pointer;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+        #startScreen button:hover, #gameOverScreen button:hover, #clearScreen button:hover {
+            background: #3182ce;
+        }
+        #startScreen p, #gameOverScreen p, #clearScreen p {
+            color: #aaa;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="startScreen">
+            <h1>MINI MOBA</h1>
+            <p>Click: Move | Q: AOE (8s CD) | W: Heal 20% (15s CD)</p>
+            <button onclick="startGame()">START</button>
+        </div>
+        <div id="gameOverScreen">
+            <h1>GAME OVER</h1>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        <div id="clearScreen">
+            <h1>VICTORY!</h1>
+            <button onclick="retryGame()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'MINI MOBA',
+            bg_color: '#1a2a1a',
+            lane_color: '#2d4a2d',
+            hero_color: '#4299e1',
+            ally_color: '#68d391',
+            enemy_color: '#e53e3e',
+            hero_hp: 200,
+            nexus_hp: 500,
+            minion_spawn: 10,
+            skill_q_cd: 8,
+            skill_w_cd: 15
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 1400;
+        canvas.height = 400;
+
+        const gameState = {
+            running: false,
+            time: 0,
+            hero: { x: 700, y: 200, hp: config.hero_hp, maxHp: config.hero_hp, vx: 0, vy: 0 },
+            allyNexus: { x: 50, y: 200, hp: config.nexus_hp, maxHp: config.nexus_hp },
+            enemyNexus: { x: 1350, y: 200, hp: config.nexus_hp, maxHp: config.nexus_hp },
+            allies: [],
+            enemies: [],
+            skills: {
+                q: { cd: 0, maxCd: config.skill_q_cd, range: 150 },
+                w: { cd: 0, maxCd: config.skill_w_cd }
+            },
+            targetX: 700,
+            targetY: 200,
+            lastMinionSpawn: 0
+        };
+
+        document.body.style.background = config.bg_color;
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.time = 0;
+            gameState.hero = { x: 700, y: 200, hp: config.hero_hp, maxHp: config.hero_hp, vx: 0, vy: 0 };
+            gameState.allyNexus = { x: 50, y: 200, hp: config.nexus_hp, maxHp: config.nexus_hp };
+            gameState.enemyNexus = { x: 1350, y: 200, hp: config.nexus_hp, maxHp: config.nexus_hp };
+            gameState.allies = [];
+            gameState.enemies = [];
+            gameState.skills = { q: { cd: 0, maxCd: config.skill_q_cd, range: 150 }, w: { cd: 0, maxCd: config.skill_w_cd } };
+            gameState.lastMinionSpawn = 0;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+        }
+
+        function spawnMinions() {
+            const spawnAlly = { x: 100, y: 180 };
+            const spawnEnemy = { x: 1300, y: 220 };
+            for (let i = 0; i < 3; i++) {
+                gameState.allies.push({ x: spawnAlly.x, y: spawnAlly.y - 20 + i * 20, hp: 40, maxHp: 40, team: 'ally' });
+                gameState.enemies.push({ x: spawnEnemy.x, y: spawnEnemy.y - 20 + i * 20, hp: 40, maxHp: 40, team: 'enemy' });
+            }
+        }
+
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+
+        function updateGame(dt) {
+            gameState.time += dt;
+
+            // Spawn minions
+            if (gameState.time - gameState.lastMinionSpawn > config.minion_spawn * 1000) {
+                spawnMinions();
+                gameState.lastMinionSpawn = gameState.time;
+            }
+
+            // Hero movement
+            const dist = distance(gameState.hero.x, gameState.hero.y, gameState.targetX, gameState.targetY);
+            if (dist > 5) {
+                const angle = Math.atan2(gameState.targetY - gameState.hero.y, gameState.targetX - gameState.hero.x);
+                gameState.hero.vx = Math.cos(angle) * 150;
+                gameState.hero.vy = Math.sin(angle) * 150;
+            } else {
+                gameState.hero.vx = 0;
+                gameState.hero.vy = 0;
+            }
+            gameState.hero.x += gameState.hero.vx * dt;
+            gameState.hero.y += gameState.hero.vy * dt;
+            gameState.hero.x = Math.max(50, Math.min(1350, gameState.hero.x));
+            gameState.hero.y = Math.max(50, Math.min(350, gameState.hero.y));
+
+            // Skill cooldowns
+            if (gameState.skills.q.cd > 0) gameState.skills.q.cd -= dt;
+            if (gameState.skills.w.cd > 0) gameState.skills.w.cd -= dt;
+
+            // Minion movement and combat
+            gameState.allies = gameState.allies.filter(m => m.hp > 0);
+            gameState.enemies = gameState.enemies.filter(m => m.hp > 0);
+
+            gameState.allies.forEach(m => {
+                m.x += 50 * dt;
+                const enemy = gameState.enemies.find(e => distance(m.x, m.y, e.x, e.y) < 30);
+                if (enemy) {
+                    enemy.hp -= 5 * dt;
+                } else if (distance(m.x, m.y, gameState.enemyNexus.x, gameState.enemyNexus.y) < 40) {
+                    gameState.enemyNexus.hp -= 10 * dt;
+                }
+            });
+
+            gameState.enemies.forEach(m => {
+                m.x -= 50 * dt;
+                const ally = gameState.allies.find(a => distance(m.x, m.y, a.x, a.y) < 30);
+                if (ally) {
+                    ally.hp -= 5 * dt;
+                } else if (distance(m.x, m.y, gameState.allyNexus.x, gameState.allyNexus.y) < 40) {
+                    gameState.allyNexus.hp -= 10 * dt;
+                }
+            });
+
+            // Hero attacks
+            const nearEnemy = gameState.enemies.find(e => distance(gameState.hero.x, gameState.hero.y, e.x, e.y) < 100);
+            if (nearEnemy) {
+                nearEnemy.hp -= 20 * dt;
+            }
+
+            // Win/Lose conditions
+            if (gameState.enemyNexus.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+            if (gameState.allyNexus.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+        }
+
+        function drawGame() {
+            ctx.fillStyle = config.lane_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Nexus
+            ctx.fillStyle = config.ally_color;
+            ctx.fillRect(gameState.allyNexus.x - 20, gameState.allyNexus.y - 20, 40, 40);
+            ctx.fillStyle = config.enemy_color;
+            ctx.fillRect(gameState.enemyNexus.x - 20, gameState.enemyNexus.y - 20, 40, 40);
+
+            // Minions
+            gameState.allies.forEach(m => {
+                ctx.fillStyle = config.ally_color;
+                ctx.beginPath();
+                ctx.arc(m.x, m.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            gameState.enemies.forEach(m => {
+                ctx.fillStyle = config.enemy_color;
+                ctx.beginPath();
+                ctx.arc(m.x, m.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Hero
+            ctx.fillStyle = config.hero_color;
+            ctx.beginPath();
+            ctx.arc(gameState.hero.x, gameState.hero.y, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // HUD
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, 400, 120);
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px Arial';
+            ctx.fillText('Hero HP: ' + Math.ceil(gameState.hero.hp) + '/' + gameState.hero.maxHp, 10, 20);
+            ctx.fillText('Q (AOE): ' + (gameState.skills.q.cd > 0 ? gameState.skills.q.cd.toFixed(1) + 's' : 'Ready'), 10, 40);
+            ctx.fillText('W (Heal): ' + (gameState.skills.w.cd > 0 ? gameState.skills.w.cd.toFixed(1) + 's' : 'Ready'), 10, 60);
+            ctx.fillText('Ally Nexus: ' + Math.ceil(gameState.allyNexus.hp), 10, 80);
+            ctx.fillText('Enemy Nexus: ' + Math.ceil(gameState.enemyNexus.hp), 10, 100);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(canvas.width - 300, 0, 300, 60);
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.fillText('Click: Move | Q: AOE | W: Heal', canvas.width - 290, 20);
+        }
+
+        let lastTime = Date.now();
+        function gameLoop() {
+            const now = Date.now();
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            if (gameState.running) {
+                updateGame(dt);
+                drawGame();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState.running) {
+                const rect = canvas.getBoundingClientRect();
+                gameState.targetX = e.clientX - rect.left;
+                gameState.targetY = e.clientY - rect.top;
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (!gameState.running) return;
+            if (e.key.toLowerCase() === 'q' && gameState.skills.q.cd <= 0) {
+                gameState.enemies.forEach(enemy => {
+                    if (distance(gameState.hero.x, gameState.hero.y, enemy.x, enemy.y) < gameState.skills.q.range) {
+                        enemy.hp -= 60;
+                    }
+                });
+                gameState.skills.q.cd = config.skill_q_cd;
+            }
+            if (e.key.toLowerCase() === 'w' && gameState.skills.w.cd <= 0) {
+                gameState.hero.hp = Math.min(gameState.hero.maxHp, gameState.hero.hp + gameState.hero.maxHp * 0.2);
+                gameState.skills.w.cd = config.skill_w_cd;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CARD BATTLE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #ffffff;
+        }
+        
+        #container {
+            width: 100%;
+            max-width: 1000px;
+            padding: 20px;
+        }
+        
+        #startScreen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            min-height: 100vh;
+        }
+        
+        #startScreen h1 {
+            font-size: 4em;
+            letter-spacing: 8px;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(159, 122, 234, 0.8);
+        }
+        
+        #startBtn {
+            padding: 15px 60px;
+            font-size: 1.5em;
+            font-weight: bold;
+            border: 3px solid;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+        
+        #startBtn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(159, 122, 234, 0.8);
+        }
+        
+        #gameOverScreen, #clearScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        
+        #gameOverScreen h2, #clearScreen h2 {
+            font-size: 3em;
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(229, 62, 62, 0.8);
+        }
+        
+        #clearScreen h2 {
+            text-shadow: 0 0 20px rgba(66, 153, 225, 0.8);
+        }
+        
+        #retryBtn, #retryClearBtn {
+            padding: 12px 50px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: 2px solid;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        #retryBtn:hover, #retryClearBtn:hover {
+            transform: scale(1.05);
+        }
+        
+        #gameScreen {
+            display: none;
+            flex-direction: column;
+            gap: 30px;
+        }
+        
+        .hud {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: rgba(0, 0, 0, 0.3);
+        }
+        
+        .hud-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .hud-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        
+        .stat-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95em;
+        }
+        
+        .bar {
+            flex-grow: 1;
+            height: 24px;
+            border-radius: 4px;
+            border: 2px solid;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bar-fill {
+            height: 100%;
+            transition: width 0.4s ease;
+        }
+        
+        .bar-text {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85em;
+            z-index: 10;
+        }
+        
+        .shield-info {
+            font-size: 0.9em;
+            padding: 5px 0;
+        }
+        
+        .mana-info {
+            font-size: 0.9em;
+            padding: 5px 0;
+        }
+        
+        #gameBoard {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            margin: 20px 0;
+            min-height: 200px;
+        }
+        
+        .player-area, .enemy-area {
+            flex: 1;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .player-area {
+            border: 2px solid;
+        }
+        
+        .enemy-area {
+            border: 2px solid;
+        }
+        
+        .area-label {
+            font-size: 1em;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        #hand {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin: 20px 0;
+            min-height: 150px;
+            flex-wrap: wrap;
+        }
+        
+        .card {
+            padding: 12px;
+            border: 2px solid;
+            border-radius: 6px;
+            min-width: 110px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85em;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .card:hover:not(.disabled) {
+            transform: translateY(-8px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+        }
+        
+        .card.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .card-name {
+            font-weight: bold;
+            font-size: 0.95em;
+            line-height: 1.1;
+        }
+        
+        .card-cost {
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
+        
+        .card-effect {
+            font-size: 0.8em;
+            line-height: 1.2;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        #endTurnBtn {
+            padding: 10px 40px;
+            font-size: 1em;
+            font-weight: bold;
+            border: 2px solid;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        #endTurnBtn:hover {
+            transform: scale(1.05);
+        }
+        
+        #endTurnBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .action-log {
+            max-height: 100px;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            padding: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="startScreen">
+            <h1>CARD BATTLE</h1>
+            <button id="startBtn">START</button>
+        </div>
+        
+        <div id="gameOverScreen">
+            <h2>GAME OVER</h2>
+            <button id="retryBtn">RETRY</button>
+        </div>
+        
+        <div id="clearScreen">
+            <h2>VICTORY</h2>
+            <button id="retryClearBtn">RETRY</button>
+        </div>
+        
+        <div id="gameScreen">
+            <div class="hud">
+                <div class="hud-section">
+                    <div class="hud-title">PLAYER</div>
+                    <div class="stat-bar">
+                        <div class="bar" style="border-color: #4299e1;">
+                            <div class="bar-fill" id="playerHpFill" style="background-color: #4299e1; width: 100%;"></div>
+                            <div class="bar-text" id="playerHpText">30 / 30</div>
+                        </div>
+                    </div>
+                    <div class="shield-info">Shield: <span id="playerShield">0</span></div>
+                    <div class="mana-info">Mana: <span id="playerMana">3</span> / <span id="playerManaMax">10</span></div>
+                </div>
+                
+                <div class="hud-section">
+                    <div class="hud-title">ENEMY</div>
+                    <div class="stat-bar">
+                        <div class="bar" style="border-color: #e53e3e;">
+                            <div class="bar-fill" id="enemyHpFill" style="background-color: #e53e3e; width: 100%;"></div>
+                            <div class="bar-text" id="enemyHpText">30 / 30</div>
+                        </div>
+                    </div>
+                    <div class="shield-info">Shield: <span id="enemyShield">0</span></div>
+                </div>
+            </div>
+            
+            <div id="gameBoard">
+                <div class="player-area" style="border-color: #4299e1;">
+                    <div class="area-label">Player</div>
+                </div>
+                <div class="enemy-area" style="border-color: #e53e3e;">
+                    <div class="area-label">Enemy</div>
+                </div>
+            </div>
+            
+            <div class="action-log" id="actionLog"></div>
+            
+            <div style="text-align: center; margin: 10px 0; font-size: 0.9em; color: rgba(255, 255, 255, 0.7);">
+                <div id="turnIndicator">PLAYER TURN</div>
+            </div>
+            
+            <div id="hand"></div>
+            
+            <div id="controls">
+                <button id="endTurnBtn">END TURN</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'CARD BATTLE',
+            bg_color: '#1a0a2e',
+            card_bg: '#2d1b4a',
+            card_border: '#9f7aea',
+            player_color: '#4299e1',
+            enemy_color: '#e53e3e',
+            player_hp: 30,
+            enemy_hp: 30,
+            hand_size: 4,
+            mana_per_turn: 3,
+            mana_max: 10
+        };
+        
+        const cardDefinitions = [
+            { name: 'Normal Attack', cost: 1, effect: 'Deal 3 dmg', type: 'attack', value: 3 },
+            { name: 'Strong Attack', cost: 3, effect: 'Deal 8 dmg', type: 'attack', value: 8 },
+            { name: 'Pierce Attack', cost: 2, effect: '5 dmg (pierce)', type: 'pierce', value: 5 },
+            { name: 'Shield Wall', cost: 2, effect: 'Gain 5 shield', type: 'defense', value: 5 },
+            { name: 'Full Defense', cost: 3, effect: 'Gain 10 shield', type: 'defense', value: 10 },
+            { name: 'Small Heal', cost: 1, effect: 'Heal 4 HP', type: 'heal', value: 4 },
+            { name: 'Full Heal', cost: 3, effect: 'Heal 10 HP', type: 'heal', value: 10 },
+            { name: 'Dual Attack', cost: 4, effect: '5 dmg x2', type: 'dual', value: 5 }
+        ];
+        
+        let gameState = {
+            running: false,
+            playerTurn: true,
+            playerHp: config.player_hp,
+            enemyHp: config.enemy_hp,
+            playerShield: 0,
+            enemyShield: 0,
+            playerMana: config.mana_per_turn,
+            playerDeck: [],
+            playerHand: [],
+            enemyDeck: [],
+            enemyHand: [],
+            actionLog: []
+        };
+        
+        function initDeck() {
+            let deck = [];
+            for (let i = 0; i < cardDefinitions.length; i++) {
+                for (let j = 0; j < 3; j++) {
+                    deck.push({...cardDefinitions[i], id: Math.random()});
+                }
+            }
+            return deck.sort(() => Math.random() - 0.5);
+        }
+        
+        function drawCards(deck, hand, count) {
+            for (let i = 0; i < count && deck.length > 0; i++) {
+                hand.push(deck.shift());
+            }
+        }
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'flex';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            
+            gameState.running = true;
+            gameState.playerTurn = true;
+            gameState.playerHp = config.player_hp;
+            gameState.enemyHp = config.enemy_hp;
+            gameState.playerShield = 0;
+            gameState.enemyShield = 0;
+            gameState.playerMana = config.mana_per_turn;
+            gameState.playerDeck = initDeck();
+            gameState.playerHand = [];
+            gameState.enemyDeck = initDeck();
+            gameState.enemyHand = [];
+            gameState.actionLog = [];
+            
+            drawCards(gameState.playerDeck, gameState.playerHand, config.hand_size);
+            
+            document.body.style.background = config.bg_color;
+            updateUI();
+            gameLoop();
+        }
+        
+        function endPlayerTurn() {
+            if (!gameState.playerTurn || !gameState.running) return;
+            
+            gameState.playerTurn = false;
+            gameState.playerMana = Math.min(gameState.playerMana + config.mana_per_turn, config.mana_max);
+            gameState.actionLog = [];
+            
+            setTimeout(() => {
+                if (gameState.running) cpuTurn();
+            }, 500);
+        }
+        
+        function cpuTurn() {
+            if (!gameState.running) return;
+            
+            gameState.enemyHand = [];
+            drawCards(gameState.enemyDeck, gameState.enemyHand, 3 + Math.floor(Math.random() * 2));
+            
+            let delay = 0;
+            const usableCards = gameState.enemyHand.filter(card => card.cost <= 10);
+            const cardsToUse = usableCards.slice(0, Math.floor(Math.random() * 2) + 1);
+            
+            cardsToUse.forEach(card => {
+                setTimeout(() => {
+                    if (gameState.running) {
+                        executeCardEffect(card, false);
+                        updateUI();
+                    }
+                }, delay);
+                delay += 600;
+            });
+            
+            setTimeout(() => {
+                if (gameState.running) {
+                    gameState.playerTurn = true;
+                    gameState.playerMana = config.mana_per_turn;
+                    gameState.actionLog = [];
+                    updateUI();
+                }
+            }, delay + 300);
+        }
+        
+        function useCard(cardId) {
+            if (!gameState.playerTurn || !gameState.running) return;
+            
+            const cardIndex = gameState.playerHand.findIndex(c => c.id === cardId);
+            if (cardIndex === -1) return;
+            
+            const card = gameState.playerHand[cardIndex];
+            if (gameState.playerMana < card.cost) return;
+            
+            gameState.playerMana -= card.cost;
+            executeCardEffect(card, true);
+            gameState.playerHand.splice(cardIndex, 1);
+            
+            if (gameState.playerHand.length < config.hand_size) {
+                drawCards(gameState.playerDeck, gameState.playerHand, 1);
+            }
+            
+            updateUI();
+        }
+        
+        function executeCardEffect(card, isPlayer) {
+            if (card.type === 'attack') {
+                let damage = card.value;
+                if (isPlayer) {
+                    gameState.enemyShield -= damage;
+                    if (gameState.enemyShield < 0) {
+                        gameState.enemyHp += gameState.enemyShield;
+                        gameState.enemyShield = 0;
+                    }
+                    gameState.actionLog.push('You: ' + card.name + ' - ' + Math.min(damage, damage) + ' dmg');
+                } else {
+                    gameState.playerShield -= damage;
+                    if (gameState.playerShield < 0) {
+                        gameState.playerHp += gameState.playerShield;
+                        gameState.playerShield = 0;
+                    }
+                    gameState.actionLog.push('Enemy: ' + card.name + ' - ' + Math.min(damage, damage) + ' dmg');
+                }
+            } else if (card.type === 'pierce') {
+                if (isPlayer) {
+                    gameState.enemyHp -= card.value;
+                    gameState.actionLog.push('You: ' + card.name + ' - ' + card.value + ' dmg');
+                } else {
+                    gameState.playerHp -= card.value;
+                    gameState.actionLog.push('Enemy: ' + card.name + ' - ' + card.value + ' dmg');
+                }
+            } else if (card.type === 'dual') {
+                if (isPlayer) {
+                    gameState.enemyShield -= card.value;
+                    if (gameState.enemyShield < 0) {
+                        gameState.enemyHp += gameState.enemyShield;
+                        gameState.enemyShield = 0;
+                    }
+                    gameState.enemyShield -= card.value;
+                    if (gameState.enemyShield < 0) {
+                        gameState.enemyHp += gameState.enemyShield;
+                        gameState.enemyShield = 0;
+                    }
+                    gameState.actionLog.push('You: ' + card.name + ' - ' + (card.value * 2) + ' dmg');
+                } else {
+                    gameState.playerShield -= card.value;
+                    if (gameState.playerShield < 0) {
+                        gameState.playerHp += gameState.playerShield;
+                        gameState.playerShield = 0;
+                    }
+                    gameState.playerShield -= card.value;
+                    if (gameState.playerShield < 0) {
+                        gameState.playerHp += gameState.playerShield;
+                        gameState.playerShield = 0;
+                    }
+                    gameState.actionLog.push('Enemy: ' + card.name + ' - ' + (card.value * 2) + ' dmg');
+                }
+            } else if (card.type === 'defense') {
+                if (isPlayer) {
+                    gameState.playerShield += card.value;
+                    gameState.actionLog.push('You: ' + card.name + ' +' + card.value + ' shield');
+                } else {
+                    gameState.enemyShield += card.value;
+                    gameState.actionLog.push('Enemy: ' + card.name + ' +' + card.value + ' shield');
+                }
+            } else if (card.type === 'heal') {
+                if (isPlayer) {
+                    gameState.playerHp = Math.min(gameState.playerHp + card.value, config.player_hp);
+                    gameState.actionLog.push('You: ' + card.name + ' +' + card.value + ' HP');
+                } else {
+                    gameState.enemyHp = Math.min(gameState.enemyHp + card.value, config.enemy_hp);
+                    gameState.actionLog.push('Enemy: ' + card.name + ' +' + card.value + ' HP');
+                }
+            }
+        }
+        
+        function updateUI() {
+            const playerHpPercent = (gameState.playerHp / config.player_hp) * 100;
+            const enemyHpPercent = (gameState.enemyHp / config.enemy_hp) * 100;
+            
+            document.getElementById('playerHpFill').style.width = playerHpPercent + '%';
+            document.getElementById('playerHpText').textContent = Math.max(0, gameState.playerHp) + ' / ' + config.player_hp;
+            document.getElementById('playerShield').textContent = Math.max(0, gameState.playerShield);
+            document.getElementById('playerMana').textContent = gameState.playerMana;
+            
+            document.getElementById('enemyHpFill').style.width = enemyHpPercent + '%';
+            document.getElementById('enemyHpText').textContent = Math.max(0, gameState.enemyHp) + ' / ' + config.enemy_hp;
+            document.getElementById('enemyShield').textContent = Math.max(0, gameState.enemyShield);
+            
+            document.getElementById('turnIndicator').textContent = gameState.playerTurn ? 'PLAYER TURN' : 'ENEMY TURN';
+            
+            const handHtml = gameState.playerHand.map(card => {
+                const disabled = gameState.playerMana < card.cost;
+                const costColor = card.cost <= 2 ? '#4299e1' : (card.cost <= 3 ? '#9f7aea' : '#e53e3e');
+                return '<div class="card' + (disabled ? ' disabled' : '') + '" style="background-color: ' + config.card_bg + '; border-color: ' + config.card_border + ';" onclick="useCard(' + card.id + ')">' +
+                    '<div class="card-name">' + card.name + '</div>' +
+                    '<div class="card-cost" style="background-color: ' + costColor + '; color: #fff;">' + card.cost + ' COST</div>' +
+                    '<div class="card-effect">' + card.effect + '</div>' +
+                    '</div>';
+            }).join('');
+            document.getElementById('hand').innerHTML = handHtml;
+            
+            const logHtml = gameState.actionLog.map(log => '<div class="log-entry">' + log + '</div>').join('');
+            document.getElementById('actionLog').innerHTML = logHtml;
+        }
+        
+        function gameLoop() {
+            if (!gameState.running) return;
+            
+            if (gameState.playerHp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameScreen').style.display = 'none';
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+            
+            if (gameState.enemyHp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameScreen').style.display = 'none';
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function retryGame() {
+            startGame();
+        }
+        
+        document.getElementById('startBtn').style.background = config.player_color;
+        document.getElementById('startBtn').style.borderColor = config.player_color;
+        document.getElementById('startBtn').style.color = '#ffffff';
+        document.getElementById('startBtn').onclick = startGame;
+        
+        document.getElementById('retryBtn').style.background = config.player_color;
+        document.getElementById('retryBtn').style.borderColor = config.player_color;
+        document.getElementById('retryBtn').style.color = '#ffffff';
+        document.getElementById('retryBtn').onclick = retryGame;
+        
+        document.getElementById('retryClearBtn').style.background = config.player_color;
+        document.getElementById('retryClearBtn').style.borderColor = config.player_color;
+        document.getElementById('retryClearBtn').style.color = '#ffffff';
+        document.getElementById('retryClearBtn').onclick = retryGame;
+        
+        document.getElementById('endTurnBtn').style.background = config.player_color;
+        document.getElementById('endTurnBtn').style.borderColor = config.player_color;
+        document.getElementById('endTurnBtn').style.color = '#ffffff';
+        document.getElementById('endTurnBtn').onclick = endPlayerTurn;
+    </script>
+</body>
+</html>
