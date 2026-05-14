@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MATCH3</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background-color: #1a1a2e;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #fff;
+    }
+    
+    .container {
+      text-align: center;
+      padding: 20px;
+    }
+    
+    h1 {
+      margin-bottom: 20px;
+      font-size: 32px;
+    }
+    
+    .info-bar {
+      margin-bottom: 15px;
+      font-size: 18px;
+      display: flex;
+      justify-content: space-around;
+      width: 100%;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+      gap: 20px;
+    }
+    
+    .info-item {
+      background: rgba(255,255,255,0.1);
+      padding: 10px 20px;
+      border-radius: 5px;
+      flex: 1;
+    }
+    
+    .info-item label {
+      display: block;
+      font-size: 12px;
+      opacity: 0.8;
+      margin-bottom: 5px;
+    }
+    
+    .info-item value {
+      display: block;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    
+    canvas {
+      border: 3px solid #fff;
+      background-color: rgba(0,0,0,0.3);
+      cursor: pointer;
+      display: block;
+      margin: 20px auto;
+      border-radius: 5px;
+    }
+    
+    .controls {
+      margin-top: 20px;
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 20px;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .modal-content {
+      background: #1a1a2e;
+      padding: 40px;
+      border-radius: 10px;
+      border: 3px solid #fff;
+      text-align: center;
+    }
+    
+    .modal-content h2 {
+      font-size: 36px;
+      margin-bottom: 20px;
+    }
+    
+    .modal-content p {
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+    
+    button {
+      background-color: #fff;
+      color: #1a1a2e;
+      border: none;
+      padding: 12px 30px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: opacity 0.2s;
+    }
+    
+    button:hover {
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MATCH3</h1>
+    
+    <div class="info-bar">
+      <div class="info-item">
+        <label>スコア</label>
+        <value id="score">0</value>
+      </div>
+      <div class="info-item">
+        <label>残り手数</label>
+        <value id="moves">20</value>
+      </div>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="controls">
+      <p>クリックで選択 → 隣をクリックで入れ替え</p>
+    </div>
+  </div>
+  
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h2 id="modalTitle"></h2>
+      <p id="modalMessage"></p>
+      <button onclick="location.reload()">Restart</button>
+    </div>
+  </div>
+
+  <script>
+    /*
+    パラメータスキーマ:
+    {
+      "theme": "string",
+      "title": "MATCH3",
+      "bg_color": "#1a1a2e",
+      "cell_colors": ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6"],
+      "grid_cols": 7,
+      "grid_rows": 7,
+      "cell_size": 52,
+      "win_moves": 20,
+      "win_score": 300
+    }
+    
+    デフォルト値:
+    title="MATCH3", bg_color="#1a1a2e",
+    cell_colors=["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6"],
+    grid_cols=7, grid_rows=7, cell_size=52, win_moves=20, win_score=300
+    */
+    
+    const COLS = 7;
+    const ROWS = 7;
+    const CELL = 52;
+    const COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6"];
+    const WIN_MOVES = 20;
+    const WIN_SCORE = 300;
+    
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = COLS * CELL;
+    canvas.height = ROWS * CELL;
+    
+    let grid = [];
+    let score = 0;
+    let moves = WIN_MOVES;
+    let selectedTile = null;
+    let gameOver = false;
+    
+    function initGrid() {
+      grid = [];
+      for (let i = 0; i < ROWS; i++) {
+        grid[i] = [];
+        for (let j = 0; j < COLS; j++) {
+          grid[i][j] = Math.floor(Math.random() * COLORS.length);
+        }
+      }
+      
+      while (hasInitialMatches()) {
+        for (let i = 0; i < ROWS; i++) {
+          for (let j = 0; j < COLS; j++) {
+            if (checkMatches(i, j).length > 0) {
+              grid[i][j] = Math.floor(Math.random() * COLORS.length);
+            }
+          }
+        }
+      }
+    }
+    
+    function hasInitialMatches() {
+      for (let i = 0; i < ROWS; i++) {
+        for (let j = 0; j < COLS; j++) {
+          if (checkMatches(i, j).length > 0) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    
+    function checkMatches(row, col) {
+      let matches = [];
+      const color = grid[row][col];
+      
+      // 縦チェック
+      let verticalMatches = [{ r: row, c: col }];
+      for (let i = row - 1; i >= 0 && grid[i][col] === color; i--) {
+        verticalMatches.push({ r: i, c: col });
+      }
+      for (let i = row + 1; i < ROWS && grid[i][col] === color; i++) {
+        verticalMatches.push({ r: i, c: col });
+      }
+      if (verticalMatches.length >= 3) {
+        matches = matches.concat(verticalMatches);
+      }
+      
+      // 横チェック
+      let horizontalMatches = [{ r: row, c: col }];
+      for (let j = col - 1; j >= 0 && grid[row][j] === color; j--) {
+        horizontalMatches.push({ r: row, c: j });
+      }
+      for (let j = col + 1; j < COLS && grid[row][j] === color; j++) {
+        horizontalMatches.push({ r: row, c: j });
+      }
+      if (horizontalMatches.length >= 3) {
+        matches = matches.concat(horizontalMatches);
+      }
+      
+      return matches.filter((m, i, arr) => arr.findIndex(x => x.r === m.r && x.c === m.c) === i);
+    }
+    
+    function processMatches() {
+      let allMatches = [];
+      for (let i = 0; i < ROWS; i++) {
+        for (let j = 0; j < COLS; j++) {
+          let matches = checkMatches(i, j);
+          allMatches = allMatches.concat(matches);
+        }
+      }
+      
+      allMatches = allMatches.filter((m, i, arr) => arr.findIndex(x => x.r === m.r && x.c === m.c) === i);
+      
+      if (allMatches.length === 0) return false;
+      
+      score += allMatches.length * 10;
+      
+      for (let match of allMatches) {
+        grid[match.r][match.c] = null;
+      }
+      
+      dropTiles();
+      return true;
+    }
+    
+    function dropTiles() {
+      for (let j = 0; j < COLS; j++) {
+        let writePos = ROWS - 1;
+        for (let i = ROWS - 1; i >= 0; i--) {
+          if (grid[i][j] !== null) {
+            grid[writePos][j] = grid[i][j];
+            if (writePos !== i) {
+              grid[i][j] = null;
+            }
+            writePos--;
+          }
+        }
+      }
+      
+      for (let j = 0; j < COLS; j++) {
+        for (let i = 0; i < ROWS; i++) {
+          if (grid[i][j] === null) {
+            grid[i][j] = Math.floor(Math.random() * COLORS.length);
+          }
+        }
+      }
+    }
+    
+    function draw() {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      for (let i = 0; i < ROWS; i++) {
+        for (let j = 0; j < COLS; j++) {
+          const x = j * CELL;
+          const y = i * CELL;
+          
+          ctx.fillStyle = COLORS[grid[i][j]];
+          ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+          ctx.fillRect(x, y, CELL, CELL);
+          
+          if (selectedTile && selectedTile.r === i && selectedTile.c === j) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4);
+          }
+        }
+      }
+    }
+    
+    function isAdjacent(r1, c1, r2, c2) {
+      return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+    }
+    
+    function canvasClick(e) {
+      if (gameOver) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const col = Math.floor(x / CELL);
+      const row = Math.floor(y / CELL);
+      
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+      
+      if (!selectedTile) {
+        selectedTile = { r: row, c: col };
+      } else if (selectedTile.r === row && selectedTile.c === col) {
+        selectedTile = null;
+      } else if (isAdjacent(selectedTile.r, selectedTile.c, row, col)) {
+        // Swap
+        [grid[selectedTile.r][selectedTile.c], grid[row][col]] = 
+        [grid[row][col], grid[selectedTile.r][selectedTile.c]];
+        
+        moves--;
+        
+        let hasMatches = true;
+        while (hasMatches) {
+          hasMatches = processMatches();
+        }
+        
+        selectedTile = null;
+        
+        document.getElementById('score').textContent = score;
+        document.getElementById('moves').textContent = moves;
+        
+        if (score >= WIN_SCORE) {
+          showWin();
+        } else if (moves <= 0) {
+          showGameOver();
+        }
+      } else {
+        selectedTile = { r: row, c: col };
+      }
+    }
+    
+    function showWin() {
+      gameOver = true;
+      document.getElementById('modalTitle').textContent = '勝利！';
+      document.getElementById('modalMessage').textContent = `スコア: ${score}`;
+      document.getElementById('modal').style.display = 'flex';
+    }
+    
+    function showGameOver() {
+      gameOver = true;
+      document.getElementById('modalTitle').textContent = 'ゲームオーバー';
+      document.getElementById('modalMessage').textContent = `最終スコア: ${score}`;
+      document.getElementById('modal').style.display = 'flex';
+    }
+    
+    function gameLoop() {
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    canvas.addEventListener('click', canvasClick);
+    
+    initGrid();
+    gameLoop();
+  </script>
+</body>
+</html>
