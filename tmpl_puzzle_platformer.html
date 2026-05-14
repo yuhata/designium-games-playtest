@@ -10,112 +10,109 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
         body {
-            width: 100%;
-            height: 100vh;
+            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
+            min-height: 100vh;
             background-color: #333;
-            font-family: Arial, sans-serif;
         }
-        
-        #gameContainer {
+        .container {
             position: relative;
             width: 640px;
             height: 400px;
             background-color: #87ceeb;
-            border: 3px solid #333;
-            overflow: hidden;
+            border: 4px solid #000;
         }
-        
         canvas {
             display: block;
-            width: 100%;
-            height: 100%;
+            background-color: #87ceeb;
         }
-        
         .screen {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            display: none;
+            display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: rgba(0, 0, 0, 0.8);
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            text-align: center;
             z-index: 100;
         }
-        
-        .screen.active {
-            display: flex;
-        }
-        
         .screen h1 {
-            color: white;
             font-size: 48px;
-            margin-bottom: 30px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-        
-        .screen p {
-            color: white;
-            font-size: 18px;
             margin-bottom: 20px;
-            text-align: center;
+            color: #ffd700;
         }
-        
-        .screen button {
-            padding: 15px 40px;
+        .screen p {
             font-size: 20px;
-            background-color: #4CAF50;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        .screen button {
+            font-size: 24px;
+            padding: 12px 40px;
+            background-color: #ff4500;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
             transition: background-color 0.3s;
         }
-        
         .screen button:hover {
-            background-color: #45a049;
+            background-color: #ff6347;
         }
-        
+        #startScreen {
+            display: flex;
+        }
+        #gameOverScreen {
+            display: none;
+        }
+        #clearScreen {
+            display: none;
+        }
         #stageInfo {
             position: absolute;
             top: 10px;
             left: 10px;
             color: white;
-            font-size: 16px;
+            font-size: 18px;
             font-weight: bold;
-            z-index: 50;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
+    <div class="container">
+        <div id="stageInfo">Stage: <span id="stageNumber">1</span>/3</div>
         <canvas id="gameCanvas" width="640" height="400"></canvas>
-        <div id="stageInfo">STAGE <span id="stageName">1</span></div>
         
-        <div id="startScreen" class="screen active">
+        <div id="startScreen" class="screen">
             <h1>PUZZLE JUMP</h1>
-            <p>Move: A/D or Arrow Keys</p>
-            <p>Jump: W or Space</p>
-            <p>Push boxes onto switches to open doors!</p>
+            <p>
+                箱をスイッチに乗せて扉を開き、<br>
+                ゴールに到達しよう！<br><br>
+                <strong>操作: AD/矢印キー移動</strong><br>
+                <strong>W/スペース: ジャンプ</strong>
+            </p>
             <button onclick="startGame()">START</button>
         </div>
         
         <div id="gameOverScreen" class="screen">
             <h1>GAME OVER</h1>
-            <p>You fell into a hole!</p>
+            <p>穴に落ちてしまいました...<br>もう一度チャレンジしましょう！</p>
             <button onclick="retryGame()">RETRY</button>
         </div>
         
         <div id="clearScreen" class="screen">
-            <h1>STAGE CLEAR!</h1>
-            <button onclick="nextStage()">NEXT</button>
+            <h1>CLEAR!</h1>
+            <p id="clearMessage">ステージをクリアしました！</p>
+            <button id="nextButton" onclick="nextStage()">NEXT STAGE</button>
         </div>
     </div>
 
@@ -137,440 +134,370 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Game State
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            e.preventDefault();
+        });
+        window.addEventListener('keyup', e => {
+            keys[e.key] = false;
+        });
+
         const gameState = {
-            running: false,
             currentStage: 0,
+            running: false,
             player: null,
             boxes: [],
             platforms: [],
             switches: [],
             doors: [],
-            goal: null,
-            activatedSwitches: new Set()
+            goal: null
         };
 
-        // Player Object
-        class Player {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.width = 20;
-                this.height = 30;
-                this.velocityX = 0;
-                this.velocityY = 0;
-                this.jumping = false;
-                this.spawnX = x;
-                this.spawnY = y;
-            }
-
-            update() {
-                this.velocityY += config.gravity;
-                this.x += this.velocityX;
-                this.y += this.velocityY;
-
-                // Check collision with platforms
-                for (let platform of gameState.platforms) {
-                    if (this.isColliding(platform)) {
-                        if (this.velocityY > 0) {
-                            this.y = platform.y - this.height;
-                            this.velocityY = 0;
-                            this.jumping = false;
-                        } else if (this.velocityY < 0) {
-                            this.y = platform.y + platform.height;
-                            this.velocityY = 0;
-                        }
-                    }
-                }
-
-                // Check collision with boxes
-                for (let box of gameState.boxes) {
-                    if (this.isColliding(box)) {
-                        if (this.velocityY > 0) {
-                            this.y = box.y - this.height;
-                            this.velocityY = 0;
-                            this.jumping = false;
-                        } else if (this.velocityY < 0) {
-                            this.y = box.y + box.height;
-                            this.velocityY = 0;
-                        }
-                    }
-                }
-
-                // Check collision with doors
-                for (let door of gameState.doors) {
-                    if (door.activated && this.isColliding(door)) {
-                        // Can pass through activated doors
-                    } else if (!door.activated && this.isColliding(door)) {
-                        if (this.velocityY > 0) {
-                            this.y = door.y - this.height;
-                            this.velocityY = 0;
-                            this.jumping = false;
-                        }
-                    }
-                }
-
-                // Check goal
-                if (this.isColliding(gameState.goal)) {
-                    gameState.running = false;
-                    showScreen('clearScreen');
-                }
-
-                // Fall detection
-                if (this.y > canvas.height) {
-                    gameState.running = false;
-                    showScreen('gameOverScreen');
-                }
-
-                // Friction
-                this.velocityX *= 0.95;
-            }
-
-            isColliding(obj) {
-                return this.x < obj.x + obj.width &&
-                       this.x + this.width > obj.x &&
-                       this.y < obj.y + obj.height &&
-                       this.y + this.height > obj.y;
-            }
-
-            draw() {
-                ctx.fillStyle = '#ff6b6b';
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                // Eyes
-                ctx.fillStyle = 'white';
-                ctx.fillRect(this.x + 5, this.y + 8, 4, 4);
-                ctx.fillRect(this.x + 11, this.y + 8, 4, 4);
-            }
-        }
-
-        // Box Object
-        class Box {
-            constructor(x, y, width, height) {
-                this.x = x;
-                this.y = y;
-                this.width = width;
-                this.height = height;
-                this.velocityX = 0;
-                this.velocityY = 0;
-            }
-
-            update() {
-                this.velocityY += config.gravity;
-                this.x += this.velocityX;
-                this.y += this.velocityY;
-
-                // Collision with platforms
-                for (let platform of gameState.platforms) {
-                    if (this.isColliding(platform)) {
-                        if (this.velocityY > 0) {
-                            this.y = platform.y - this.height;
-                            this.velocityY = 0;
-                        }
-                    }
-                }
-
-                // Collision with other boxes
-                for (let box of gameState.boxes) {
-                    if (box !== this && this.isColliding(box)) {
-                        if (this.velocityY > 0) {
-                            this.y = box.y - this.height;
-                            this.velocityY = 0;
-                        }
-                    }
-                }
-
-                // Check switches
-                for (let i = 0; i < gameState.switches.length; i++) {
-                    let switchObj = gameState.switches[i];
-                    if (this.isColliding(switchObj)) {
-                        gameState.activatedSwitches.add(i);
-                        if (gameState.doors[i]) {
-                            gameState.doors[i].activated = true;
-                        }
-                    }
-                }
-
-                // Fall detection
-                if (this.y > canvas.height) {
-                    this.reset();
-                }
-
-                this.velocityX *= 0.95;
-            }
-
-            isColliding(obj) {
-                return this.x < obj.x + obj.width &&
-                       this.x + this.width > obj.x &&
-                       this.y < obj.y + obj.height &&
-                       this.y + this.height > obj.y;
-            }
-
-            reset() {
-                this.y = -100;
-                this.velocityX = 0;
-                this.velocityY = 0;
-            }
-
-            draw() {
-                ctx.fillStyle = config.box_color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                ctx.strokeStyle = '#8b4513';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(this.x, this.y, this.width, this.height);
-            }
-        }
-
-        // Platform Object
-        class Platform {
-            constructor(x, y, width, height) {
-                this.x = x;
-                this.y = y;
-                this.width = width;
-                this.height = height;
-            }
-
-            draw() {
-                ctx.fillStyle = config.platform_color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                ctx.strokeStyle = '#654321';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(this.x, this.y, this.width, this.height);
-            }
-        }
-
-        // Switch Object
-        class Switch {
-            constructor(x, y, radius = 8) {
-                this.x = x;
-                this.y = y;
-                this.radius = radius;
-            }
-
-            draw(activated) {
-                ctx.fillStyle = activated ? '#00ff00' : config.switch_color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            }
-        }
-
-        // Door Object
-        class Door {
-            constructor(x, y, width, height) {
-                this.x = x;
-                this.y = y;
-                this.width = width;
-                this.height = height;
-                this.activated = false;
-            }
-
-            draw() {
-                ctx.fillStyle = this.activated ? '#00aa00' : config.door_color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(this.x, this.y, this.width, this.height);
-            }
-        }
-
-        // Goal Object
-        class Goal {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.width = 30;
-                this.height = 40;
-            }
-
-            draw() {
-                // Pole
-                ctx.fillStyle = '#8b4513';
-                ctx.fillRect(this.x + 12, this.y + 20, 6, 20);
-                // Flag
-                ctx.fillStyle = config.goal_color;
-                ctx.beginPath();
-                ctx.moveTo(this.x + 18, this.y + 20);
-                ctx.lineTo(this.x + 28, this.y + 10);
-                ctx.lineTo(this.x + 28, this.y + 30);
-                ctx.closePath();
-                ctx.fill();
-            }
-        }
-
-        // Stage Data
         const stageData = [
             {
+                // Stage 1: Simple introduction
                 platforms: [
-                    { x: 0, y: 350, w: 640, h: 50 },
-                    { x: 200, y: 300, w: 100, h: 20 },
-                    { x: 450, y: 250, w: 150, h: 20 }
+                    { x: 0, y: 360, w: 640, h: 40 }, // floor
+                    { x: 150, y: 300, w: 100, h: 20 },
+                    { x: 350, y: 280, w: 100, h: 20 },
+                    { x: 500, y: 250, w: 120, h: 20 }
                 ],
                 boxes: [
-                    { x: 250, y: 250, w: 40, h: 40 }
+                    { x: 80, y: 300, w: 40, h: 40 }
                 ],
                 switches: [
-                    { x: 250, y: 275 }
+                    { x: 400, y: 260, radius: 10, doorId: 0 }
                 ],
                 doors: [
-                    { x: 490, y: 200, w: 40, h: 50 }
+                    { x: 520, y: 200, w: 40, h: 80, switchId: 0 }
                 ],
-                goal: { x: 580, y: 280 },
-                playerStart: { x: 50, y: 300 }
+                goal: { x: 580, y: 160 }
             },
             {
+                // Stage 2: Multiple boxes and switches
                 platforms: [
-                    { x: 0, y: 350, w: 640, h: 50 },
-                    { x: 100, y: 280, w: 100, h: 20 },
-                    { x: 250, y: 250, w: 100, h: 20 },
-                    { x: 420, y: 220, w: 100, h: 20 }
+                    { x: 0, y: 360, w: 640, h: 40 }, // floor
+                    { x: 50, y: 300, w: 100, h: 20 },
+                    { x: 200, y: 280, w: 120, h: 20 },
+                    { x: 380, y: 260, w: 100, h: 20 },
+                    { x: 500, y: 240, w: 120, h: 20 }
                 ],
                 boxes: [
-                    { x: 120, y: 240, w: 35, h: 35 },
-                    { x: 280, y: 210, w: 35, h: 35 }
+                    { x: 60, y: 250, w: 40, h: 40 },
+                    { x: 210, y: 230, w: 40, h: 40 }
                 ],
                 switches: [
-                    { x: 150, y: 275 },
-                    { x: 300, y: 245 }
+                    { x: 250, y: 250, radius: 10, doorId: 0 },
+                    { x: 430, y: 240, radius: 10, doorId: 1 }
                 ],
                 doors: [
-                    { x: 180, y: 230, w: 40, h: 50 },
-                    { x: 380, y: 170, w: 40, h: 50 }
+                    { x: 320, y: 160, w: 40, h: 120, switchId: 0 },
+                    { x: 520, y: 120, w: 40, h: 140, switchId: 1 }
                 ],
-                goal: { x: 550, y: 250 },
-                playerStart: { x: 30, y: 300 }
+                goal: { x: 580, y: 80 }
             },
             {
+                // Stage 3: Complex terrain
                 platforms: [
-                    { x: 0, y: 350, w: 640, h: 50 },
-                    { x: 80, y: 280, w: 80, h: 20 },
-                    { x: 200, y: 220, w: 80, h: 20 },
-                    { x: 320, y: 260, w: 80, h: 20 },
-                    { x: 450, y: 180, w: 100, h: 20 }
+                    { x: 0, y: 360, w: 200, h: 40 }, // floor left
+                    { x: 0, y: 280, w: 80, h: 20 },
+                    { x: 120, y: 240, w: 100, h: 20 },
+                    { x: 280, y: 280, w: 120, h: 20 },
+                    { x: 450, y: 220, w: 100, h: 20 },
+                    { x: 600, y: 360, w: 40, h: 40 }, // floor right
+                    { x: 540, y: 140, w: 100, h: 20 }
                 ],
                 boxes: [
-                    { x: 120, y: 240, w: 35, h: 35 },
-                    { x: 280, y: 180, w: 35, h: 35 }
+                    { x: 70, y: 230, w: 40, h: 40 },
+                    { x: 200, y: 190, w: 40, h: 40 }
                 ],
                 switches: [
-                    { x: 240, y: 245 },
-                    { x: 360, y: 290 }
+                    { x: 330, y: 260, radius: 10, doorId: 0 },
+                    { x: 500, y: 200, radius: 10, doorId: 1 }
                 ],
                 doors: [
-                    { x: 260, y: 170, w: 40, h: 50 },
-                    { x: 420, y: 130, w: 40, h: 50 }
+                    { x: 380, y: 140, w: 40, h: 160, switchId: 0 },
+                    { x: 560, y: 60, w: 40, h: 100, switchId: 1 }
                 ],
-                goal: { x: 560, y: 220 },
-                playerStart: { x: 30, y: 300 }
+                goal: { x: 600, y: 100 }
             }
         ];
 
-        function loadStage(stageIndex) {
-            if (stageIndex >= config.stage_count) {
-                stageIndex = 0;
-                gameState.currentStage = 0;
-            }
-
-            const stage = stageData[stageIndex];
-            document.getElementById('stageName').textContent = stageIndex + 1;
-
-            gameState.platforms = stage.platforms.map(p => new Platform(p.x, p.y, p.w, p.h));
-            gameState.boxes = stage.boxes.map(b => new Box(b.x, b.y, b.w, b.h));
-            gameState.switches = stage.switches.map(s => new Switch(s.x, s.y));
-            gameState.doors = stage.doors.map(d => new Door(d.x, d.y, d.w, d.h));
-            gameState.goal = new Goal(stage.goal.x, stage.goal.y);
-            gameState.player = new Player(stage.playerStart.x, stage.playerStart.y);
-            gameState.activatedSwitches.clear();
-
-            gameState.running = true;
+        function initPlayer() {
+            gameState.player = {
+                x: 20,
+                y: 300,
+                w: 30,
+                h: 40,
+                vx: 0,
+                vy: 0,
+                onGround: false
+            };
         }
 
-        function showScreen(screenId) {
-            document.getElementById('startScreen').classList.remove('active');
-            document.getElementById('gameOverScreen').classList.remove('active');
-            document.getElementById('clearScreen').classList.remove('active');
-            document.getElementById(screenId).classList.add('active');
+        function loadStage(stageIndex) {
+            const data = stageData[stageIndex];
+            
+            gameState.platforms = data.platforms.map(p => ({ ...p }));
+            gameState.boxes = data.boxes.map(b => ({ ...b, vx: 0, vy: 0, onGround: false }));
+            gameState.switches = data.switches.map(s => ({ ...s, activated: false }));
+            gameState.doors = data.doors.map(d => ({ ...d, open: false }));
+            gameState.goal = { ...data.goal };
+            
+            initPlayer();
+            
+            document.getElementById('stageNumber').textContent = stageIndex + 1;
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            
+            gameState.running = true;
+            requestAnimationFrame(gameLoop);
         }
 
         function startGame() {
             gameState.currentStage = 0;
-            showScreen('gameOverScreen');
-            document.getElementById('gameOverScreen').classList.remove('active');
             loadStage(0);
-        }
-
-        function retryGame() {
-            showScreen('startScreen');
-            gameState.running = false;
         }
 
         function nextStage() {
             gameState.currentStage++;
             if (gameState.currentStage >= config.stage_count) {
-                showScreen('startScreen');
+                document.getElementById('startScreen').style.display = 'flex';
+                document.getElementById('clearScreen').style.display = 'none';
                 gameState.currentStage = 0;
             } else {
                 loadStage(gameState.currentStage);
             }
         }
 
-        // Input Handling
-        const keys = {};
-        window.addEventListener('keydown', (e) => {
-            keys[e.key.toLowerCase()] = true;
-            if (e.key === ' ') e.preventDefault();
-        });
-        window.addEventListener('keyup', (e) => {
-            keys[e.key.toLowerCase()] = false;
-        });
+        function retryGame() {
+            gameState.currentStage = 0;
+            document.getElementById('startScreen').style.display = 'flex';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            gameState.running = false;
+        }
 
         function handleInput() {
-            if (keys['a'] || keys['arrowleft']) {
-                gameState.player.velocityX = -5;
+            const speed = 6;
+            gameState.player.vx = 0;
+            
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+                gameState.player.vx = -speed;
             }
-            if (keys['d'] || keys['arrowright']) {
-                gameState.player.velocityX = 5;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                gameState.player.vx = speed;
             }
-            if ((keys['w'] || keys[' ']) && !gameState.player.jumping) {
-                gameState.player.velocityY = config.jump_force;
-                gameState.player.jumping = true;
+            
+            if ((keys['ArrowUp'] || keys['w'] || keys['W'] || keys[' ']) && gameState.player.onGround) {
+                gameState.player.vy = config.jump_force;
+                gameState.player.onGround = false;
             }
         }
 
-        function update() {
-            if (!gameState.running) return;
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.w &&
+                   rect1.x + rect1.w > rect2.x &&
+                   rect1.y < rect2.y + rect2.h &&
+                   rect1.y + rect1.h > rect2.y;
+        }
 
-            handleInput();
-            gameState.player.update();
-            gameState.boxes.forEach(box => box.update());
+        function checkPointInCircle(px, py, cx, cy, radius) {
+            const dx = px - cx;
+            const dy = py - cy;
+            return Math.sqrt(dx * dx + dy * dy) <= radius;
+        }
+
+        function updateEntity(entity, isPlayer = false) {
+            entity.vy += config.gravity;
+            entity.x += entity.vx;
+            entity.y += entity.vy;
+
+            entity.onGround = false;
+
+            // Platform collision
+            for (let platform of gameState.platforms) {
+                if (checkCollision(entity, platform)) {
+                    if (entity.vy > 0 && entity.y + entity.h - entity.vy <= platform.y + 5) {
+                        entity.y = platform.y - entity.h;
+                        entity.vy = 0;
+                        entity.onGround = true;
+                    } else if (entity.vy < 0) {
+                        entity.y = platform.y + platform.h;
+                        entity.vy = 0;
+                    } else if (entity.vx > 0) {
+                        entity.x = platform.x - entity.w;
+                    } else if (entity.vx < 0) {
+                        entity.x = platform.x + platform.w;
+                    }
+                }
+            }
+
+            // Door collision (if open, pass through)
+            for (let door of gameState.doors) {
+                if (!door.open && checkCollision(entity, door)) {
+                    if (entity.vx > 0) {
+                        entity.x = door.x - entity.w;
+                    } else if (entity.vx < 0) {
+                        entity.x = door.x + door.w;
+                    }
+                }
+            }
+
+            // Out of bounds (fall)
+            if (entity.y > canvas.height) {
+                return false;
+            }
+            return true;
+        }
+
+        function update() {
+            // Update player
+            const playerAlive = updateEntity(gameState.player, true);
+            if (!playerAlive) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+
+            // Update boxes
+            gameState.boxes = gameState.boxes.filter(box => {
+                const alive = updateEntity(box, false);
+                if (!alive) return false;
+
+                // Box-player collision
+                if (checkCollision(gameState.player, box)) {
+                    if (gameState.player.vx > 0) {
+                        gameState.player.x = box.x - gameState.player.w;
+                    } else if (gameState.player.vx < 0) {
+                        gameState.player.x = box.x + box.w;
+                    }
+                    if (gameState.player.vy > 0) {
+                        gameState.player.y = box.y - gameState.player.h;
+                        gameState.player.vy = 0;
+                        gameState.player.onGround = true;
+                    }
+                }
+
+                // Box-box collision
+                for (let other of gameState.boxes) {
+                    if (box !== other && checkCollision(box, other)) {
+                        if (box.vx > 0) {
+                            box.x = other.x - box.w;
+                        } else if (box.vx < 0) {
+                            box.x = other.x + other.w;
+                        }
+                    }
+                }
+
+                return true;
+            });
+
+            // Check switches
+            for (let switchObj of gameState.switches) {
+                let activated = false;
+                for (let box of gameState.boxes) {
+                    const boxCenterX = box.x + box.w / 2;
+                    const boxCenterY = box.y + box.h / 2;
+                    if (checkPointInCircle(boxCenterX, boxCenterY, switchObj.x, switchObj.y, switchObj.radius + 20)) {
+                        activated = true;
+                        break;
+                    }
+                }
+                switchObj.activated = activated;
+            }
+
+            // Update doors
+            for (let door of gameState.doors) {
+                door.open = gameState.switches[door.switchId] && gameState.switches[door.switchId].activated;
+            }
+
+            // Check goal
+            if (checkCollision(gameState.player, gameState.goal)) {
+                gameState.running = false;
+                if (gameState.currentStage === config.stage_count - 1) {
+                    document.getElementById('clearMessage').textContent = 'すべてのステージをクリアしました！おめでとう！';
+                    document.getElementById('nextButton').textContent = 'リスタート';
+                } else {
+                    document.getElementById('clearMessage').textContent = `ステージ ${gameState.currentStage + 1} をクリアしました！`;
+                    document.getElementById('nextButton').textContent = 'NEXT STAGE';
+                }
+                document.getElementById('clearScreen').style.display = 'flex';
+            }
         }
 
         function draw() {
             ctx.fillStyle = config.bg_color;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            gameState.platforms.forEach(p => p.draw());
-            gameState.boxes.forEach(b => b.draw());
-            gameState.doors.forEach((d, i) => d.draw());
-            gameState.switches.forEach((s, i) => s.draw(gameState.activatedSwitches.has(i)));
-            gameState.goal.draw();
-            gameState.player.draw();
+            // Draw platforms
+            ctx.fillStyle = config.platform_color;
+            for (let platform of gameState.platforms) {
+                ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
+            }
+
+            // Draw boxes
+            ctx.fillStyle = config.box_color;
+            for (let box of gameState.boxes) {
+                ctx.fillRect(box.x, box.y, box.w, box.h);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(box.x, box.y, box.w, box.h);
+            }
+
+            // Draw switches
+            for (let switchObj of gameState.switches) {
+                ctx.fillStyle = switchObj.activated ? '#00ff00' : config.switch_color;
+                ctx.beginPath();
+                ctx.arc(switchObj.x, switchObj.y, switchObj.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Draw doors
+            for (let door of gameState.doors) {
+                ctx.fillStyle = door.open ? '#4a4a4a' : config.door_color;
+                ctx.fillRect(door.x, door.y, door.w, door.h);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(door.x, door.y, door.w, door.h);
+            }
+
+            // Draw goal flag
+            const goalPoleX = gameState.goal.x + 15;
+            const goalPoleY = gameState.goal.y;
+            ctx.strokeStyle = '#8b4513';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(goalPoleX, goalPoleY + 50);
+            ctx.lineTo(goalPoleX, goalPoleY);
+            ctx.stroke();
+            ctx.fillStyle = config.goal_color;
+            ctx.beginPath();
+            ctx.moveTo(goalPoleX, goalPoleY);
+            ctx.lineTo(goalPoleX + 30, goalPoleY + 15);
+            ctx.lineTo(goalPoleX, goalPoleY + 30);
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw player
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.w, gameState.player.h);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(gameState.player.x, gameState.player.y, gameState.player.w, gameState.player.h);
         }
 
         function gameLoop() {
+            if (!gameState.running) return;
+            handleInput();
             update();
             draw();
-            if (gameState.running) {
-                requestAnimationFrame(gameLoop);
-            }
+            requestAnimationFrame(gameLoop);
         }
-
-        // Start
-        document.addEventListener('DOMContentLoaded', () => {
-            showScreen('startScreen');
-        });
     </script>
 </body>
 </html>
