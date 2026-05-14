@@ -1,0 +1,434 @@
+<!--
+theme:       dark
+title:        FIGHTER
+bg_color:    #1a0a2e
+player_color: #4299e1
+cpu_color:   #e53e3e
+player_hp:   100
+cpu_hp:      100
+move_speed:  5
+jump_force:  -12
+gravity:     0.6
+mp_max:      50
+-->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIGHTER</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        #gameWrapper {
+            position: relative;
+            width: fit-content;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 600px;
+            height: 350px;
+            background: #1a0a2e;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            z-index: 100;
+        }
+        #startScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #startScreen p {
+            font-size: 14px;
+            text-align: center;
+            max-width: 500px;
+            line-height: 1.6;
+            color: #aaa;
+        }
+        #startButton {
+            padding: 12px 30px;
+            font-size: 18px;
+            background: #4299e1;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #startButton:hover {
+            background: #3182ce;
+        }
+        #gameContainer {
+            border: 2px solid #4299e1;
+        }
+        #gameCanvas {
+            display: block;
+            background: #1a0a2e;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 600px;
+            height: 350px;
+            background: rgba(26, 10, 46, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            z-index: 100;
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 600px;
+            height: 350px;
+            background: rgba(26, 10, 46, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            z-index: 100;
+        }
+        .screen-title {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .screen-message {
+            font-size: 18px;
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 20px;
+        }
+        #retryButton {
+            padding: 12px 30px;
+            font-size: 18px;
+            background: #4299e1;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #retryButton:hover {
+            background: #3182ce;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameWrapper">
+        <div id="startScreen">
+            <h1>FIGHTER</h1>
+            <p>
+                CPU と対戦します。<br>
+                操作: A/D（移動）, W（ジャンプ）<br>
+                J（弱攻撃）, K（強攻撃）, L（必殺技）<br>
+                CPU の HP を 0 にするとクリアです。
+            </p>
+            <button id="startButton">START</button>
+        </div>
+        <div id="gameOverScreen">
+            <div class="screen-title">GAME OVER</div>
+            <div class="screen-message">You were defeated.</div>
+            <button id="retryButton">RETRY</button>
+        </div>
+        <div id="clearScreen">
+            <div class="screen-title">CLEAR!</div>
+            <div class="screen-message">You defeated the CPU!</div>
+            <button id="retryButton">RETRY</button>
+        </div>
+        <div id="gameContainer">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'FIGHTER',
+            bg_color: '#1a0a2e',
+            player_color: '#4299e1',
+            cpu_color: '#e53e3e',
+            player_hp: 100,
+            cpu_hp: 100,
+            move_speed: 5,
+            jump_force: -12,
+            gravity: 0.6,
+            mp_max: 50
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 600;
+        canvas.height = 350;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+        const gameState = {
+            running: false,
+            frame: 0
+        };
+
+        const input = {
+            left: false,
+            right: false,
+            jump: false,
+            attack_weak: false,
+            attack_strong: false,
+            attack_special: false
+        };
+
+        const player = {
+            x: 100,
+            y: canvas.height - 60,
+            width: 30,
+            height: 50,
+            vx: 0,
+            vy: 0,
+            hp: config.player_hp,
+            mp: 0,
+            jumping: false,
+            attack_cooldown: 0,
+            strong_cooldown: 0,
+            special_cooldown: 0,
+            color: config.player_color
+        };
+
+        const cpu = {
+            x: canvas.width - 130,
+            y: canvas.height - 60,
+            width: 30,
+            height: 50,
+            vx: 0,
+            vy: 0,
+            hp: config.cpu_hp,
+            mp: 0,
+            jumping: false,
+            attack_cooldown: 0,
+            strong_cooldown: 0,
+            special_cooldown: 0,
+            color: config.cpu_color,
+            ai_timer: 0
+        };
+
+        function update() {
+            gameState.frame++;
+
+            if (input.left && player.x > 0) {
+                player.x -= config.move_speed;
+            }
+            if (input.right && player.x < canvas.width - player.width) {
+                player.x += config.move_speed;
+            }
+            if (input.jump && !player.jumping) {
+                player.vy = config.jump_force;
+                player.jumping = true;
+            }
+
+            player.vy += config.gravity;
+            player.y += player.vy;
+            if (player.y >= canvas.height - 60) {
+                player.y = canvas.height - 60;
+                player.vy = 0;
+                player.jumping = false;
+            }
+
+            cpu.vy += config.gravity;
+            cpu.y += cpu.vy;
+            if (cpu.y >= canvas.height - 60) {
+                cpu.y = canvas.height - 60;
+                cpu.vy = 0;
+                cpu.jumping = false;
+            }
+
+            player.mp = Math.min(player.mp + 0.3, config.mp_max);
+            cpu.mp = Math.min(cpu.mp + 0.3, config.mp_max);
+
+            if (player.attack_cooldown > 0) player.attack_cooldown--;
+            if (player.strong_cooldown > 0) player.strong_cooldown--;
+            if (player.special_cooldown > 0) player.special_cooldown--;
+            if (cpu.attack_cooldown > 0) cpu.attack_cooldown--;
+            if (cpu.strong_cooldown > 0) cpu.strong_cooldown--;
+            if (cpu.special_cooldown > 0) cpu.special_cooldown--;
+
+            const dist = Math.abs(player.x - cpu.x);
+
+            if (input.attack_weak && player.attack_cooldown === 0) {
+                if (dist < 50) {
+                    cpu.hp -= 5;
+                }
+                player.attack_cooldown = 15;
+                input.attack_weak = false;
+            }
+
+            if (input.attack_strong && player.strong_cooldown === 0) {
+                if (dist < 50) {
+                    cpu.hp -= 12;
+                }
+                player.strong_cooldown = 40;
+                input.attack_strong = false;
+            }
+
+            if (input.attack_special && player.special_cooldown === 0 && player.mp >= 10) {
+                if (dist < 50) {
+                    cpu.hp -= 20;
+                }
+                player.mp -= 10;
+                player.special_cooldown = 60;
+                input.attack_special = false;
+            }
+
+            cpu.ai_timer++;
+            if (cpu.ai_timer > 30) {
+                cpu.ai_timer = 0;
+                if (dist < 80) {
+                    if (Math.random() < 0.4 && cpu.attack_cooldown === 0) {
+                        if (dist < 50) player.hp -= 5;
+                        cpu.attack_cooldown = 15;
+                    } else if (Math.random() < 0.2 && cpu.strong_cooldown === 0) {
+                        if (dist < 50) player.hp -= 12;
+                        cpu.strong_cooldown = 40;
+                    }
+                } else {
+                    if (cpu.x > player.x + 50) {
+                        cpu.x -= config.move_speed;
+                    } else if (cpu.x < player.x - 50) {
+                        cpu.x += config.move_speed;
+                    }
+                }
+
+                if (cpu.mp >= 10 && cpu.special_cooldown === 0 && dist < 80) {
+                    if (Math.random() < 0.3) {
+                        if (dist < 50) player.hp -= 20;
+                        cpu.mp -= 10;
+                        cpu.special_cooldown = 60;
+                    }
+                }
+
+                if (!cpu.jumping && Math.random() < 0.15) {
+                    cpu.vy = config.jump_force;
+                    cpu.jumping = true;
+                }
+            }
+
+            if (player.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+
+            if (cpu.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            ctx.fillStyle = config.cpu_color;
+            ctx.fillRect(cpu.x, cpu.y, cpu.width, cpu.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Player HP: ' + Math.max(0, player.hp), 10, 25);
+            ctx.fillStyle = '#4299e1';
+            ctx.fillRect(10, 30, 100, 10);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(10, 30, (Math.max(0, player.hp) / config.player_hp) * 100, 10);
+
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'right';
+            ctx.fillText('CPU HP: ' + Math.max(0, cpu.hp), canvas.width - 10, 25);
+            ctx.fillStyle = '#e53e3e';
+            ctx.fillRect(canvas.width - 110, 30, 100, 10);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(canvas.width - 110, 30, (Math.max(0, cpu.hp) / config.cpu_hp) * 100, 10);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('MP: ' + Math.floor(player.mp) + '/' + config.mp_max, 10, 55);
+            ctx.fillStyle = '#ffaa00';
+            ctx.fillRect(10, 60, 60, 8);
+            ctx.fillStyle = '#ffdd00';
+            ctx.fillRect(10, 60, (player.mp / config.mp_max) * 60, 8);
+
+            ctx.fillStyle = '#aaa';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('J: Weak | K: Strong | L: Special', canvas.width / 2, canvas.height - 10);
+        }
+
+        function gameLoop() {
+            if (!gameState.running) {
+                return;
+            }
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') input.left = true;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') input.right = true;
+            if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') input.jump = true;
+            if (e.key === 'j' || e.key === 'J') input.attack_weak = true;
+            if (e.key === 'k' || e.key === 'K') input.attack_strong = true;
+            if (e.key === 'l' || e.key === 'L') input.attack_special = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') input.left = false;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') input.right = false;
+            if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') input.jump = false;
+        });
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            player.hp = config.player_hp;
+            cpu.hp = config.cpu_hp;
+            player.mp = 0;
+            cpu.mp = 0;
+            gameLoop();
+        });
+
+        const retryButtons = document.querySelectorAll('#retryButton');
+        retryButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('gameOverScreen').style.display = 'none';
+                document.getElementById('clearScreen').style.display = 'none';
+                document.getElementById('startScreen').style.display = 'flex';
+                gameState.running = false;
+                player.hp = config.player_hp;
+                cpu.hp = config.cpu_hp;
+                player.mp = 0;
+                cpu.mp = 0;
+            });
+        });
+    </script>
+</body>
+</html>

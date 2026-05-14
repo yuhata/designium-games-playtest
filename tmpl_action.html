@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wave Action Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #444;
+        }
+        canvas {
+            display: block;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startScreen {
+            display: flex;
+        }
+        #gameOverScreen {
+            display: none;
+        }
+        #clearScreen {
+            display: none;
+        }
+        .screen-content {
+            text-align: center;
+            color: white;
+        }
+        .screen-content h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        .screen-content p {
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        .screen-content button {
+            padding: 12px 30px;
+            font-size: 18px;
+            background: #58a6ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .screen-content button:hover {
+            background: #79c0ff;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <div class="screen-content">
+                <h1>ACTION</h1>
+                <p><strong>Goal:</strong> Defeat all enemies in 5 waves to win!</p>
+                <p><strong>Controls:</strong><br>WASD or Arrow Keys to move<br>SPACEBAR to attack</p>
+                <p><strong>Game Over:</strong> If your HP reaches 0</p>
+                <button onclick="startGame()">START</button>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="gameOverScreen">
+            <div class="screen-content">
+                <h1>GAME OVER</h1>
+                <p>You were defeated...</p>
+                <button onclick="retryGame()">RETRY</button>
+            </div>
+        </div>
+        <div id="clearScreen">
+            <div class="screen-content">
+                <h1>CLEAR!</h1>
+                <p>You defeated all waves!</p>
+                <button onclick="retryGame()">PLAY AGAIN</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Parameter Schema (comments only, not used in code)
+        // theme:            string
+        // title:            string
+        // bg_color:         string
+        // player_color:     string
+        // enemy_color:      string
+        // player_hp:        int     (default: 5)
+        // player_speed:     int     (default: 4)
+        // attack_range:     int     (default: 60)
+        // attack_cooldown:  int     (default: 30)
+        // enemies_per_wave: int     (default: 5)
+        // win_waves:        int     (default: 5)
+
+        const config = {
+            title: 'ACTION',
+            bg_color: '#0d1117',
+            player_color: '#58a6ff',
+            enemy_color: '#f78166',
+            player_hp: 5,
+            player_speed: 4,
+            attack_range: 60,
+            attack_cooldown: 30,
+            enemies_per_wave: 5,
+            win_waves: 5
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400;
+        canvas.height = 600;
+
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        document.body.style.background = config.bg_color;
+
+        const gameState = {
+            running: false,
+            currentWave: 0,
+            waveActive: false,
+            waveMessage: '',
+            waveMessageTime: 0,
+            player: null,
+            enemies: [],
+            keys: {}
+        };
+
+        const Player = function(x, y) {
+            this.x = x;
+            this.y = y;
+            this.width = 20;
+            this.height = 20;
+            this.vx = 0;
+            this.vy = 0;
+            this.hp = config.player_hp;
+            this.attackCooldown = 0;
+            this.speed = config.player_speed;
+        };
+
+        Player.prototype.update = function() {
+            this.vx = 0;
+            this.vy = 0;
+            if (gameState.keys['w'] || gameState.keys['ArrowUp']) this.vy = -this.speed;
+            if (gameState.keys['s'] || gameState.keys['ArrowDown']) this.vy = this.speed;
+            if (gameState.keys['a'] || gameState.keys['ArrowLeft']) this.vx = -this.speed;
+            if (gameState.keys['d'] || gameState.keys['ArrowRight']) this.vx = this.speed;
+
+            this.x += this.vx;
+            this.y += this.vy;
+
+            if (this.x < 0) this.x = 0;
+            if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+            if (this.y < 0) this.y = 0;
+            if (this.y + this.height > canvas.height) this.y = canvas.height - this.height;
+
+            if (this.attackCooldown > 0) this.attackCooldown--;
+        };
+
+        Player.prototype.attack = function() {
+            if (this.attackCooldown > 0) return;
+            this.attackCooldown = config.attack_cooldown;
+
+            for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+                const enemy = gameState.enemies[i];
+                const dx = (enemy.x + enemy.width / 2) - (this.x + this.width / 2);
+                const dy = (enemy.y + enemy.height / 2) - (this.y + this.height / 2);
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < config.attack_range) {
+                    gameState.enemies.splice(i, 1);
+                }
+            }
+        };
+
+        Player.prototype.draw = function() {
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        };
+
+        const Enemy = function(x, y) {
+            this.x = x;
+            this.y = y;
+            this.width = 16;
+            this.height = 16;
+            this.speed = 1.5;
+        };
+
+        Enemy.prototype.update = function() {
+            const dx = gameState.player.x + gameState.player.width / 2 - (this.x + this.width / 2);
+            const dy = gameState.player.y + gameState.player.height / 2 - (this.y + this.height / 2);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 0) {
+                this.x += (dx / distance) * this.speed;
+                this.y += (dy / distance) * this.speed;
+            }
+        };
+
+        Enemy.prototype.draw = function() {
+            ctx.fillStyle = config.enemy_color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        };
+
+        function startWave() {
+            gameState.currentWave++;
+            gameState.waveActive = true;
+            gameState.enemies = [];
+
+            for (let i = 0; i < config.enemies_per_wave; i++) {
+                const side = Math.floor(Math.random() * 4);
+                let ex, ey;
+
+                if (side === 0) {
+                    ex = Math.random() * canvas.width;
+                    ey = -20;
+                } else if (side === 1) {
+                    ex = Math.random() * canvas.width;
+                    ey = canvas.height + 20;
+                } else if (side === 2) {
+                    ex = -20;
+                    ey = Math.random() * canvas.height;
+                } else {
+                    ex = canvas.width + 20;
+                    ey = Math.random() * canvas.height;
+                }
+
+                gameState.enemies.push(new Enemy(ex, ey));
+            }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.currentWave = 0;
+            gameState.waveActive = false;
+            gameState.player = new Player(canvas.width / 2, canvas.height / 2);
+            gameState.player.hp = config.player_hp;
+            gameState.enemies = [];
+            startWave();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            gameState.player.update();
+            gameState.player.draw();
+
+            for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+                gameState.enemies[i].update();
+                gameState.enemies[i].draw();
+
+                const px = gameState.player.x + gameState.player.width / 2;
+                const py = gameState.player.y + gameState.player.height / 2;
+                const ex = gameState.enemies[i].x + gameState.enemies[i].width / 2;
+                const ey = gameState.enemies[i].y + gameState.enemies[i].height / 2;
+                const dist = Math.sqrt((px - ex) ** 2 + (py - ey) ** 2);
+
+                if (dist < gameState.player.width / 2 + gameState.enemies[i].width / 2) {
+                    gameState.player.hp--;
+                    gameState.enemies.splice(i, 1);
+                }
+            }
+
+            if (gameState.waveActive && gameState.enemies.length === 0) {
+                if (gameState.currentWave >= config.win_waves) {
+                    gameState.running = false;
+                    document.getElementById('clearScreen').style.display = 'flex';
+                    return;
+                }
+                gameState.waveActive = false;
+                gameState.waveMessage = 'Wave ' + (gameState.currentWave + 1) + ' Starting...';
+                gameState.waveMessageTime = 60;
+            }
+
+            if (!gameState.waveActive) {
+                if (gameState.waveMessageTime > 0) {
+                    gameState.waveMessageTime--;
+                    if (gameState.waveMessageTime === 0) {
+                        startWave();
+                    }
+                }
+            }
+
+            if (gameState.waveMessage && gameState.waveMessageTime > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(gameState.waveMessage, canvas.width / 2, canvas.height / 2);
+            }
+
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('HP: ' + '♥'.repeat(Math.max(0, gameState.player.hp)), 10, 20);
+            ctx.fillText('Wave: ' + gameState.currentWave + '/' + config.win_waves, 10, 40);
+            ctx.fillText('Enemies: ' + gameState.enemies.length, 10, 60);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText('WASD/Arrows to move | SPACE to attack', canvas.width - 10, canvas.height - 10);
+
+            if (gameState.player.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            gameState.keys[key] = true;
+            gameState.keys[e.key] = true;
+
+            if (key === ' ') {
+                e.preventDefault();
+                if (gameState.running) gameState.player.attack();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            gameState.keys[key] = false;
+            gameState.keys[e.key] = false;
+        });
+    </script>
+</body>
+</html>
