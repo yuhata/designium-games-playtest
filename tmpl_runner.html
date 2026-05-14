@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ENDLESS RUN</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #111;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #666;
+            display: block;
+            background-color: #1a1a2e;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // ==========================================
+        // パラメータスキーマ（デフォルト値）
+        // ==========================================
+        // theme:              "string  // param生成への入力。HTMLには出ない"
+        // title:              "ENDLESS RUN"
+        // bg_color:           "#1a1a2e"
+        // player_color:       "#00d4ff"
+        // obstacle_color:     "#e74c3c"
+        // ground_color:       "#4a9e4a"
+        // scroll_speed:       4  (px/frame)
+        // gravity:            0.6
+        // jump_force:         -13 (負値)
+        // obstacle_interval:  90  (フレーム)
+        // win_distance:       200 (m)
+        // lives:              3
+
+        // ==========================================
+        // ゲーム設定
+        // ==========================================
+        const config = {
+            title: "ENDLESS RUN",
+            bg_color: "#1a1a2e",
+            player_color: "#00d4ff",
+            obstacle_color: "#e74c3c",
+            ground_color: "#4a9e4a",
+            scroll_speed: 4,
+            gravity: 0.6,
+            jump_force: -13,
+            obstacle_interval: 90,
+            win_distance: 200,
+            lives: 3
+        };
+
+        // ==========================================
+        // Canvas & Context
+        // ==========================================
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        
+        canvas.width = 1200;
+        canvas.height = 400;
+
+        // ==========================================
+        // ゲーム状態
+        // ==========================================
+        let gameState = "start";  // "start", "playing", "gameOver", "clear"
+        let frameCount = 0;
+        let distance = 0; // メートル単位（px / 10）
+        let lives = config.lives;
+        let invincibilityTimer = 0;
+        const invincibilityDuration = 30; // フレーム
+
+        // ==========================================
+        // プレイヤー
+        // ==========================================
+        const player = {
+            x: 50,
+            y: canvas.height - 80,
+            width: 30,
+            height: 40,
+            velocityY: 0,
+            isJumping: false,
+            isGrounded: false
+        };
+
+        const groundY = canvas.height - 40;
+
+        // ==========================================
+        // 障害物
+        // ==========================================
+        let obstacles = [];
+        let lastObstacleFrame = 0;
+
+        // ==========================================
+        // 入力処理
+        // ==========================================
+        document.addEventListener("keydown", (e) => {
+            if (e.code === "Space") {
+                e.preventDefault();
+                if (gameState === "start") {
+                    gameState = "playing";
+                    frameCount = 0;
+                    distance = 0;
+                    lives = config.lives;
+                    obstacles = [];
+                } else if (gameState === "playing" && player.isGrounded) {
+                    player.velocityY = config.jump_force;
+                    player.isJumping = true;
+                    player.isGrounded = false;
+                }
+            }
+        });
+
+        canvas.addEventListener("click", () => {
+            if (gameState === "start") {
+                gameState = "playing";
+                frameCount = 0;
+                distance = 0;
+                lives = config.lives;
+                obstacles = [];
+            } else if (gameState === "playing" && player.isGrounded) {
+                player.velocityY = config.jump_force;
+                player.isJumping = true;
+                player.isGrounded = false;
+            }
+        });
+
+        // ==========================================
+        // ゲームロジック
+        // ==========================================
+        function update() {
+            if (gameState !== "playing") return;
+
+            frameCount++;
+            distance = Math.floor(frameCount / 10); // 10フレーム = 1m
+
+            // 重力適用
+            player.velocityY += config.gravity;
+            player.y += player.velocityY;
+
+            // 地面判定
+            if (player.y + player.height >= groundY) {
+                player.y = groundY - player.height;
+                player.velocityY = 0;
+                player.isJumping = false;
+                player.isGrounded = true;
+            } else {
+                player.isGrounded = false;
+            }
+
+            // 無敵時間処理
+            if (invincibilityTimer > 0) {
+                invincibilityTimer--;
+            }
+
+            // 障害物生成
+            if (frameCount - lastObstacleFrame >= config.obstacle_interval) {
+                obstacles.push({
+                    x: canvas.width,
+                    y: groundY - 40,
+                    width: 30,
+                    height: 40
+                });
+                lastObstacleFrame = frameCount;
+            }
+
+            // 障害物更新
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= config.scroll_speed;
+                
+                // 画面外の障害物削除
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // 衝突判定
+            if (invincibilityTimer <= 0) {
+                for (let obstacle of obstacles) {
+                    if (
+                        player.x < obstacle.x + obstacle.width &&
+                        player.x + player.width > obstacle.x &&
+                        player.y < obstacle.y + obstacle.height &&
+                        player.y + player.height > obstacle.y
+                    ) {
+                        lives--;
+                        invincibilityTimer = invincibilityDuration;
+                        if (lives <= 0) {
+                            gameState = "gameOver";
+                        }
+                    }
+                }
+            }
+
+            // クリア判定
+            if (distance >= config.win_distance) {
+                gameState = "clear";
+            }
+        }
+
+        // ==========================================
+        // 描画
+        // ==========================================
+        function draw() {
+            // 背景
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // グラウンド
+            ctx.fillStyle = config.ground_color;
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+            // スクロール背景パターン（視覚効果）
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+            ctx.lineWidth = 1;
+            const offset = (frameCount * config.scroll_speed) % 100;
+            for (let i = 0; i <= canvas.width / 100; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * 100 - offset, groundY);
+                ctx.lineTo(i * 100 - offset, 0);
+                ctx.stroke();
+            }
+
+            // プレイヤー
+            if (gameState === "playing" && invincibilityTimer > 0 && Math.floor(invincibilityTimer / 5) % 2 === 0) {
+                ctx.globalAlpha = 0.5; // 無敵時間中は点滅
+            }
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.globalAlpha = 1.0;
+
+            // 障害物
+            ctx.fillStyle = config.obstacle_color;
+            for (let obstacle of obstacles) {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            }
+
+            // UI: 距離表示
+            ctx.fillStyle = "white";
+            ctx.font = "bold 24px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(`${distance} / 200 m`, canvas.width / 2, 50);
+
+            // UI: ライフ表示（左上）
+            ctx.textAlign = "left";
+            ctx.font = "bold 20px Arial";
+            ctx.fillText(`Lives: ${lives}`, 20, 40);
+            for (let i = 0; i < lives; i++) {
+                ctx.fillStyle = "#ff6b6b";
+                ctx.font = "bold 24px Arial";
+                ctx.fillText("♥", 20 + i * 30, 65);
+            }
+
+            // UI: 操作説明
+            ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+            ctx.font = "14px Arial";
+            ctx.textAlign = "right";
+            ctx.fillText("Space / Click to Jump", canvas.width - 20, canvas.height - 20);
+
+            // ==========================================
+            // スタート画面
+            // ==========================================
+            if (gameState === "start") {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = "white";
+                ctx.font = "bold 48px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("ENDLESS RUN", canvas.width / 2, canvas.height / 2 - 60);
+                
+                ctx.font = "bold 32px Arial";
+                ctx.fillText("200mを走り切れ！", canvas.width / 2, canvas.height / 2);
+                
+                ctx.font = "20px Arial";
+                ctx.fillText("Press SPACE or CLICK to Start", canvas.width / 2, canvas.height / 2 + 80);
+            }
+
+            // ==========================================
+            // ゲームオーバー画面
+            // ==========================================
+            if (gameState === "gameOver") {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = "#ff6b6b";
+                ctx.font = "bold 56px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
+                
+                ctx.fillStyle = "white";
+                ctx.font = "24px Arial";
+                ctx.fillText(`Final Distance: ${distance} m`, canvas.width / 2, canvas.height / 2 + 40);
+                
+                ctx.font = "20px Arial";
+                ctx.fillText("Press SPACE or CLICK to Retry", canvas.width / 2, canvas.height / 2 + 100);
+            }
+
+            // ==========================================
+            // クリア画面
+            // ==========================================
+            if (gameState === "clear") {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = "#4ecdc4";
+                ctx.font = "bold 56px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("CLEAR!", canvas.width / 2, canvas.height / 2 - 40);
+                
+                ctx.fillStyle = "white";
+                ctx.font = "24px Arial";
+                ctx.fillText(`Distance: 200 m`, canvas.width / 2, canvas.height / 2 + 40);
+                
+                ctx.font = "20px Arial";
+                ctx.fillText("Press SPACE or CLICK to Retry", canvas.width / 2, canvas.height / 2 + 100);
+            }
+        }
+
+        // ==========================================
+        // ゲームループ
+        // ==========================================
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

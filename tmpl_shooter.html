@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHOOTER</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #0a0a1e;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      display: inline-block;
+    }
+    #gameCanvas {
+      display: block;
+      border: 2px solid #666;
+      background-color: #0a0a1e;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 10, 30, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #00d4ff;
+      font-size: 48px;
+      margin-bottom: 40px;
+    }
+    #startScreen .goal {
+      color: #f1c40f;
+      font-size: 32px;
+      margin-bottom: 60px;
+      font-weight: bold;
+    }
+    #startScreen .instructions {
+      color: #ffffff;
+      font-size: 18px;
+      text-align: center;
+      line-height: 1.8;
+      margin-bottom: 60px;
+    }
+    #startScreen .instructions p {
+      margin-bottom: 10px;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 18px;
+      background-color: #00d4ff;
+      color: #0a0a1e;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    #startBtn:hover {
+      background-color: #00e5ff;
+    }
+    #gameOverScreen, #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 10, 30, 0.95);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 101;
+    }
+    #gameOverScreen.show, #clearScreen.show {
+      display: flex;
+    }
+    #gameOverScreen h1 {
+      color: #e74c3c;
+      font-size: 56px;
+      margin-bottom: 40px;
+    }
+    #clearScreen h1 {
+      color: #2ecc71;
+      font-size: 56px;
+      margin-bottom: 40px;
+    }
+    .endgame-text {
+      color: #ffffff;
+      font-size: 24px;
+      margin-bottom: 40px;
+    }
+    .retryBtn {
+      padding: 15px 40px;
+      font-size: 18px;
+      background-color: #00d4ff;
+      color: #0a0a1e;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .retryBtn:hover {
+      background-color: #00e5ff;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: bold;
+      z-index: 50;
+    }
+    #hp {
+      margin-bottom: 10px;
+    }
+    #kills {
+      margin-bottom: 10px;
+    }
+    #controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      color: #ffffff;
+      font-size: 14px;
+      z-index: 50;
+      opacity: 0.7;
+    }
+    #controls p {
+      margin: 3px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="startScreen">
+      <h1>SHOOTER</h1>
+      <div class="goal">20体倒せ！</div>
+      <div class="instructions">
+        <p>← → キーで移動</p>
+        <p>スペースキーまたはクリックで発射</p>
+        <p>敵をすべて倒してクリアを目指そう！</p>
+      </div>
+      <button id="startBtn">ゲーム開始</button>
+    </div>
+    <div id="gameOverScreen">
+      <h1>GAME OVER</h1>
+      <div class="endgame-text" id="gameOverText"></div>
+      <button class="retryBtn" id="retryBtn1">リトライ</button>
+    </div>
+    <div id="clearScreen">
+      <h1>クリア！</h1>
+      <div class="endgame-text" id="clearText"></div>
+      <button class="retryBtn" id="retryBtn2">リトライ</button>
+    </div>
+    <div id="hud">
+      <div id="hp"></div>
+      <div id="kills"></div>
+    </div>
+    <div id="controls">
+      <p>← → 移動</p>
+      <p>Space / Click 発射</p>
+    </div>
+  </div>
+
+  <script>
+    /*
+    パラメータスキーマ:
+    {
+      "theme":          "string",
+      "title":          "SHOOTER",
+      "bg_color":       "#0a0a1e",
+      "player_color":   "#00d4ff",
+      "enemy_color":    "#e74c3c",
+      "bullet_color":   "#f1c40f",
+      "player_speed":   5,
+      "bullet_speed":   8,
+      "enemy_speed":    2,
+      "enemy_interval": 60,
+      "win_kills":      20,
+      "hp":             3
+    }
+    
+    デフォルト値（プロトタイプ用）:
+    title="SHOOTER", bg_color="#0a0a1e", player_color="#00d4ff",
+    enemy_color="#e74c3c", bullet_color="#f1c40f",
+    player_speed=5, bullet_speed=8, enemy_speed=2, enemy_interval=60,
+    win_kills=20, hp=3
+    */
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = 800;
+    canvas.height = 600;
+
+    const STATE = {
+      WAITING: 'waiting',
+      PLAYING: 'playing',
+      GAME_OVER: 'gameOver',
+      CLEAR: 'clear'
+    };
+
+    const CONFIG = {
+      title: 'SHOOTER',
+      bg_color: '#0a0a1e',
+      player_color: '#00d4ff',
+      enemy_color: '#e74c3c',
+      bullet_color: '#f1c40f',
+      player_speed: 5,
+      bullet_speed: 8,
+      enemy_speed: 2,
+      enemy_interval: 60,
+      win_kills: 20,
+      hp: 3
+    };
+
+    let gameState = STATE.WAITING;
+    let frameCount = 0;
+    let currentKills = 0;
+    let currentHp = CONFIG.hp;
+
+    const player = {
+      x: canvas.width / 2 - 20,
+      y: canvas.height - 60,
+      width: 40,
+      height: 40
+    };
+
+    let enemies = [];
+    let bullets = [];
+    const keys = {};
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (gameState === STATE.PLAYING) {
+          shootBullet();
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    canvas.addEventListener('click', () => {
+      if (gameState === STATE.PLAYING) {
+        shootBullet();
+      }
+    });
+
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('retryBtn1').addEventListener('click', restartGame);
+    document.getElementById('retryBtn2').addEventListener('click', restartGame);
+
+    function startGame() {
+      gameState = STATE.PLAYING;
+      frameCount = 0;
+      currentKills = 0;
+      currentHp = CONFIG.hp;
+      enemies = [];
+      bullets = [];
+      player.x = canvas.width / 2 - 20;
+      player.y = canvas.height - 60;
+      
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').classList.remove('show');
+      document.getElementById('clearScreen').classList.remove('show');
+    }
+
+    function restartGame() {
+      startGame();
+    }
+
+    function shootBullet() {
+      bullets.push({
+        x: player.x + player.width / 2 - 3,
+        y: player.y,
+        width: 6,
+        height: 15,
+        vy: -CONFIG.bullet_speed
+      });
+    }
+
+    function spawnEnemy() {
+      const x = Math.random() * (canvas.width - 30);
+      enemies.push({
+        x: x,
+        y: -40,
+        width: 30,
+        height: 30,
+        vy: CONFIG.enemy_speed
+      });
+    }
+
+    function checkCollision(rect1, rect2) {
+      return !(rect1.x + rect1.width < rect2.x ||
+               rect2.x + rect2.width < rect1.x ||
+               rect1.y + rect1.height < rect2.y ||
+               rect2.y + rect2.height < rect1.y);
+    }
+
+    function updateGame() {
+      if (gameState !== STATE.PLAYING) return;
+
+      frameCount++;
+
+      if (keys['ArrowLeft'] || keys['a']) {
+        player.x = Math.max(0, player.x - CONFIG.player_speed);
+      }
+      if (keys['ArrowRight'] || keys['d']) {
+        player.x = Math.min(canvas.width - player.width, player.x + CONFIG.player_speed);
+      }
+
+      if (frameCount % CONFIG.enemy_interval === 0) {
+        spawnEnemy();
+      }
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        enemies[i].y += enemies[i].vy;
+
+        if (enemies[i].y > canvas.height) {
+          const overlapsX = !(enemies[i].x + enemies[i].width < player.x ||
+                              player.x + player.width < enemies[i].x);
+          if (overlapsX) {
+            currentHp--;
+            enemies.splice(i, 1);
+            if (currentHp <= 0) {
+              gameOver();
+            }
+          } else {
+            enemies.splice(i, 1);
+          }
+          continue;
+        }
+
+        if (checkCollision(player, enemies[i])) {
+          currentHp--;
+          enemies.splice(i, 1);
+          if (currentHp <= 0) {
+            gameOver();
+          }
+          continue;
+        }
+
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          if (checkCollision(bullets[j], enemies[i])) {
+            currentKills++;
+            enemies.splice(i, 1);
+            bullets.splice(j, 1);
+            
+            if (currentKills >= CONFIG.win_kills) {
+              clearGame();
+            }
+            break;
+          }
+        }
+      }
+
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        bullets[i].y += bullets[i].vy;
+        
+        if (bullets[i].y < 0) {
+          bullets.splice(i, 1);
+        }
+      }
+
+      updateHUD();
+    }
+
+    function updateHUD() {
+      document.getElementById('hp').textContent = '♥ ' + currentHp;
+      document.getElementById('kills').textContent = '撃破 ' + currentKills + ' / ' + CONFIG.win_kills;
+    }
+
+    function gameOver() {
+      gameState = STATE.GAME_OVER;
+      document.getElementById('gameOverText').textContent = '撃破数: ' + currentKills + ' / ' + CONFIG.win_kills;
+      document.getElementById('gameOverScreen').classList.add('show');
+    }
+
+    function clearGame() {
+      gameState = STATE.CLEAR;
+      document.getElementById('clearText').textContent = '撃破数: ' + currentKills;
+      document.getElementById('clearScreen').classList.add('show');
+    }
+
+    function drawGame() {
+      ctx.fillStyle = CONFIG.bg_color;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState === STATE.PLAYING || gameState === STATE.GAME_OVER || gameState === STATE.CLEAR) {
+        ctx.fillStyle = CONFIG.player_color;
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+
+        ctx.fillStyle = CONFIG.enemy_color;
+        for (let enemy of enemies) {
+          ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+        }
+
+        ctx.fillStyle = CONFIG.bullet_color;
+        for (let bullet of bullets) {
+          ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        }
+      }
+    }
+
+    function gameLoop() {
+      updateGame();
+      drawGame();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

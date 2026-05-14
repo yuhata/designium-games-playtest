@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHYSICS SHOT</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #0a0a0a;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      display: inline-block;
+      background: #1a1a2e;
+      border: 2px solid #333;
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #fff;
+      font-size: 14px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 4px;
+    }
+    #shotCount, #targetCount {
+      margin-bottom: 5px;
+    }
+    #controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      color: #aaa;
+      font-size: 12px;
+      background: rgba(0,0,0,0.5);
+      padding: 8px;
+      border-radius: 4px;
+    }
+    #startScreen, #gameOverScreen, #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      z-index: 100;
+    }
+    .screen-hidden {
+      display: none !important;
+    }
+    .screen-text {
+      font-size: 32px;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 30px;
+      line-height: 1.5;
+    }
+    .screen-subtext {
+      font-size: 18px;
+      margin-bottom: 40px;
+      color: #ccc;
+      text-align: center;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      background: #e74c3c;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #c0392b;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+      <div id="shotCount">残弾: 8 / 8</div>
+      <div id="targetCount">的: 5 / 5</div>
+    </div>
+    <div id="controls">クリックで発射 | 照準線を狙って次発</div>
+    
+    <div id="startScreen">
+      <div class="screen-text">PHYSICS SHOT</div>
+      <div class="screen-subtext">8発で5個の的を全滅させろ！</div>
+      <button onclick="startGame()">START</button>
+    </div>
+    
+    <div id="clearScreen" class="screen-hidden">
+      <div class="screen-text">CLEAR!</div>
+      <div class="screen-subtext">全ての的を破壊した！</div>
+      <button onclick="location.reload()">RETRY</button>
+    </div>
+    
+    <div id="gameOverScreen" class="screen-hidden">
+      <div class="screen-text">GAME OVER</div>
+      <div class="screen-subtext">弾が尽きました。的が残っています。</div>
+      <button onclick="location.reload()">RETRY</button>
+    </div>
+  </div>
+
+  <script>
+    /*
+     * Parameter Schema
+     * {
+     *   "theme":         "string",
+     *   "title":         "string",
+     *   "bg_color":      "string",
+     *   "ball_color":    "string",
+     *   "target_color":  "string",
+     *   "wall_color":    "string",
+     *   "gravity":       "float",
+     *   "ball_radius":   "int",
+     *   "max_shots":     "int",
+     *   "target_count":  "int"
+     * }
+     */
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = 800;
+    canvas.height = 600;
+
+    let mouseX = 0;
+    let mouseY = 0;
+
+    canvas.addEventListener('mousemove', e => {
+      const r = canvas.getBoundingClientRect();
+      mouseX = e.clientX - r.left;
+      mouseY = e.clientY - r.top;
+    });
+
+    const params = {
+      theme: undefined,
+      title: 'PHYSICS SHOT',
+      bg_color: '#1a1a2e',
+      ball_color: '#f1c40f',
+      target_color: '#e74c3c',
+      wall_color: '#7f8c8d',
+      gravity: 0.3,
+      ball_radius: 12,
+      max_shots: 8,
+      target_count: 5
+    };
+
+    let gameState = 'start';
+    let shotsRemaining = params.max_shots;
+    let targetsRemaining = params.target_count;
+
+    const launcher = {
+      x: 30,
+      y: canvas.height - 30,
+      width: 40,
+      height: 40
+    };
+
+    let balls = [];
+    let targets = [];
+    let nextBall = null;
+
+    function initTargets() {
+      targets = [];
+      const positions = [
+        { x: 150, y: 100 },
+        { x: 400, y: 80 },
+        { x: 650, y: 120 },
+        { x: 250, y: 300 },
+        { x: 550, y: 280 }
+      ];
+      for (let i = 0; i < Math.min(params.target_count, positions.length); i++) {
+        targets.push({
+          x: positions[i].x,
+          y: positions[i].y,
+          radius: 15,
+          active: true
+        });
+      }
+      targetsRemaining = targets.filter(t => t.active).length;
+    }
+
+    function startGame() {
+      gameState = 'playing';
+      document.getElementById('startScreen').classList.add('screen-hidden');
+      initTargets();
+    }
+
+    function drawLauncher() {
+      ctx.fillStyle = params.wall_color;
+      ctx.fillRect(launcher.x - launcher.width / 2, launcher.y - launcher.height / 2, launcher.width, launcher.height);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(launcher.x - launcher.width / 2, launcher.y - launcher.height / 2, launcher.width, launcher.height);
+    }
+
+    function drawAimLine() {
+      const dx = mouseX - launcher.x;
+      const dy = mouseY - launcher.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 0) {
+        ctx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(launcher.x, launcher.y);
+        ctx.lineTo(mouseX, mouseY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    function drawBalls() {
+      for (let ball of balls) {
+        ctx.fillStyle = params.ball_color;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    function drawTargets() {
+      for (let target of targets) {
+        if (target.active) {
+          ctx.fillStyle = params.target_color;
+          ctx.beginPath();
+          ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+    }
+
+    function updatePhysics() {
+      for (let i = 0; i < balls.length; i++) {
+        let ball = balls[i];
+        ball.vx *= 0.999;
+        ball.vy += params.gravity;
+        ball.vy *= 0.999;
+
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        if (ball.x - ball.radius < 0) {
+          ball.x = ball.radius;
+          ball.vx *= -0.8;
+        }
+        if (ball.x + ball.radius > canvas.width) {
+          ball.x = canvas.width - ball.radius;
+          ball.vx *= -0.8;
+        }
+        if (ball.y - ball.radius < 0) {
+          ball.y = ball.radius;
+          ball.vy *= -0.8;
+        }
+        if (ball.y + ball.radius > canvas.height) {
+          ball.y = canvas.height - ball.radius;
+          ball.vy *= -0.8;
+        }
+
+        for (let target of targets) {
+          if (target.active) {
+            const dx = ball.x - target.x;
+            const dy = ball.y - target.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < ball.radius + target.radius) {
+              target.active = false;
+              targetsRemaining--;
+              ball.vx *= -0.5;
+              ball.vy *= -0.5;
+            }
+          }
+        }
+
+        if (ball.x < -50 || ball.x > canvas.width + 50 || ball.y > canvas.height + 50) {
+          balls.splice(i, 1);
+          i--;
+        }
+      }
+    }
+
+    function updateHUD() {
+      document.getElementById('shotCount').textContent = `残弾: ${shotsRemaining} / ${params.max_shots}`;
+      document.getElementById('targetCount').textContent = `的: ${targetsRemaining} / ${params.target_count}`;
+    }
+
+    function drawGame() {
+      ctx.fillStyle = params.bg_color;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawLauncher();
+      if (gameState === 'playing') {
+        drawAimLine();
+      }
+      drawBalls();
+      drawTargets();
+    }
+
+    function checkGameEnd() {
+      if (targetsRemaining === 0) {
+        gameState = 'clear';
+        document.getElementById('clearScreen').classList.remove('screen-hidden');
+      } else if (shotsRemaining === 0 && balls.length === 0) {
+        gameState = 'gameover';
+        document.getElementById('gameOverScreen').classList.remove('screen-hidden');
+      }
+    }
+
+    canvas.addEventListener('click', e => {
+      if (gameState !== 'playing') return;
+
+      const r = canvas.getBoundingClientRect();
+      const clickX = e.clientX - r.left;
+      const clickY = e.clientY - r.top;
+
+      const dx = clickX - launcher.x;
+      const dy = clickY - launcher.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 0 && shotsRemaining > 0) {
+        const power = Math.min(dist, 300);
+        const vx = (dx / dist) * (power * 0.08);
+        const vy = (dy / dist) * (power * 0.08);
+
+        balls.push({
+          x: launcher.x,
+          y: launcher.y,
+          vx: vx,
+          vy: vy,
+          radius: params.ball_radius
+        });
+
+        shotsRemaining--;
+        updateHUD();
+      }
+    });
+
+    function gameLoop() {
+      drawGame();
+      updateHUD();
+
+      if (gameState === 'playing') {
+        updatePhysics();
+        checkGameEnd();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    initTargets();
+    updateHUD();
+    gameLoop();
+  </script>
+</body>
+</html>
