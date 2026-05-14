@@ -1,160 +1,178 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>REVERSI</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
         body {
-            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            background: #0d4f0d;
-            color: white;
-        }
-        #startScreen {
-            text-align: center;
-        }
-        #startScreen h1 {
-            font-size: 72px;
-            margin-bottom: 30px;
-            letter-spacing: 4px;
-        }
-        #startScreen button {
-            font-size: 32px;
-            padding: 20px 60px;
-            background: #3d8b3d;
-            border: none;
-            color: white;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: background 0.3s;
-        }
-        #startScreen button:hover {
-            background: #5aad5a;
-        }
-        #gameContainer {
-            display: none;
-            flex-direction: column;
             align-items: center;
-            gap: 20px;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
         }
-        #hud {
-            font-size: 20px;
+        .container {
             text-align: center;
         }
-        #turn {
-            font-size: 18px;
-            margin-top: 10px;
+        h1 {
+            color: #f0f0f0;
+            margin: 0 0 20px 0;
+            font-size: 32px;
         }
-        #board {
-            display: grid;
-            grid-template-columns: repeat(8, 50px);
-            grid-template-rows: repeat(8, 50px);
-            gap: 1px;
-            background: #1a6b1a;
-            padding: 1px;
-            border: 2px solid #1a6b1a;
+        .game-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        .board {
+            display: inline-grid;
+            grid-template-columns: repeat(8, 40px);
+            grid-gap: 1px;
+            padding: 10px;
+            border-radius: 5px;
         }
         .cell {
-            background: #1a6b1a;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-        .cell.clickable {
-            cursor: pointer;
-        }
-        .piece {
             width: 40px;
             height: 40px;
+            border: 1px solid #0a3a0a;
+            border-radius: 3px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+        }
+        .piece {
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
-            position: absolute;
         }
         .piece.player {
-            background: #1a1a1a;
+            background-color: #1a1a1a;
         }
         .piece.ai {
-            background: #f0f0f0;
+            background-color: #f0f0f0;
         }
-        #gameOverScreen, #clearScreen {
+        .hud {
+            margin-top: 20px;
+            color: #f0f0f0;
+            font-size: 18px;
+        }
+        .hud-item {
+            display: inline-block;
+            margin: 0 20px;
+        }
+        .turn-indicator {
+            margin-top: 15px;
+            color: #3d8b3d;
+            font-size: 16px;
+            height: 20px;
+        }
+        .pass-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #f0f0f0;
+            padding: 30px 60px;
+            border-radius: 10px;
+            font-size: 32px;
+            z-index: 1000;
             display: none;
+        }
+        #startScreen {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            flex-direction: column;
-            align-items: center;
+            background: rgba(13, 79, 13, 0.95);
+            display: flex;
             justify-content: center;
-            z-index: 1000;
-        }
-        #gameOverScreen h2, #clearScreen h2 {
-            font-size: 64px;
-            margin-bottom: 40px;
-        }
-        #gameOverScreen button, #clearScreen button {
-            font-size: 24px;
-            padding: 15px 50px;
-            background: #3d8b3d;
-            border: none;
-            color: white;
-            cursor: pointer;
-            border-radius: 8px;
-        }
-        #gameOverScreen button:hover, #clearScreen button:hover {
-            background: #5aad5a;
-        }
-        #passNotification {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 48px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 40px 60px;
-            border-radius: 12px;
-            display: none;
+            align-items: center;
             z-index: 500;
+        }
+        .start-button {
+            background-color: #3d8b3d;
+            color: #1a1a1a;
+            border: none;
+            padding: 20px 60px;
+            font-size: 28px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .start-button:hover {
+            background-color: #4a9f4a;
+        }
+        #gameOverScreen, #clearScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        .end-screen-text {
+            color: #f0f0f0;
+            font-size: 48px;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        #clearScreen .end-screen-text {
+            color: #3d8b3d;
+        }
+        .retry-button {
+            background-color: #3d8b3d;
+            color: #1a1a1a;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .retry-button:hover {
+            background-color: #4a9f4a;
         }
     </style>
 </head>
 <body>
     <div id="startScreen">
-        <h1>REVERSI</h1>
-        <button onclick="startGame()">START</button>
-    </div>
-
-    <div id="gameContainer">
-        <div id="hud">
-            <div>黒: <span id="playerCount">2</span> | 白: <span id="aiCount">2</span></div>
-            <div id="turn">プレイヤー（黒）のターン</div>
-        </div>
-        <div id="board"></div>
+        <button class="start-button" onclick="startGame()">START</button>
     </div>
 
     <div id="gameOverScreen">
-        <h2>GAME OVER</h2>
-        <button onclick="retryGame()">RETRY</button>
+        <div class="end-screen-text">GAME OVER</div>
+        <button class="retry-button" onclick="retryGame()">RETRY</button>
     </div>
 
     <div id="clearScreen">
-        <h2>CLEAR</h2>
-        <button onclick="retryGame()">RETRY</button>
+        <div class="end-screen-text">CLEAR</div>
+        <button class="retry-button" onclick="retryGame()">RETRY</button>
     </div>
 
-    <div id="passNotification">PASS</div>
+    <div class="pass-message" id="passMessage">PASS</div>
+
+    <div class="container">
+        <h1 id="title">REVERSI</h1>
+        <div class="game-wrapper">
+            <div class="board" id="board"></div>
+        </div>
+        <div class="hud">
+            <div class="hud-item">Player (Black): <span id="playerScore">2</span></div>
+            <div class="hud-item">AI (White): <span id="aiScore">2</span></div>
+        </div>
+        <div class="turn-indicator" id="turnIndicator"></div>
+    </div>
 
     <script>
         const config = {
@@ -167,38 +185,32 @@
             valid_color: '#3d8b3d'
         };
 
-        const board = [];
-        const gameState = { running: false };
+        let board = [];
         let isPlayerTurn = false;
+        let consecutivePasses = 0;
+        let gameState = { running: false };
 
-        function initBoard() {
-            for (let i = 0; i < 8; i++) {
-                board[i] = [];
-                for (let j = 0; j < 8; j++) {
-                    board[i][j] = 0;
-                }
-            }
-            board[3][3] = 1;
-            board[3][4] = -1;
-            board[4][3] = -1;
-            board[4][4] = 1;
+        function initializeBoard() {
+            board = Array(64).fill(0);
+            board[27] = 1;
+            board[28] = -1;
+            board[35] = -1;
+            board[36] = 1;
         }
 
         function getValidMoves(player) {
             const moves = [];
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (canPlacePiece(r, c, player)) {
-                        moves.push([r, c]);
-                    }
+            for (let i = 0; i < 64; i++) {
+                if (board[i] === 0 && isValidMove(i, player)) {
+                    moves.push(i);
                 }
             }
             return moves;
         }
 
-        function canPlacePiece(r, c, player) {
-            if (board[r][c] !== 0) return false;
-
+        function isValidMove(pos, player) {
+            const row = Math.floor(pos / 8);
+            const col = pos % 8;
             const directions = [
                 [-1, -1], [-1, 0], [-1, 1],
                 [0, -1],           [0, 1],
@@ -206,29 +218,29 @@
             ];
 
             for (let [dr, dc] of directions) {
-                let nr = r + dr;
-                let nc = c + dc;
+                let r = row + dr;
+                let c = col + dc;
                 let found = false;
 
-                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                    if (board[nr][nc] === 0) break;
-                    if (board[nr][nc] === player) {
-                        if (found) return true;
+                while (r >= 0 && r < 8 && c >= 0 && c < 8) {
+                    const idx = r * 8 + c;
+                    if (board[idx] === -player) {
+                        found = true;
+                    } else if (board[idx] === player && found) {
+                        return true;
+                    } else {
                         break;
                     }
-                    found = true;
-                    nr += dr;
-                    nc += dc;
+                    r += dr;
+                    c += dc;
                 }
             }
             return false;
         }
 
-        function placePiece(r, c, player) {
-            if (!canPlacePiece(r, c, player)) return false;
-
-            board[r][c] = player;
-
+        function flipPieces(pos, player) {
+            const row = Math.floor(pos / 8);
+            const col = pos % 8;
             const directions = [
                 [-1, -1], [-1, 0], [-1, 1],
                 [0, -1],           [0, 1],
@@ -236,146 +248,163 @@
             ];
 
             for (let [dr, dc] of directions) {
-                let nr = r + dr;
-                let nc = c + dc;
+                let r = row + dr;
+                let c = col + dc;
                 let toFlip = [];
-                let found = false;
 
-                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                    if (board[nr][nc] === 0) break;
-                    if (board[nr][nc] === player) {
-                        if (found) {
-                            for (let [fr, fc] of toFlip) {
-                                board[fr][fc] = player;
-                            }
-                        }
+                while (r >= 0 && r < 8 && c >= 0 && c < 8) {
+                    const idx = r * 8 + c;
+                    if (board[idx] === -player) {
+                        toFlip.push(idx);
+                    } else if (board[idx] === player) {
+                        toFlip.forEach(i => board[i] = player);
+                        break;
+                    } else {
                         break;
                     }
-                    toFlip.push([nr, nc]);
-                    found = true;
-                    nr += dr;
-                    nc += dc;
+                    r += dr;
+                    c += dc;
                 }
             }
-            return true;
         }
 
-        function countPieces() {
-            let player = 0, ai = 0;
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (board[r][c] === -1) player++;
-                    if (board[r][c] === 1) ai++;
-                }
+        function getScore() {
+            let playerCount = 0;
+            let aiCount = 0;
+            for (let piece of board) {
+                if (piece === -1) playerCount++;
+                else if (piece === 1) aiCount++;
             }
-            return { player, ai };
-        }
-
-        function drawBoard() {
-            const boardDiv = document.getElementById('board');
-            boardDiv.innerHTML = '';
-
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    cell.style.backgroundColor = config.grid_color;
-
-                    if (board[r][c] !== 0) {
-                        const piece = document.createElement('div');
-                        piece.className = 'piece';
-                        piece.className += board[r][c] === -1 ? ' player' : ' ai';
-                        cell.appendChild(piece);
-                    }
-
-                    if (isPlayerTurn) {
-                        if (canPlacePiece(r, c, -1)) {
-                            cell.style.backgroundColor = config.valid_color;
-                            cell.onclick = function() {
-                                placePiece(r, c, -1);
-                                isPlayerTurn = false;
-                                setTimeout(aiMove, 400);
-                            };
-                        }
-                    }
-
-                    boardDiv.appendChild(cell);
-                }
-            }
+            return { player: playerCount, ai: aiCount };
         }
 
         function updateHUD() {
-            const { player, ai } = countPieces();
-            document.getElementById('playerCount').textContent = player;
-            document.getElementById('aiCount').textContent = ai;
-            document.getElementById('turn').textContent = isPlayerTurn ? 'プレイヤー（黒）のターン' : 'AI（白）のターン';
+            const score = getScore();
+            document.getElementById('playerScore').textContent = score.player;
+            document.getElementById('aiScore').textContent = score.ai;
+            
+            if (isPlayerTurn) {
+                document.getElementById('turnIndicator').textContent = 'Your Turn (Black)';
+                document.getElementById('turnIndicator').style.color = '#1a1a1a';
+            } else {
+                document.getElementById('turnIndicator').textContent = 'AI Turn (White)';
+                document.getElementById('turnIndicator').style.color = '#f0f0f0';
+            }
         }
 
-        function showPass() {
-            const notif = document.getElementById('passNotification');
-            notif.style.display = 'block';
-            setTimeout(() => {
-                notif.style.display = 'none';
-            }, 1000);
+        function drawBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            const validMoves = isPlayerTurn ? getValidMoves(-1) : [];
+
+            for (let i = 0; i < 64; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.style.backgroundColor = config.grid_color;
+
+                if (validMoves.includes(i)) {
+                    cell.style.backgroundColor = config.valid_color;
+                    if (isPlayerTurn) {
+                        cell.onclick = () => playerMove(i);
+                    }
+                }
+
+                if (board[i] === -1) {
+                    const piece = document.createElement('div');
+                    piece.className = 'piece player';
+                    cell.appendChild(piece);
+                } else if (board[i] === 1) {
+                    const piece = document.createElement('div');
+                    piece.className = 'piece ai';
+                    cell.appendChild(piece);
+                }
+
+                boardEl.appendChild(cell);
+            }
+        }
+
+        function playerMove(pos) {
+            if (!isPlayerTurn || board[pos] !== 0 || !isValidMove(pos, -1)) return;
+
+            board[pos] = -1;
+            flipPieces(pos, -1);
+            consecutivePasses = 0;
+            isPlayerTurn = false;
+            drawBoard();
+            updateHUD();
+
+            setTimeout(aiMove, 400);
         }
 
         function aiMove() {
-            const moves = getValidMoves(1);
-            
-            if (moves.length === 0) {
-                const playerMoves = getValidMoves(-1);
-                if (playerMoves.length === 0) {
+            if (!gameState.running) return;
+
+            const aiMoves = getValidMoves(1);
+
+            if (aiMoves.length === 0) {
+                consecutivePasses++;
+                if (consecutivePasses >= 2) {
                     endGame();
                     return;
                 }
-                showPass();
-                isPlayerTurn = true;
-                drawBoard();
-                updateHUD();
+                showPassMessage();
+                setTimeout(() => {
+                    isPlayerTurn = true;
+                    drawBoard();
+                    updateHUD();
+                    const playerMoves = getValidMoves(-1);
+                    if (playerMoves.length === 0) {
+                        setTimeout(() => {
+                            showPassMessage();
+                            setTimeout(aiMove, 1200);
+                        }, 100);
+                    }
+                }, 1200);
                 return;
             }
 
-            const corners = [[0, 0], [0, 7], [7, 0], [7, 7]];
-            const edges = [];
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if ((r === 0 || r === 7 || c === 0 || c === 7) && !corners.some(([cr, cc]) => cr === r && cc === c)) {
-                        edges.push([r, c]);
-                    }
-                }
-            }
-
-            let bestMove = null;
+            consecutivePasses = 0;
+            let bestMove = aiMoves[0];
             let bestScore = -Infinity;
 
-            for (let [mr, mc] of moves) {
-                let score = 0;
+            const cornerWeights = { 0: 10, 7: 10, 56: 10, 63: 10 };
+            const edgeWeights = { 1: 5, 2: 5, 3: 5, 4: 5, 5: 5, 6: 5, 8: 5, 15: 5, 16: 5, 23: 5, 24: 5, 31: 5, 32: 5, 39: 5, 40: 5, 47: 5, 48: 5, 55: 5, 57: 5, 58: 5, 59: 5, 60: 5, 61: 5, 62: 5 };
 
-                if (corners.some(([cr, cc]) => cr === mr && cc === mc)) {
-                    score = 10000;
-                } else if (edges.some(([er, ec]) => er === mr && ec === mc)) {
-                    score = 100;
-                } else {
-                    score = 1;
-                }
-
+            for (let move of aiMoves) {
+                let score = (cornerWeights[move] || edgeWeights[move] || 1);
                 if (score > bestScore) {
                     bestScore = score;
-                    bestMove = [mr, mc];
+                    bestMove = move;
                 }
             }
 
-            placePiece(bestMove[0], bestMove[1], 1);
+            board[bestMove] = 1;
+            flipPieces(bestMove, 1);
             isPlayerTurn = true;
             drawBoard();
             updateHUD();
+
+            const playerMoves = getValidMoves(-1);
+            if (playerMoves.length === 0) {
+                setTimeout(() => {
+                    showPassMessage();
+                    setTimeout(aiMove, 1200);
+                }, 100);
+            }
+        }
+
+        function showPassMessage() {
+            const passEl = document.getElementById('passMessage');
+            passEl.style.display = 'block';
+            setTimeout(() => {
+                passEl.style.display = 'none';
+            }, 1000);
         }
 
         function endGame() {
             gameState.running = false;
-            const { player, ai } = countPieces();
-
-            if (player > ai) {
+            const score = getScore();
+            if (score.player > score.ai) {
                 document.getElementById('clearScreen').style.display = 'flex';
             } else {
                 document.getElementById('gameOverScreen').style.display = 'flex';
@@ -384,31 +413,30 @@
 
         function startGame() {
             document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('gameContainer').style.display = 'flex';
             document.getElementById('gameOverScreen').style.display = 'none';
             document.getElementById('clearScreen').style.display = 'none';
-
-            document.body.style.background = config.bg_color;
-
-            initBoard();
+            
+            initializeBoard();
             gameState.running = true;
             isPlayerTurn = true;
+            consecutivePasses = 0;
+            
+            document.body.style.background = config.bg_color;
+            document.title = config.title;
+            
             drawBoard();
             updateHUD();
             gameLoop();
-        }
-
-        function retryGame() {
-            document.getElementById('startScreen').style.display = 'block';
-            document.getElementById('gameContainer').style.display = 'none';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
         }
 
         function gameLoop() {
             if (gameState.running) {
                 requestAnimationFrame(gameLoop);
             }
+        }
+
+        function retryGame() {
+            startGame();
         }
     </script>
 </body>

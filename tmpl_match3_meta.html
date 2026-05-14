@@ -11,70 +11,104 @@
       box-sizing: border-box;
     }
     body {
-      font-family: 'Arial', sans-serif;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-    }
-    #gameContainer {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-    }
-    #metaLayer {
-      flex: 0.4;
-      padding: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      border-bottom: 2px solid #444;
-    }
-    #gameInfo {
-      padding: 10px 20px;
-      font-size: 18px;
-      color: #fff;
-      text-align: center;
-      background: rgba(0,0,0,0.3);
-    }
-    #board {
-      flex: 0.5;
-      padding: 20px;
+      font-family: Arial, sans-serif;
       display: flex;
       justify-content: center;
       align-items: center;
+      min-height: 100vh;
+      background: #1a1a2e;
+      color: #fff;
     }
-    #boardGrid {
-      display: grid;
-      grid-template-columns: repeat(6, 60px);
-      grid-template-rows: repeat(6, 60px);
-      gap: 4px;
-      background: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 8px;
-    }
-    .tile {
-      width: 60px;
-      height: 60px;
-      border-radius: 4px;
-      cursor: pointer;
-      border: 2px solid transparent;
-      transition: all 0.1s ease;
-    }
-    .tile:hover {
-      transform: scale(1.05);
-    }
-    .tile.selected {
+    #gameContainer {
+      width: 90vw;
+      max-width: 600px;
+      height: 90vh;
+      max-height: 900px;
+      display: flex;
+      flex-direction: column;
       border: 3px solid #fff;
-      box-shadow: 0 0 10px rgba(255,255,255,0.8);
+      border-radius: 8px;
+      padding: 20px;
+      background: #0f0f1e;
+    }
+    #metaLayer {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      padding-bottom: 20px;
+    }
+    .building-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    .building-button {
+      width: 100px;
+      padding: 10px;
+      background: #d69e2e;
+      color: #000;
+      border: 2px solid #f6ad55;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 12px;
+      transition: background 0.3s;
+    }
+    .building-button:hover {
+      background: #f6ad55;
+    }
+    .building-button:disabled {
+      background: #666;
+      cursor: not-allowed;
+      border-color: #555;
+      color: #aaa;
+    }
+    #starDisplay {
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    #boardContainer {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
     #instructions {
-      flex: 0.1;
-      padding: 10px 20px;
-      color: #aaa;
-      font-size: 14px;
       text-align: center;
-      background: rgba(0,0,0,0.3);
+      font-size: 14px;
+      color: #aaa;
+      margin-bottom: 10px;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      flex: 1;
+      padding: 10px;
+      background: #2a2a3e;
+      border-radius: 6px;
+    }
+    .tile {
+      aspect-ratio: 1;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .tile:hover {
+      transform: scale(0.95);
+    }
+    .tile.selected {
+      box-shadow: 0 0 12px #fff;
+      border: 2px solid #fff;
     }
     #startScreen {
       position: fixed;
@@ -82,200 +116,131 @@
       left: 0;
       width: 100%;
       height: 100%;
+      background: rgba(0, 0, 0, 0.95);
       display: flex;
       justify-content: center;
       align-items: center;
-      background: rgba(0,0,0,0.9);
       z-index: 1000;
     }
     #startScreen button {
       padding: 20px 60px;
       font-size: 32px;
-      background: #e53e3e;
-      color: white;
+      background: #4299e1;
+      color: #fff;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      transition: all 0.3s;
+      font-weight: bold;
+      transition: background 0.3s;
     }
     #startScreen button:hover {
-      background: #c53030;
-      transform: scale(1.1);
+      background: #3182ce;
     }
-    #gameOverScreen, #clearScreen {
+    #clearScreen {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
+      background: rgba(0, 0, 0, 0.95);
       display: none;
       justify-content: center;
       align-items: center;
-      background: rgba(0,0,0,0.95);
-      z-index: 999;
+      z-index: 1001;
       flex-direction: column;
       gap: 20px;
     }
-    #gameOverScreen h1, #clearScreen h1 {
-      color: #fff;
-      font-size: 64px;
+    #clearScreen h1 {
+      font-size: 48px;
+      color: #68d391;
     }
-    #gameOverScreen button, #clearScreen button {
+    #clearScreen button {
       padding: 15px 40px;
       font-size: 20px;
       background: #4299e1;
-      color: white;
+      color: #fff;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-    }
-    #gameOverScreen button:hover, #clearScreen button:hover {
-      background: #3182ce;
-    }
-    .building {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
-    .building h3 {
-      color: #fff;
-      font-size: 16px;
-    }
-    .building button {
-      width: 80px;
-      height: 80px;
-      border: 2px solid #d69e2e;
-      border-radius: 8px;
-      cursor: pointer;
       font-weight: bold;
-      color: #fff;
-      transition: all 0.2s;
     }
-    .building button:hover:not(:disabled) {
-      transform: scale(1.1);
-      box-shadow: 0 0 10px #d69e2e;
-    }
-    .building button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .building p {
-      color: #aaa;
-      font-size: 12px;
+    #clearScreen button:hover {
+      background: #3182ce;
     }
   </style>
 </head>
 <body>
-  <div id="gameContainer">
-    <div id="metaLayer"></div>
-    <div id="gameInfo"></div>
-    <div id="board">
-      <div id="boardGrid"></div>
-    </div>
-    <div id="instructions">
-      タイルをクリックして選択 → 隣のタイルをクリックしてスワップ
-    </div>
-  </div>
-
   <div id="startScreen">
-    <h1 style="color: #fff; font-size: 64px; margin-bottom: 40px;">MATCH3 META</h1>
     <button onclick="startGame()">START</button>
   </div>
-
-  <div id="gameOverScreen">
-    <h1>GAME OVER</h1>
-    <button onclick="retryGame()">RETRY</button>
-  </div>
-
   <div id="clearScreen">
     <h1>CLEAR!</h1>
     <button onclick="retryGame()">RETRY</button>
+  </div>
+  <div id="gameContainer">
+    <div id="metaLayer">
+      <div id="starDisplay">Star: 0</div>
+      <div class="building-row">
+        <button class="building-button" id="buildingA" onclick="upgradeBuilding(0)">Building A<br>Lv: 1</button>
+        <button class="building-button" id="buildingB" onclick="upgradeBuilding(1)">Building B<br>Lv: 1</button>
+        <button class="building-button" id="buildingC" onclick="upgradeBuilding(2)">Building C<br>Lv: 1</button>
+      </div>
+    </div>
+    <div id="boardContainer">
+      <div id="instructions">タイルをクリックして選択 → 隣のタイルをクリックしてスワップ</div>
+      <div id="board"></div>
+    </div>
   </div>
 
   <script>
     const config = {
       title: 'MATCH3 META',
       bg_color: '#1a1a2e',
-      tile_colors: ['#e53e3e', '#4299e1', '#68d391', '#f6e05e'],
+      tile_colors: ['#e53e3e','#4299e1','#68d391','#f6e05e'],
       building_color: '#d69e2e',
       grid_cols: 6,
       grid_rows: 6,
       building_count: 3
     };
 
-    let gameState = {
+    const gameState = {
       running: false,
       board: [],
-      selectedTile: null,
       stars: 0,
-      buildingLevels: { A: 1, B: 1, C: 1 }
+      selectedTile: null,
+      buildings: [
+        { level: 1, costs: [5, 15] },
+        { level: 1, costs: [8, 20] },
+        { level: 1, costs: [10, 25] }
+      ]
     };
 
-    const buildingData = {
-      A: { name: 'Building A', costs: { 2: 5, 3: 15 } },
-      B: { name: 'Building B', costs: { 2: 8, 3: 20 } },
-      C: { name: 'Building C', costs: { 2: 10, 3: 25 } }
-    };
-
-    function initGame() {
-      gameState.board = [];
-      gameState.selectedTile = null;
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      gameState.running = true;
       gameState.stars = 0;
-      gameState.buildingLevels = { A: 1, B: 1, C: 1 };
+      gameState.selectedTile = null;
+      gameState.buildings = [
+        { level: 1, costs: [5, 15] },
+        { level: 1, costs: [8, 20] },
+        { level: 1, costs: [10, 25] }
+      ];
+      document.body.style.background = config.bg_color;
       
+      initBoard();
+      gameLoop();
+    }
+
+    function initBoard() {
+      gameState.board = [];
       for (let r = 0; r < config.grid_rows; r++) {
         gameState.board[r] = [];
         for (let c = 0; c < config.grid_cols; c++) {
           gameState.board[r][c] = Math.floor(Math.random() * config.tile_colors.length);
         }
       }
-    }
-
-    function startGame() {
-      document.getElementById('startScreen').style.display = 'none';
-      document.getElementById('gameOverScreen').style.display = 'none';
-      document.getElementById('clearScreen').style.display = 'none';
-      
-      document.body.style.background = config.bg_color;
-      
-      initGame();
-      gameState.running = true;
-      renderBoard();
-      renderMetaLayer();
-      renderGameInfo();
-      gameLoop();
-    }
-
-    function gameLoop() {
-      if (!gameState.running) return;
-      renderBoard();
-      requestAnimationFrame(gameLoop);
-    }
-
-    function renderBoard() {
-      const boardGrid = document.getElementById('boardGrid');
-      boardGrid.innerHTML = '';
-      
-      for (let r = 0; r < config.grid_rows; r++) {
-        for (let c = 0; c < config.grid_cols; c++) {
-          const tile = document.createElement('div');
-          tile.className = 'tile';
-          tile.style.background = config.tile_colors[gameState.board[r][c]];
-          tile.dataset.row = r;
-          tile.dataset.col = c;
-          
-          if (gameState.selectedTile && gameState.selectedTile.row === r && gameState.selectedTile.col === c) {
-            tile.classList.add('selected');
-          }
-          
-          tile.addEventListener('click', function() {
-            selectTile(r, c);
-          });
-          
-          boardGrid.appendChild(tile);
-        }
-      }
+      resolveMatches();
     }
 
     function selectTile(row, col) {
@@ -285,14 +250,15 @@
         gameState.selectedTile = { row, col };
         renderBoard();
       } else {
-        const dx = Math.abs(gameState.selectedTile.row - row);
-        const dy = Math.abs(gameState.selectedTile.col - col);
-        
-        if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-          swapTiles(gameState.selectedTile.row, gameState.selectedTile.col, row, col);
-        } else if (gameState.selectedTile.row === row && gameState.selectedTile.col === col) {
+        const { row: r1, col: c1 } = gameState.selectedTile;
+        if (r1 === row && c1 === col) {
           gameState.selectedTile = null;
           renderBoard();
+          return;
+        }
+        
+        if (Math.abs(r1 - row) + Math.abs(c1 - col) === 1) {
+          swapTiles(r1, c1, row, col);
         } else {
           gameState.selectedTile = { row, col };
           renderBoard();
@@ -301,164 +267,160 @@
     }
 
     function swapTiles(r1, c1, r2, c2) {
-      [gameState.board[r1][c1], gameState.board[r2][c2]] = [gameState.board[r2][c2], gameState.board[r1][c1]];
+      const temp = gameState.board[r1][c1];
+      gameState.board[r1][c1] = gameState.board[r2][c2];
+      gameState.board[r2][c2] = temp;
       gameState.selectedTile = null;
+      
+      const matchCount = resolveMatches();
+      if (matchCount === 0) {
+        const temp2 = gameState.board[r1][c1];
+        gameState.board[r1][c1] = gameState.board[r2][c2];
+        gameState.board[r2][c2] = temp2;
+      }
+      
       renderBoard();
-      resolveMatches();
     }
 
-    function findMatches() {
-      const matched = new Set();
+    function resolveMatches() {
+      let totalMatches = 0;
+      let matched = Array(config.grid_rows).fill(null).map(() => Array(config.grid_cols).fill(false));
       
       for (let r = 0; r < config.grid_rows; r++) {
         for (let c = 0; c < config.grid_cols; c++) {
           const color = gameState.board[r][c];
+          let count = 1;
           
-          let horizontalCount = 1;
-          while (c + horizontalCount < config.grid_cols && gameState.board[r][c + horizontalCount] === color) {
-            horizontalCount++;
+          for (let nc = c + 1; nc < config.grid_cols; nc++) {
+            if (gameState.board[r][nc] === color) count++;
+            else break;
           }
-          if (horizontalCount >= 3) {
-            for (let i = 0; i < horizontalCount; i++) {
-              matched.add(r * config.grid_cols + (c + i));
-            }
+          if (count >= 3) {
+            for (let nc = c; nc < c + count; nc++) matched[r][nc] = true;
           }
           
-          let verticalCount = 1;
-          while (r + verticalCount < config.grid_rows && gameState.board[r + verticalCount][c] === color) {
-            verticalCount++;
+          count = 1;
+          for (let nr = r + 1; nr < config.grid_rows; nr++) {
+            if (gameState.board[nr][c] === color) count++;
+            else break;
           }
-          if (verticalCount >= 3) {
-            for (let i = 0; i < verticalCount; i++) {
-              matched.add((r + i) * config.grid_cols + c);
-            }
+          if (count >= 3) {
+            for (let nr = r; nr < r + count; nr++) matched[nr][c] = true;
           }
         }
       }
       
-      return matched;
-    }
-
-    function resolveMatches() {
-      let matchFound = true;
+      for (let r = 0; r < config.grid_rows; r++) {
+        for (let c = 0; c < config.grid_cols; c++) {
+          if (matched[r][c]) totalMatches++;
+        }
+      }
       
-      while (matchFound) {
-        const matched = findMatches();
-        
-        if (matched.size === 0) {
-          matchFound = false;
-          break;
+      if (totalMatches > 0) {
+        gameState.stars += Math.ceil(totalMatches / 3);
+        for (let r = 0; r < config.grid_rows; r++) {
+          for (let c = 0; c < config.grid_cols; c++) {
+            if (matched[r][c]) gameState.board[r][c] = -1;
+          }
         }
-        
-        gameState.stars += 1;
-        
-        for (let idx of matched) {
-          const r = Math.floor(idx / config.grid_cols);
-          const c = idx % config.grid_cols;
-          gameState.board[r][c] = null;
-        }
-        
-        renderBoard();
         
         for (let c = 0; c < config.grid_cols; c++) {
+          let writePos = config.grid_rows - 1;
           for (let r = config.grid_rows - 1; r >= 0; r--) {
-            if (gameState.board[r][c] === null) {
-              for (let r2 = r; r2 > 0; r2--) {
-                gameState.board[r2][c] = gameState.board[r2 - 1][c];
-              }
-              gameState.board[0][c] = Math.floor(Math.random() * config.tile_colors.length);
+            if (gameState.board[r][c] !== -1) {
+              gameState.board[writePos][c] = gameState.board[r][c];
+              if (writePos !== r) gameState.board[r][c] = -1;
+              writePos--;
+            }
+          }
+        }
+        
+        for (let r = 0; r < config.grid_rows; r++) {
+          for (let c = 0; c < config.grid_cols; c++) {
+            if (gameState.board[r][c] === -1) {
+              gameState.board[r][c] = Math.floor(Math.random() * config.tile_colors.length);
             }
           }
         }
         
         renderBoard();
+        return totalMatches;
       }
       
-      renderGameInfo();
-      checkClear();
+      return 0;
     }
 
-    function upgradeBulding(key) {
-      if (!gameState.running) return;
+    function renderBoard() {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
       
-      const currentLevel = gameState.buildingLevels[key];
-      if (currentLevel >= 3) return;
+      for (let r = 0; r < config.grid_rows; r++) {
+        for (let c = 0; c < config.grid_cols; c++) {
+          const tile = document.createElement('div');
+          tile.className = 'tile';
+          tile.style.background = config.tile_colors[gameState.board[r][c]];
+          
+          if (gameState.selectedTile && gameState.selectedTile.row === r && gameState.selectedTile.col === c) {
+            tile.classList.add('selected');
+          }
+          
+          tile.addEventListener('click', () => selectTile(r, c));
+          board.appendChild(tile);
+        }
+      }
       
-      const nextLevel = currentLevel + 1;
-      const cost = buildingData[key].costs[nextLevel];
+      updateMetaLayer();
+    }
+
+    function updateMetaLayer() {
+      document.getElementById('starDisplay').textContent = `Star: ${gameState.stars}`;
       
+      const buildingNames = ['A', 'B', 'C'];
+      for (let i = 0; i < config.building_count; i++) {
+        const button = document.getElementById(`building${buildingNames[i]}`);
+        const level = gameState.buildings[i].level;
+        button.textContent = `Building ${buildingNames[i]}\nLv: ${level}`;
+        
+        if (level >= 3) {
+          button.disabled = true;
+        } else {
+          const cost = gameState.buildings[i].costs[level - 1];
+          button.disabled = gameState.stars < cost;
+        }
+      }
+    }
+
+    function upgradeBuilding(index) {
+      const building = gameState.buildings[index];
+      if (building.level >= 3) return;
+      
+      const cost = building.costs[building.level - 1];
       if (gameState.stars >= cost) {
         gameState.stars -= cost;
-        gameState.buildingLevels[key] = nextLevel;
-        renderGameInfo();
-        renderMetaLayer();
-        checkClear();
+        building.level++;
+        updateMetaLayer();
+        
+        if (checkClear()) {
+          gameState.running = false;
+          document.getElementById('clearScreen').style.display = 'flex';
+        }
       }
     }
 
     function checkClear() {
-      if (gameState.buildingLevels.A === 3 && gameState.buildingLevels.B === 3 && gameState.buildingLevels.C === 3) {
-        gameState.running = false;
-        document.getElementById('clearScreen').style.display = 'flex';
-      }
-    }
-
-    function renderGameInfo() {
-      const info = document.getElementById('gameInfo');
-      info.innerHTML = `STARS: ${gameState.stars}`;
-    }
-
-    function renderMetaLayer() {
-      const metaLayer = document.getElementById('metaLayer');
-      metaLayer.innerHTML = '';
-      
-      for (let key of ['A', 'B', 'C']) {
-        const level = gameState.buildingLevels[key];
-        const building = document.createElement('div');
-        building.className = 'building';
-        
-        const name = document.createElement('h3');
-        name.textContent = buildingData[key].name;
-        building.appendChild(name);
-        
-        const button = document.createElement('button');
-        button.style.background = config.building_color;
-        button.textContent = `Lv${level}`;
-        
-        if (level >= 3) {
-          button.disabled = true;
-          button.textContent = 'MAX';
-        } else {
-          const nextLevel = level + 1;
-          const cost = buildingData[key].costs[nextLevel];
-          button.onclick = () => upgradeBulding(key);
-          button.disabled = gameState.stars < cost;
-        }
-        
-        building.appendChild(button);
-        
-        if (level < 3) {
-          const nextLevel = level + 1;
-          const cost = buildingData[key].costs[nextLevel];
-          const costText = document.createElement('p');
-          costText.textContent = `Lv${nextLevel}: ${cost}star`;
-          building.appendChild(costText);
-        }
-        
-        metaLayer.appendChild(building);
-      }
+      return gameState.buildings.every(b => b.level === 3);
     }
 
     function retryGame() {
-      gameState.running = false;
-      document.getElementById('startScreen').style.display = 'flex';
-      document.getElementById('gameOverScreen').style.display = 'none';
-      document.getElementById('clearScreen').style.display = 'none';
+      startGame();
     }
 
-    window.addEventListener('load', () => {
-      document.body.style.background = config.bg_color;
-    });
+    function gameLoop() {
+      renderBoard();
+      if (gameState.running) {
+        requestAnimationFrame(gameLoop);
+      }
+    }
   </script>
 </body>
 </html>
