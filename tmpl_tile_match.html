@@ -1,374 +1,277 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TILE MATCH - タイルマッチパズル</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Arial', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: #1a1a2e;
-        }
-        
-        #gameContainer {
-            position: relative;
-            display: inline-block;
-            border: 4px solid #4299e1;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 0 20px rgba(66, 153, 225, 0.3);
-        }
-        
-        canvas {
-            display: block;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            cursor: pointer;
-        }
-        
-        .screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(26, 26, 46, 0.98);
-            z-index: 1000;
-        }
-        
-        #startScreen {
-            display: flex;
-        }
-        
-        #gameOverScreen {
-            display: none;
-        }
-        
-        #clearScreen {
-            display: none;
-        }
-        
-        .screen h1 {
-            color: #4299e1;
-            margin-bottom: 20px;
-            font-size: 48px;
-            text-shadow: 0 0 10px rgba(66, 153, 225, 0.5);
-        }
-        
-        .screen p {
-            color: #a0aec0;
-            margin: 8px 0;
-            font-size: 16px;
-            text-align: center;
-            max-width: 320px;
-        }
-        
-        .screen button {
-            margin-top: 30px;
-            padding: 12px 40px;
-            font-size: 18px;
-            background: #4299e1;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 10px rgba(66, 153, 225, 0.4);
-        }
-        
-        .screen button:hover {
-            background: #3182ce;
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(66, 153, 225, 0.6);
-        }
-        
-        .screen button:active {
-            transform: scale(0.98);
-        }
-    </style>
+  <meta charset="utf-8">
+  <title>Tile Match Puzzle</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    #startScreen, #gameOverScreen, #clearScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+    .screen-content { background: white; padding: 40px; border-radius: 10px; text-align: center; }
+    .screen-content h1 { font-size: 2.5em; margin-bottom: 20px; color: #1a1a2e; }
+    .screen-content p { font-size: 1.1em; margin-bottom: 15px; color: #333; }
+    button { padding: 12px 30px; font-size: 1.1em; cursor: pointer; background: #4299e1; color: white; border: none; border-radius: 5px; margin-top: 10px; }
+    button:hover { background: #3182ce; }
+    #gameContainer { display: block; cursor: pointer; }
+  </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
-        
-        <div id="startScreen" class="screen">
-            <h1>TILE MATCH</h1>
-            <p>タイルを選んで手札に集めよう</p>
-            <p>同じ種類が3枚揃ったら自動消去</p>
-            <p>クリア目標: 全48枚消去</p>
-            <p>注意: 手札が5枚に達したらゲームオーバー</p>
-            <button onclick="startGame()">START</button>
-        </div>
-        
-        <div id="clearScreen" class="screen">
-            <h1>🎉 CLEAR!</h1>
-            <p>全てのタイルを消去しました！</p>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
-        
-        <div id="gameOverScreen" class="screen">
-            <h1>GAME OVER</h1>
-            <p>手札が満杯になりました...</p>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
+  <div id="startScreen" style="display: flex;">
+    <div class="screen-content">
+      <h1>タイルマッチパズル</h1>
+      <p>同じ絵文字タイルを3枚取って消そう!</p>
+      <p style="font-size: 1em; color: #666;">盤面をクリックしてタイルを手札に追加</p>
+      <p style="font-size: 1em; color: #666;">目標: すべてのタイルを消す</p>
+      <button onclick="startGame()">スタート</button>
     </div>
+  </div>
+
+  <div id="gameOverScreen" style="display: none;">
+    <div class="screen-content">
+      <h1>ゲームオーバー</h1>
+      <p>手札がいっぱいになってしまいました...</p>
+      <button onclick="retryGame()">リトライ</button>
+    </div>
+  </div>
+
+  <div id="clearScreen" style="display: none;">
+    <div class="screen-content">
+      <h1>クリア!</h1>
+      <p>すべてのタイルを消すことができました!</p>
+      <button onclick="retryGame()">もう一度遊ぶ</button>
+    </div>
+  </div>
+
+  <canvas id="gameContainer"></canvas>
+
+  <script>
+    // theme: default (param生成への入力のみ)
+    // title: TILE MATCH
+    // bg_color: #1a1a2e
+    // tile_color: #2d3748
+    // tile_highlight: #4299e1
+    // tile_types: 12
+    // hand_limit: 5
+
+    const config = {
+      title: 'TILE MATCH',
+      bg_color: '#1a1a2e',
+      tile_color: '#2d3748',
+      tile_highlight: '#4299e1',
+      tile_types: 12,
+      hand_limit: 5
+    };
+
+    const canvas = document.getElementById('gameContainer');
+    const ctx = canvas.getContext('2d');
     
-    <script>
-        const config = {
-            title: 'TILE MATCH',
-            bg_color: '#1a1a2e',
-            tile_color: '#2d3748',
-            tile_highlight: '#4299e1',
-            tile_types: 12,
-            hand_limit: 5
-        };
-        
-        const TILE_WIDTH = 45;
-        const TILE_HEIGHT = 45;
-        const TOTAL_TILES = config.tile_types * 4;
-        const TILE_EMOJIS = ['🍎', '🍊', '🍋', '🍇', '🍓', '🍑', '🍒', '🥝', '🍍', '🥭', '🍈', '🍌'];
-        
-        const gameState = {
-            running: false,
-            tiles: [],
-            hand: [],
-            selectedTileIndex: -1
-        };
-        
-        class Tile {
-            constructor(type, x, y, index) {
-                this.type = type;
-                this.x = x;
-                this.y = y;
-                this.index = index;
-                this.locked = false;
-            }
-            
-            contains(px, py) {
-                return px >= this.x && px < this.x + TILE_WIDTH &&
-                       py >= this.y && py < this.y + TILE_HEIGHT;
-            }
+    canvas.width = 400;
+    canvas.height = 520;
+    document.getElementById('gameContainer').style.width = canvas.width + 'px';
+    document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+    document.body.style.background = config.bg_color;
+
+    const TILE_SIZE = 44;
+    const EMOJIS = ['🍎', '🍊', '🍋', '🍇', '🍓', '🍑', '🍒', '🥝', '🍍', '🥭', '🍈', '🍌'];
+
+    class Tile {
+      constructor(x, y, emoji, index) {
+        this.x = x;
+        this.y = y;
+        this.emoji = emoji;
+        this.index = index;
+        this.width = TILE_SIZE;
+        this.height = TILE_SIZE;
+        this.zIndex = 0;
+        this.locked = false;
+      }
+
+      draw() {
+        ctx.fillStyle = this.locked ? '#1a1a2e' : config.tile_color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.strokeStyle = this.locked ? '#555' : config.tile_highlight;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = this.locked ? '#666' : '#fff';
+        ctx.fillText(this.emoji, this.x + this.width / 2, this.y + this.height / 2);
+      }
+
+      contains(px, py) {
+        return px >= this.x && px <= this.x + this.width && py >= this.y && py <= this.y + this.height;
+      }
+
+      overlaps(other) {
+        return !(this.x + this.width < other.x || this.x > other.x + other.width ||
+                 this.y + this.height < other.y || this.y > other.y + other.height);
+      }
+    }
+
+    const gameState = {
+      running: false,
+      tiles: [],
+      hand: [],
+      matched: 0
+    };
+
+    function initGame() {
+      gameState.tiles = [];
+      gameState.hand = [];
+      gameState.matched = 0;
+      gameState.running = true;
+
+      const tileEmojis = [];
+      for (let type = 0; type < config.tile_types; type++) {
+        for (let count = 0; count < 4; count++) {
+          tileEmojis.push(EMOJIS[type]);
         }
-        
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 400;
-        canvas.height = 580;
-        document.getElementById('gameContainer').style.width = canvas.width + 'px';
-        document.getElementById('gameContainer').style.height = canvas.height + 'px';
-        
-        function initGame() {
-            gameState.tiles = [];
-            gameState.hand = [];
-            gameState.selectedTileIndex = -1;
-            
-            const deck = [];
-            for (let type = 0; type < config.tile_types; type++) {
-                for (let count = 0; count < 4; count++) {
-                    deck.push(type);
-                }
-            }
-            
-            for (let i = deck.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [deck[i], deck[j]] = [deck[j], deck[i]];
-            }
-            
-            const cols = 6;
-            const rows = Math.ceil(TOTAL_TILES / cols);
-            
-            let tileIndex = 0;
-            for (let row = 0; row < rows; row++) {
-                for (let col = 0; col < cols; col++) {
-                    if (tileIndex >= deck.length) break;
-                    
-                    const baseX = 30 + col * 55;
-                    const baseY = 20 + row * 50;
-                    const randomX = baseX + Math.random() * 15 - 7.5;
-                    const randomY = baseY + Math.random() * 15 - 7.5;
-                    
-                    gameState.tiles.push(new Tile(deck[tileIndex], randomX, randomY, tileIndex));
-                    tileIndex++;
-                }
-            }
-            
-            updateLockStatus();
+      }
+      tileEmojis.sort(() => Math.random() - 0.5);
+
+      let index = 0;
+      for (let row = 0; row < 6; row++) {
+        for (let col = 0; col < 8; col++) {
+          const baseX = 5 + col * 49;
+          const baseY = 10 + row * 58;
+          const offsetX = Math.random() * 16 - 8;
+          const offsetY = Math.random() * 16 - 8;
+          const x = baseX + offsetX;
+          const y = baseY + offsetY;
+          const tile = new Tile(x, y, tileEmojis[index], index);
+          gameState.tiles.push(tile);
+          index++;
         }
-        
-        function updateLockStatus() {
-            gameState.tiles.forEach(tile => tile.locked = false);
-            
-            for (let i = 0; i < gameState.tiles.length; i++) {
-                for (let j = 0; j < gameState.tiles.length; j++) {
-                    if (i === j) continue;
-                    
-                    const tile1 = gameState.tiles[i];
-                    const tile2 = gameState.tiles[j];
-                    
-                    if (tile2.x < tile1.x + TILE_WIDTH && 
-                        tile2.x + TILE_WIDTH > tile1.x &&
-                        tile2.y < tile1.y + TILE_HEIGHT && 
-                        tile2.y + TILE_HEIGHT > tile1.y) {
-                        tile1.locked = true;
-                    }
-                }
-            }
-        }
-        
-        function startGame() {
-            document.getElementById('startScreen').style.display = 'none';
-            initGame();
-            gameState.running = true;
-            gameLoop();
-        }
-        
-        function retryGame() {
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            document.getElementById('startScreen').style.display = 'flex';
+      }
+
+      gameState.tiles.sort((a, b) => (a.y + a.height) - (b.y + b.height));
+      gameState.tiles.forEach((tile, i) => {
+        tile.zIndex = i;
+      });
+
+      updateLocking();
+    }
+
+    function updateLocking() {
+      gameState.tiles.forEach(tile => {
+        tile.locked = false;
+        gameState.tiles.forEach(other => {
+          if (tile.index !== other.index && other.zIndex > tile.zIndex && tile.overlaps(other)) {
+            tile.locked = true;
+          }
+        });
+      });
+    }
+
+    function handleTileClick(px, py) {
+      if (py >= 360) return;
+
+      for (let i = gameState.tiles.length - 1; i >= 0; i--) {
+        const tile = gameState.tiles[i];
+        if (tile.contains(px, py) && !tile.locked) {
+          if (gameState.hand.length >= config.hand_limit) {
             gameState.running = false;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+            return;
+          }
+
+          gameState.hand.push(tile.emoji);
+          gameState.tiles.splice(i, 1);
+
+          checkMatch();
+
+          if (gameState.tiles.length === 0 && gameState.hand.length === 0) {
+            gameState.running = false;
+            document.getElementById('clearScreen').style.display = 'flex';
+            return;
+          }
+
+          updateLocking();
+          break;
         }
-        
-        function handleTileClick(event) {
-            if (!gameState.running) return;
-            
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            
-            for (let i = gameState.tiles.length - 1; i >= 0; i--) {
-                const tile = gameState.tiles[i];
-                if (!tile.locked && tile.contains(x, y)) {
-                    if (gameState.hand.length >= config.hand_limit) {
-                        gameState.running = false;
-                        document.getElementById('gameOverScreen').style.display = 'flex';
-                        return;
-                    }
-                    
-                    gameState.hand.push(tile.type);
-                    gameState.tiles.splice(i, 1);
-                    
-                    checkAndRemoveMatches();
-                    
-                    if (gameState.tiles.length === 0 && gameState.hand.length === 0) {
-                        gameState.running = false;
-                        document.getElementById('clearScreen').style.display = 'flex';
-                        return;
-                    }
-                    
-                    updateLockStatus();
-                    break;
-                }
-            }
+      }
+    }
+
+    function checkMatch() {
+      for (let emoji of EMOJIS) {
+        const count = gameState.hand.filter(e => e === emoji).length;
+        if (count >= 3) {
+          gameState.hand = gameState.hand.filter(e => e !== emoji);
+          gameState.matched++;
+          checkMatch();
         }
-        
-        function checkAndRemoveMatches() {
-            let matched = true;
-            while (matched) {
-                matched = false;
-                
-                for (let type = 0; type < config.tile_types; type++) {
-                    const count = gameState.hand.filter(t => t === type).length;
-                    if (count >= 3) {
-                        for (let i = 0; i < 3; i++) {
-                            const idx = gameState.hand.indexOf(type);
-                            if (idx !== -1) {
-                                gameState.hand.splice(idx, 1);
-                            }
-                        }
-                        matched = true;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        function drawGame() {
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.strokeStyle = '#4299e1';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(10, 10, canvas.width - 20, 340);
-            ctx.fillStyle = 'rgba(66, 153, 225, 0.05)';
-            ctx.fillRect(10, 10, canvas.width - 20, 340);
-            
-            gameState.tiles.forEach(tile => {
-                ctx.fillStyle = tile.locked ? 'rgba(45, 55, 72, 0.4)' : '#2d3748';
-                ctx.fillRect(tile.x, tile.y, TILE_WIDTH, TILE_HEIGHT);
-                
-                ctx.strokeStyle = tile.locked ? 'rgba(66, 153, 225, 0.3)' : '#4299e1';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(tile.x, tile.y, TILE_WIDTH, TILE_HEIGHT);
-                
-                ctx.font = 'bold 28px Arial';
-                ctx.fillStyle = '#ffffff';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(TILE_EMOJIS[tile.type], tile.x + TILE_WIDTH / 2, tile.y + TILE_HEIGHT / 2);
-            });
-            
-            ctx.strokeStyle = '#4299e1';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(10, 360, canvas.width - 20, 210);
-            ctx.fillStyle = 'rgba(66, 153, 225, 0.05)';
-            ctx.fillRect(10, 360, canvas.width - 20, 210);
-            
-            for (let i = 0; i < gameState.hand.length; i++) {
-                const x = 30 + i * 60;
-                const y = 380;
-                ctx.fillStyle = '#2d3748';
-                ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
-                
-                ctx.strokeStyle = '#4299e1';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x, y, TILE_WIDTH, TILE_HEIGHT);
-                
-                ctx.font = 'bold 28px Arial';
-                ctx.fillStyle = '#ffffff';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(TILE_EMOJIS[gameState.hand[i]], x + TILE_WIDTH / 2, y + TILE_HEIGHT / 2);
-            }
-            
-            ctx.font = 'bold 20px Arial';
-            ctx.fillStyle = '#4299e1';
-            ctx.textAlign = 'left';
-            ctx.fillText('TILE MATCH', 20, 550);
-            
-            ctx.font = 'bold 13px Arial';
-            ctx.fillStyle = '#a0aec0';
-            const remainingTiles = gameState.tiles.length;
-            const handCount = gameState.hand.length;
-            ctx.fillText(`残り: ${remainingTiles}/48 | 手札: ${handCount}/${config.hand_limit}`, 20, 570);
-            
-            ctx.font = '11px Arial';
-            ctx.fillStyle = '#718096';
-            ctx.textAlign = 'right';
-            ctx.fillText('ロック解除後にタイルをクリック | 同種3枚で消去', canvas.width - 20, 570);
-        }
-        
-        function gameLoop() {
-            drawGame();
-            if (gameState.running) {
-                requestAnimationFrame(gameLoop);
-            }
-        }
-        
-        canvas.addEventListener('click', handleTileClick);
-    </script>
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = config.bg_color;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      gameState.tiles.forEach(tile => {
+        tile.draw();
+      });
+
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 360);
+      ctx.lineTo(canvas.width, 360);
+      ctx.stroke();
+
+      ctx.fillStyle = '#0d0d1b';
+      ctx.fillRect(0, 370, canvas.width, 100);
+
+      gameState.hand.forEach((emoji, i) => {
+        const x = 20 + i * 72;
+        const y = 385;
+        ctx.fillStyle = config.tile_color;
+        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        ctx.strokeStyle = config.tile_highlight;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(emoji, x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+      });
+
+      ctx.font = 'bold 13px Arial';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.fillText('残り: ' + gameState.tiles.length + '/48 | 手札: ' + gameState.hand.length + '/' + config.hand_limit + ' | 目標: 全消去 | クリックでタイル取得', 10, 495);
+    }
+
+    function gameLoop() {
+      draw();
+      if (gameState.running) {
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      initGame();
+      gameLoop();
+    }
+
+    function retryGame() {
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('startScreen').style.display = 'flex';
+      gameState.running = false;
+    }
+
+    canvas.addEventListener('click', (e) => {
+      if (!gameState.running) return;
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      handleTileClick(px, py);
+    });
+  </script>
 </body>
 </html>
