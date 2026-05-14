@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MATCH3 META</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #gameContainer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #startScreen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        #startScreen button {
+            padding: 20px 60px;
+            font-size: 32px;
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #startScreen button:hover {
+            background-color: #3182ce;
+        }
+        #startScreen h1 {
+            color: white;
+            margin-bottom: 40px;
+            font-size: 48px;
+        }
+        #gameOverScreen, #clearScreen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        #gameOverScreen h2, #clearScreen h2 {
+            color: white;
+            font-size: 48px;
+            margin-bottom: 40px;
+        }
+        #clearScreen h2 {
+            color: #68d391;
+        }
+        #gameOverScreen button, #clearScreen button {
+            padding: 15px 40px;
+            font-size: 24px;
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #gameArea {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 20px;
+        }
+        #metaLayer {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            height: 50%;
+            border-bottom: 2px solid #4299e1;
+            padding: 20px 0;
+        }
+        .building {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            padding: 20px;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        .building:hover {
+            transform: scale(1.05);
+        }
+        .building-name {
+            color: white;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .building-level {
+            color: #f6e05e;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .building-cost {
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .building-cost.disabled {
+            color: #666;
+        }
+        #boardContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 50%;
+            padding: 20px 0;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(6, 60px);
+            grid-template-rows: repeat(6, 60px);
+            gap: 4px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+        }
+        .tile {
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            transition: transform 0.1s;
+        }
+        .tile:hover {
+            transform: scale(0.95);
+        }
+        .tile.selected {
+            transform: scale(0.9);
+            border: 3px solid white;
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            z-index: 100;
+        }
+        #starCount {
+            font-weight: bold;
+            color: #f6e05e;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1>MATCH3 META</h1>
+            <button onclick="startGame()">START</button>
+        </div>
+        <div id="gameOverScreen">
+            <h2>GAME OVER</h2>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        <div id="clearScreen">
+            <h2>CLEAR!</h2>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        <div id="hud">
+            STAR: <span id="starCount">0</span>
+        </div>
+        <div id="gameArea">
+            <div id="metaLayer"></div>
+            <div id="boardContainer">
+                <div id="board"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'MATCH3 META',
+            bg_color: '#1a1a2e',
+            tile_colors: ['#e53e3e','#4299e1','#68d391','#f6e05e'],
+            building_color: '#d69e2e',
+            grid_cols: 6,
+            grid_rows: 6,
+            building_count: 3
+        };
+
+        const gameState = {
+            running: false,
+            grid: [],
+            stars: 0,
+            buildings: [
+                { name: 'A', level: 1, costs: [5, 15] },
+                { name: 'B', level: 1, costs: [8, 20] },
+                { name: 'C', level: 1, costs: [10, 25] }
+            ],
+            selectedTile: null
+        };
+
+        function initializeGame() {
+            document.body.style.background = config.bg_color;
+            gameState.grid = [];
+            gameState.stars = 0;
+            gameState.buildings = [
+                { name: 'A', level: 1, costs: [5, 15] },
+                { name: 'B', level: 1, costs: [8, 20] },
+                { name: 'C', level: 1, costs: [10, 25] }
+            ];
+            gameState.selectedTile = null;
+
+            for (let i = 0; i < config.grid_rows; i++) {
+                gameState.grid[i] = [];
+                for (let j = 0; j < config.grid_cols; j++) {
+                    gameState.grid[i][j] = Math.floor(Math.random() * config.tile_colors.length);
+                }
+            }
+            renderBoard();
+            renderMeta();
+            updateHUD();
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameState.running = true;
+            initializeGame();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('startScreen').style.display = 'flex';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameState.running = false;
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let i = 0; i < config.grid_rows; i++) {
+                for (let j = 0; j < config.grid_cols; j++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+                    tile.style.backgroundColor = config.tile_colors[gameState.grid[i][j]];
+                    tile.dataset.row = i;
+                    tile.dataset.col = j;
+                    if (gameState.selectedTile && gameState.selectedTile.row === i && gameState.selectedTile.col === j) {
+                        tile.classList.add('selected');
+                    }
+                    tile.onclick = () => selectTile(i, j);
+                    board.appendChild(tile);
+                }
+            }
+        }
+
+        function renderMeta() {
+            const metaLayer = document.getElementById('metaLayer');
+            metaLayer.innerHTML = '';
+            for (let i = 0; i < gameState.buildings.length; i++) {
+                const building = gameState.buildings[i];
+                const div = document.createElement('div');
+                div.className = 'building';
+                div.style.backgroundColor = config.building_color;
+                const nextLevel = building.level + 1;
+                const cost = nextLevel <= 3 ? building.costs[nextLevel - 2] : 0;
+                const canUpgrade = building.level < 3 && gameState.stars >= cost;
+                div.innerHTML = `
+                    <div class="building-name">Building ${building.name}</div>
+                    <div class="building-level">Lv ${building.level}/3</div>
+                    <div class="building-cost ${canUpgrade ? '' : 'disabled'}">
+                        ${building.level < 3 ? `Cost: ${cost}★` : 'MAXED'}
+                    </div>
+                `;
+                div.onclick = () => upgradeBuilding(i);
+                metaLayer.appendChild(div);
+            }
+        }
+
+        function selectTile(row, col) {
+            if (!gameState.running) return;
+            if (gameState.selectedTile === null) {
+                gameState.selectedTile = { row, col };
+            } else {
+                const dist = Math.abs(gameState.selectedTile.row - row) + Math.abs(gameState.selectedTile.col - col);
+                if (dist === 1) {
+                    swapTiles(gameState.selectedTile.row, gameState.selectedTile.col, row, col);
+                }
+                gameState.selectedTile = null;
+            }
+            renderBoard();
+        }
+
+        function swapTiles(r1, c1, r2, c2) {
+            [gameState.grid[r1][c1], gameState.grid[r2][c2]] = [gameState.grid[r2][c2], gameState.grid[r1][c1]];
+            resolveMatches();
+        }
+
+        function resolveMatches() {
+            let found = true;
+            while (found) {
+                found = false;
+                const toRemove = new Set();
+                for (let i = 0; i < config.grid_rows; i++) {
+                    for (let j = 0; j < config.grid_cols; j++) {
+                        if (j <= config.grid_cols - 3) {
+                            if (gameState.grid[i][j] === gameState.grid[i][j + 1] && gameState.grid[i][j] === gameState.grid[i][j + 2]) {
+                                toRemove.add(`${i},${j}`);
+                                toRemove.add(`${i},${j + 1}`);
+                                toRemove.add(`${i},${j + 2}`);
+                            }
+                        }
+                        if (i <= config.grid_rows - 3) {
+                            if (gameState.grid[i][j] === gameState.grid[i + 1][j] && gameState.grid[i][j] === gameState.grid[i + 2][j]) {
+                                toRemove.add(`${i},${j}`);
+                                toRemove.add(`${i + 1},${j}`);
+                                toRemove.add(`${i + 2},${j}`);
+                            }
+                        }
+                    }
+                }
+                if (toRemove.size > 0) {
+                    found = true;
+                    gameState.stars++;
+                    toRemove.forEach(key => {
+                        const [r, c] = key.split(',').map(Number);
+                        gameState.grid[r][c] = -1;
+                    });
+                    applyGravity();
+                    fillBoard();
+                }
+            }
+        }
+
+        function applyGravity() {
+            for (let j = 0; j < config.grid_cols; j++) {
+                let writePos = config.grid_rows - 1;
+                for (let i = config.grid_rows - 1; i >= 0; i--) {
+                    if (gameState.grid[i][j] !== -1) {
+                        gameState.grid[writePos][j] = gameState.grid[i][j];
+                        if (writePos !== i) {
+                            gameState.grid[i][j] = -1;
+                        }
+                        writePos--;
+                    }
+                }
+            }
+        }
+
+        function fillBoard() {
+            for (let i = 0; i < config.grid_rows; i++) {
+                for (let j = 0; j < config.grid_cols; j++) {
+                    if (gameState.grid[i][j] === -1) {
+                        gameState.grid[i][j] = Math.floor(Math.random() * config.tile_colors.length);
+                    }
+                }
+            }
+        }
+
+        function upgradeBuilding(index) {
+            if (!gameState.running) return;
+            const building = gameState.buildings[index];
+            if (building.level >= 3) return;
+            const cost = building.costs[building.level - 1];
+            if (gameState.stars >= cost) {
+                gameState.stars -= cost;
+                building.level++;
+                renderMeta();
+                updateHUD();
+                checkClear();
+            }
+        }
+
+        function checkClear() {
+            if (gameState.buildings.every(b => b.level === 3)) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('starCount').textContent = gameState.stars;
+        }
+
+        function gameLoop() {
+            renderBoard();
+            renderMeta();
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>

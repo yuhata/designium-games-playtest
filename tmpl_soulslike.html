@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOULS LITE</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; font-family: Arial, sans-serif; overflow: hidden; }
+        #gameContainer { position: relative; width: 1000px; height: 600px; border: 2px solid #333; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; z-index: 10; }
+        #startButton { padding: 20px 40px; font-size: 24px; cursor: pointer; background-color: #c0c0c0; border: none; color: #000; font-weight: bold; }
+        #startButton:hover { background-color: #e0e0e0; }
+        #gameOverScreen, #clearScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; justify-content: center; align-items: center; z-index: 20; flex-direction: column; gap: 20px; background: rgba(0,0,0,0.9); }
+        .screen-title { font-size: 48px; font-weight: bold; color: #c0c0c0; }
+        .screen-button { padding: 15px 30px; font-size: 20px; cursor: pointer; background-color: #c0c0c0; border: none; color: #000; font-weight: bold; }
+        .screen-button:hover { background-color: #e0e0e0; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="startScreen">
+            <button id="startButton">START</button>
+        </div>
+        <div id="gameOverScreen">
+            <div class="screen-title">GAME OVER</div>
+            <button class="screen-button" onclick="retryGame()">RETRY</button>
+        </div>
+        <div id="clearScreen">
+            <div class="screen-title">CLEAR!</div>
+            <button class="screen-button" onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <script>
+        /*
+         * CONFIG SCHEMA
+         * { title, bg_color, arena_color, player_color, boss_color, player_hp, boss_hp, stamina_max, atk_cost, dodge_cost }
+         */
+        const config = {
+            title: 'SOULS LITE',
+            bg_color: '#0a0a0a',
+            arena_color: '#1a1a1a',
+            player_color: '#c0c0c0',
+            boss_color: '#8b0000',
+            player_hp: 5,
+            boss_hp: 20,
+            stamina_max: 100,
+            atk_cost: 10,
+            dodge_cost: 20
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 1000;
+        canvas.height = 600;
+
+        const gameState = {
+            running: false,
+            playerHp: config.player_hp,
+            bossHp: config.boss_hp,
+            playerX: 150,
+            playerY: 300,
+            bossX: 800,
+            bossY: 300,
+            stamina: config.stamina_max,
+            playerVelX: 0,
+            isDodging: false,
+            dodgeTimer: 0,
+            isDefending: false,
+            bossAttackType: 0,
+            bossAttackTimer: 0,
+            bossChargeFrame: -1,
+            bossDamageFlash: 0,
+            playerDamageFlash: 0,
+            perfectDodgeTriggered: false
+        };
+
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ') e.preventDefault();
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.playerHp = config.player_hp;
+            gameState.bossHp = config.boss_hp;
+            gameState.stamina = config.stamina_max;
+            gameState.playerX = 150;
+            gameState.playerY = 300;
+            gameState.bossX = 800;
+            gameState.bossY = 300;
+            gameState.playerVelX = 0;
+            gameState.isDodging = false;
+            gameState.dodgeTimer = 0;
+            gameState.isDefending = false;
+            gameState.bossAttackType = 0;
+            gameState.bossAttackTimer = 0;
+            gameState.bossChargeFrame = -1;
+            gameState.bossDamageFlash = 0;
+            gameState.playerDamageFlash = 0;
+            gameState.perfectDodgeTriggered = false;
+            document.body.style.background = config.bg_color;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function retryGame() {
+            startGame();
+        }
+
+        function updateInput() {
+            const moveSpeed = 5;
+            gameState.playerVelX = 0;
+            if (keys['a']) gameState.playerVelX = -moveSpeed;
+            if (keys['d']) gameState.playerVelX = moveSpeed;
+
+            if (keys[' '] && gameState.stamina >= config.dodge_cost && !gameState.isDodging) {
+                gameState.isDodging = true;
+                gameState.dodgeTimer = 15;
+                gameState.stamina -= config.dodge_cost;
+                gameState.perfectDodgeTriggered = false;
+                if (gameState.bossChargeFrame === 0) {
+                    gameState.perfectDodgeTriggered = true;
+                    gameState.stamina += 10;
+                }
+            }
+
+            if (keys['j'] && gameState.stamina >= config.atk_cost && !gameState.isDodging) {
+                gameState.stamina -= config.atk_cost;
+                handlePlayerAttack();
+            }
+
+            gameState.isDefending = keys['k'] ? true : false;
+        }
+
+        function handlePlayerAttack() {
+            const attackRange = 150;
+            const attackX = gameState.playerX + 80;
+            if (attackX > gameState.bossX - attackRange && attackX < gameState.bossX + 50) {
+                let damage = 1;
+                if (gameState.bossAttackType === 1) damage = 2;
+                gameState.bossHp -= damage;
+                gameState.bossDamageFlash = 10;
+                if (gameState.bossHp < 0) gameState.bossHp = 0;
+            }
+        }
+
+        function updatePlayer() {
+            gameState.playerX += gameState.playerVelX;
+            if (gameState.playerX < 50) gameState.playerX = 50;
+            if (gameState.playerX > 400) gameState.playerX = 400;
+
+            if (gameState.isDodging) {
+                gameState.dodgeTimer--;
+                if (gameState.dodgeTimer <= 0) gameState.isDodging = false;
+            }
+
+            gameState.stamina += 15 / 60;
+            if (gameState.stamina > config.stamina_max) gameState.stamina = config.stamina_max;
+        }
+
+        function updateBoss() {
+            gameState.bossAttackTimer--;
+            if (gameState.bossAttackTimer <= 0) {
+                gameState.bossAttackType = Math.floor(Math.random() * 3);
+                gameState.bossAttackTimer = 180;
+                gameState.bossChargeFrame = gameState.bossAttackType === 1 ? 0 : -1;
+                gameState.perfectDodgeTriggered = false;
+            }
+
+            if (gameState.bossChargeFrame >= 0) {
+                gameState.bossChargeFrame++;
+                if (gameState.bossChargeFrame > 30) {
+                    gameState.bossChargeFrame = -1;
+                    performBossAttack();
+                }
+            } else if (gameState.bossAttackTimer === 1) {
+                performBossAttack();
+            }
+
+            if (gameState.bossDamageFlash > 0) gameState.bossDamageFlash--;
+        }
+
+        function performBossAttack() {
+            if (gameState.perfectDodgeTriggered) return;
+            let damage = [1, 2, 1][gameState.bossAttackType];
+            let isAreaAttack = gameState.bossAttackType === 2;
+
+            let playerTakeDamage = damage;
+            if (gameState.isDefending) playerTakeDamage = Math.max(1, Math.floor(damage * 0.5));
+
+            if (!gameState.isDodging || isAreaAttack) {
+                gameState.playerHp -= playerTakeDamage;
+                gameState.playerDamageFlash = 10;
+                if (gameState.playerHp < 0) gameState.playerHp = 0;
+            }
+        }
+
+        function drawGame() {
+            ctx.fillStyle = config.arena_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawPlayer();
+            drawBoss();
+            drawHUD();
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            if (gameState.playerDamageFlash > 5) ctx.globalAlpha = 0.5;
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(gameState.playerX, gameState.playerY, 60, 80);
+            ctx.restore();
+
+            if (gameState.isDodging) {
+                ctx.strokeStyle = config.player_color;
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.5;
+                ctx.beginPath();
+                ctx.arc(gameState.playerX + 30, gameState.playerY + 40, 50, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
+            if (gameState.isDefending) {
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 0.7;
+                ctx.strokeRect(gameState.playerX - 10, gameState.playerY - 10, 80, 100);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function drawBoss() {
+            ctx.save();
+            if (gameState.bossDamageFlash > 5) ctx.globalAlpha = 0.5;
+            ctx.fillStyle = config.boss_color;
+            ctx.fillRect(gameState.bossX, gameState.bossY, 50, 100);
+            ctx.restore();
+
+            if (gameState.bossChargeFrame >= 0) {
+                const blinkRate = gameState.bossChargeFrame % 6 < 3 ? 1 : 0.3;
+                ctx.globalAlpha = blinkRate;
+                ctx.fillStyle = '#ff6666';
+                ctx.fillRect(gameState.bossX, gameState.bossY, 50, 100);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '16px Arial';
+            ctx.fillText('Player HP:', 20, 30);
+            for (let i = 0; i < config.player_hp; i++) {
+                const pipX = 140 + i * 25;
+                ctx.fillStyle = gameState.playerHp > i ? '#00ff00' : '#333333';
+                ctx.fillRect(pipX, 15, 20, 20);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(pipX, 15, 20, 20);
+            }
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('Boss HP:', 20, 80);
+            const bossHpPercent = gameState.bossHp / config.boss_hp;
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(120, 65, 200, 20);
+            ctx.fillStyle = bossHpPercent > 0.3 ? '#ff0000' : '#ff6666';
+            ctx.fillRect(120, 65, 200 * bossHpPercent, 20);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(120, 65, 200, 20);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('Stamina:', 20, 130);
+            const staminaPercent = gameState.stamina / config.stamina_max;
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(120, 115, 200, 20);
+            ctx.fillStyle = staminaPercent > 0.3 ? '#ffff00' : '#ff9900';
+            ctx.fillRect(120, 115, 200 * staminaPercent, 20);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(120, 115, 200, 20);
+
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#888888';
+            ctx.fillText('A/D: Move  SPACE: Dodge  J: Attack  K: Defend', 20, canvas.height - 20);
+
+            if (gameState.perfectDodgeTriggered) {
+                ctx.fillStyle = '#ffff00';
+                ctx.font = 'bold 20px Arial';
+                ctx.fillText('Perfect Dodge!', canvas.width / 2 - 80, 100);
+            }
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+            updateInput();
+            updatePlayer();
+            updateBoss();
+            drawGame();
+
+            if (gameState.bossHp <= 0) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+            } else if (gameState.playerHp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+            }
+
+            if (gameState.running) requestAnimationFrame(gameLoop);
+        }
+
+        document.getElementById('startButton').addEventListener('click', startGame);
+        document.body.style.background = config.bg_color;
+    </script>
+</body>
+</html>

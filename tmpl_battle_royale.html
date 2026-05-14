@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BATTLE ROYALE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        #container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 2px solid #666;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.9);
+        }
+        
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.9);
+        }
+        
+        .screen-text {
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
+        .screen-button {
+            padding: 15px 40px;
+            font-size: 18px;
+            background: #f6e05e;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            color: #000;
+        }
+        
+        .screen-button:hover {
+            background: #e0c146;
+        }
+        
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 14px;
+            font-family: monospace;
+            z-index: 5;
+        }
+        
+        .hud-item {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="hud">
+            <div class="hud-item">HP: <span id="hudHp">100</span></div>
+            <div class="hud-item">ALIVE: <span id="hudAlive">10</span></div>
+            <div class="hud-item">ZONE: <span id="hudZone">30</span>s</div>
+        </div>
+        
+        <div id="startScreen">
+            <div class="screen-text">BATTLE ROYALE</div>
+            <button class="screen-button" onclick="startGame()">START</button>
+        </div>
+        
+        <div id="gameOverScreen">
+            <div class="screen-text">GAME OVER</div>
+            <button class="screen-button" onclick="retryGame()">RETRY</button>
+        </div>
+        
+        <div id="clearScreen">
+            <div class="screen-text">YOU WIN!</div>
+            <button class="screen-button" onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'BATTLE ROYALE',
+            bg_color: '#1a2a1a',
+            safe_color: '#2d4a2d',
+            danger_color: '#4a1a1a',
+            player_color: '#f6e05e',
+            enemy_color: '#e53e3e',
+            player_hp: 100,
+            total_players: 10,
+            zone_shrink_interval: 30,
+            zone_damage: 2
+        };
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 800;
+        canvas.height = 600;
+        
+        document.body.style.background = config.bg_color;
+        
+        const gameState = {
+            running: false,
+            zoneTimer: config.zone_shrink_interval,
+            zonePhase: 0,
+            worldWidth: 800,
+            worldHeight: 600
+        };
+        
+        const initialZoneRadius = 250;
+        let zoneRadius = initialZoneRadius;
+        const zoneCenterX = 400;
+        const zoneCenterY = 300;
+        
+        class Entity {
+            constructor(x, y, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = color;
+                this.vx = 0;
+                this.vy = 0;
+                this.speed = 2;
+                this.hp = 100;
+                this.maxHp = 100;
+                this.attackPower = 10;
+                this.attackRange = 30;
+                this.attackCooldown = 0;
+                this.inZone = true;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                this.x = Math.max(this.radius, Math.min(gameState.worldWidth - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(gameState.worldHeight - this.radius, this.y));
+                
+                const dx = this.x - zoneCenterX;
+                const dy = this.y - zoneCenterY;
+                const distToZone = Math.sqrt(dx * dx + dy * dy);
+                
+                this.inZone = distToZone <= zoneRadius;
+                
+                if (!this.inZone) {
+                    this.hp -= config.zone_damage;
+                }
+                
+                if (this.attackCooldown > 0) {
+                    this.attackCooldown -= 1;
+                }
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(Math.round(this.hp), this.x, this.y);
+            }
+            
+            canAttack() {
+                return this.attackCooldown <= 0;
+            }
+            
+            attack() {
+                this.attackCooldown = 30;
+            }
+        }
+        
+        class Item {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.radius = 5;
+                this.collected = false;
+            }
+            
+            draw() {
+                if (this.type === 'weapon') {
+                    ctx.fillStyle = '#ffd700';
+                } else {
+                    ctx.fillStyle = '#00ff00';
+                }
+                ctx.beginPath();
+                ctx.rect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                ctx.fill();
+            }
+        }
+        
+        let player = null;
+        let enemies = [];
+        let items = [];
+        const keys = {};
+        
+        function initGame() {
+            gameState.zoneTimer = config.zone_shrink_interval;
+            gameState.zonePhase = 0;
+            zoneRadius = initialZoneRadius;
+            
+            player = new Entity(400, 300, 8, config.player_color);
+            player.hp = config.player_hp;
+            player.maxHp = config.player_hp;
+            
+            enemies = [];
+            for (let i = 0; i < config.total_players - 1; i++) {
+                let x, y, distance;
+                do {
+                    x = Math.random() * gameState.worldWidth;
+                    y = Math.random() * gameState.worldHeight;
+                    const dx = x - zoneCenterX;
+                    const dy = y - zoneCenterY;
+                    distance = Math.sqrt(dx * dx + dy * dy);
+                } while (distance > zoneRadius);
+                
+                const enemy = new Entity(x, y, 6, config.enemy_color);
+                enemy.hp = 60;
+                enemy.maxHp = 60;
+                enemies.push(enemy);
+            }
+            
+            items = [];
+            for (let i = 0; i < 15; i++) {
+                let x, y, distance;
+                do {
+                    x = Math.random() * gameState.worldWidth;
+                    y = Math.random() * gameState.worldHeight;
+                    const dx = x - zoneCenterX;
+                    const dy = y - zoneCenterY;
+                    distance = Math.sqrt(dx * dx + dy * dy);
+                } while (distance > zoneRadius);
+                
+                const type = Math.random() < 0.5 ? 'weapon' : 'heal';
+                items.push(new Item(x, y, type));
+            }
+        }
+        
+        function updatePlayerInput() {
+            player.vx = 0;
+            player.vy = 0;
+            
+            if (keys['w'] || keys['W']) player.vy = -player.speed;
+            if (keys['s'] || keys['S']) player.vy = player.speed;
+            if (keys['a'] || keys['A']) player.vx = -player.speed;
+            if (keys['d'] || keys['D']) player.vx = player.speed;
+        }
+        
+        function updateEnemyAI() {
+            enemies.forEach((enemy, idx) => {
+                if (Math.random() < 0.05) {
+                    enemy.vx = (Math.random() - 0.5) * 3;
+                    enemy.vy = (Math.random() - 0.5) * 3;
+                }
+                
+                if (Math.random() < 0.02 && enemy.canAttack()) {
+                    const targets = [player, ...enemies.filter((e, i) => i !== idx && e.hp > 0)];
+                    if (targets.length > 0) {
+                        const target = targets[Math.floor(Math.random() * targets.length)];
+                        const dx = target.x - enemy.x;
+                        const dy = target.y - enemy.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < enemy.attackRange) {
+                            target.hp -= enemy.attackPower;
+                            enemy.attack();
+                        }
+                    }
+                }
+            });
+        }
+        
+        function checkCollisions() {
+            items = items.filter(item => !item.collected);
+            
+            items.forEach(item => {
+                const dx = player.x - item.x;
+                const dy = player.y - item.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < player.radius + item.radius) {
+                    if (item.type === 'weapon') {
+                        player.attackPower = 20;
+                    } else if (item.type === 'heal') {
+                        player.hp = Math.min(player.maxHp, player.hp + 30);
+                    }
+                    item.collected = true;
+                }
+            });
+            
+            enemies.forEach(enemy => {
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < player.radius + enemy.radius + 5 && keys[' '] && player.canAttack()) {
+                    enemy.hp -= player.attackPower;
+                    player.attack();
+                    keys[' '] = false;
+                }
+            });
+        }
+        
+        function updateHUD() {
+            document.getElementById('hudHp').textContent = Math.max(0, Math.round(player.hp));
+            
+            const alive = enemies.filter(e => e.hp > 0).length + 1;
+            document.getElementById('hudAlive').textContent = alive;
+            
+            const remainingTime = Math.ceil(gameState.zoneTimer);
+            document.getElementById('hudZone').textContent = remainingTime;
+        }
+        
+        function gameLoop() {
+            if (!gameState.running) return;
+            
+            updatePlayerInput();
+            updateEnemyAI();
+            
+            player.update();
+            enemies.forEach(e => e.update());
+            
+            checkCollisions();
+            
+            gameState.zoneTimer -= 1 / 60;
+            if (gameState.zoneTimer <= 0) {
+                gameState.zonePhase += 1;
+                gameState.zoneTimer = config.zone_shrink_interval;
+                const shrinkFactor = 0.7;
+                zoneRadius *= shrinkFactor;
+            }
+            
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, gameState.worldWidth, gameState.worldHeight);
+            
+            const dx = zoneCenterX;
+            const dy = zoneCenterY;
+            ctx.fillStyle = config.safe_color;
+            ctx.beginPath();
+            ctx.arc(dx, dy, zoneRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = config.danger_color;
+            ctx.beginPath();
+            ctx.arc(dx, dy, zoneRadius * 1.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(dx, dy, zoneRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            items.forEach(item => item.draw());
+            player.draw();
+            enemies.forEach(enemy => {
+                if (enemy.hp > 0) {
+                    enemy.draw();
+                }
+            });
+            
+            updateHUD();
+            
+            const activeEnemies = enemies.filter(e => e.hp > 0).length;
+            if (player.hp <= 0) {
+                gameState.running = false;
+                showGameOver();
+                return;
+            }
+            
+            if (activeEnemies === 0) {
+                gameState.running = false;
+                showClear();
+                return;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            initGame();
+            gameState.running = true;
+            gameLoop();
+        }
+        
+        function showGameOver() {
+            document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+        
+        function showClear() {
+            document.getElementById('clearScreen').style.display = 'flex';
+        }
+        
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+        
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === ' ') e.preventDefault();
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+    </script>
+</body>
+</html>
