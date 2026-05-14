@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>METROID LITE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #666;
+        }
+        canvas {
+            display: block;
+            background: #0a0a1a;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 10;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        .screen.active {
+            display: flex;
+        }
+        .screen h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #63b3ed;
+        }
+        .screen p {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            line-height: 1.8;
+        }
+        .screen button {
+            padding: 15px 40px;
+            font-size: 1.5em;
+            background: #63b3ed;
+            color: black;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        .screen button:hover {
+            background: #4a9fd8;
+        }
+        .hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #63b3ed;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 5;
+            line-height: 1.6;
+        }
+        .controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: #63b3ed;
+            font-size: 12px;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen" class="screen active">
+            <h1>METROID LITE</h1>
+            <p>横スクロール冒険アクション</p>
+            <p>左から右へ進み、鍵を取得してボスを倒そう</p>
+            <p style="font-size: 0.9em; color: #aaa;">AD/矢印キー: 移動 | W/スペース: ジャンプ | X/クリック: 攻撃</p>
+            <button onclick="startGame()">START</button>
+        </div>
+        <div id="gameOverScreen" class="screen">
+            <h1>GAME OVER</h1>
+            <p>HPがなくなってしまった...</p>
+            <button onclick="retryGame()">リトライ</button>
+        </div>
+        <div id="clearScreen" class="screen">
+            <h1>CLEAR!</h1>
+            <p>ボスを倒した。冒険が完了した。</p>
+            <button onclick="retryGame()">もう一度</button>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div class="hud">
+            <div>HP: <span id="hpDisplay">5</span></div>
+            <div>鍵: <span id="keyDisplay">NO</span></div>
+            <div>Area: <span id="areaDisplay">LEFT</span></div>
+        </div>
+        <div class="controls">AD/矢印:移動 | W/Spc:ジャンプ | X/click:攻撃</div>
+    </div>
+
+    <script>
+        // theme: metroid_lite
+        // title: METROID LITE
+        // bg_color: #0a0a1a
+        // platform_color: #4a5568
+        // player_color: #63b3ed
+        // enemy_color: #fc8181
+        // boss_color: #d69e2e
+        // player_hp: 5
+        // player_atk: 1
+        // boss_hp: 15
+        // gravity: 0.5
+        // jump_force: -10
+
+        const config = {
+            title: 'METROID LITE',
+            bg_color: '#0a0a1a',
+            platform_color: '#4a5568',
+            player_color: '#63b3ed',
+            enemy_color: '#fc8181',
+            boss_color: '#d69e2e',
+            player_hp: 5,
+            player_atk: 1,
+            boss_hp: 15,
+            gravity: 0.5,
+            jump_force: -10
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400;
+        canvas.height = 400;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        document.body.style.background = config.bg_color;
+
+        const AREA_WIDTH = canvas.width / 3;
+        const GROUND_Y = canvas.height - 60;
+
+        const gameState = {
+            running: false,
+            currentArea: 0,
+            player: {
+                x: 20,
+                y: GROUND_Y - 30,
+                vx: 0,
+                vy: 0,
+                width: 20,
+                height: 30,
+                hp: config.player_hp,
+                maxHp: config.player_hp,
+                hasKey: false,
+                attackCooldown: 0,
+                attacking: false,
+                attackFrame: 0,
+                direction: 1
+            },
+            enemies: [],
+            boss: null,
+            doorOpen: false,
+            camera: { x: 0 }
+        };
+
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === 'x' || e.key === 'X') attack();
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        canvas.addEventListener('click', attack);
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.currentArea = 0;
+            gameState.player.x = 20;
+            gameState.player.y = GROUND_Y - 30;
+            gameState.player.vx = 0;
+            gameState.player.vy = 0;
+            gameState.player.hp = config.player_hp;
+            gameState.player.hasKey = false;
+            gameState.doorOpen = false;
+            setupEnemies();
+            setupBoss();
+            gameLoop();
+        }
+
+        function setupEnemies() {
+            gameState.enemies = [];
+            // Left area enemies
+            gameState.enemies.push({
+                x: 80, y: GROUND_Y - 40, vx: -1.5, width: 20, height: 20,
+                hp: 1, patrol: [50, 120], areaId: 0, direction: -1
+            });
+            gameState.enemies.push({
+                x: 160, y: GROUND_Y - 60, vx: 1.5, width: 20, height: 20,
+                hp: 1, patrol: [140, 220], areaId: 0, direction: 1
+            });
+            // Center area enemies (boss room)
+            gameState.enemies.push({
+                x: AREA_WIDTH + 40, y: GROUND_Y - 40, vx: 1.5, width: 20, height: 20,
+                hp: 1, patrol: [AREA_WIDTH + 20, AREA_WIDTH + 120], areaId: 1, direction: 1
+            });
+            gameState.enemies.push({
+                x: AREA_WIDTH + 160, y: GROUND_Y - 70, vx: -1.5, width: 20, height: 20,
+                hp: 1, patrol: [AREA_WIDTH + 120, AREA_WIDTH + 220], areaId: 1, direction: -1
+            });
+            // Right area enemies (key area)
+            gameState.enemies.push({
+                x: AREA_WIDTH * 2 + 60, y: GROUND_Y - 80, vx: 1.5, width: 20, height: 20,
+                hp: 1, patrol: [AREA_WIDTH * 2 + 40, AREA_WIDTH * 2 + 140], areaId: 2, direction: 1
+            });
+            gameState.enemies.push({
+                x: AREA_WIDTH * 2 + 180, y: GROUND_Y - 50, vx: -1.5, width: 20, height: 20,
+                hp: 1, patrol: [AREA_WIDTH * 2 + 140, AREA_WIDTH * 2 + 280], areaId: 2, direction: -1
+            });
+        }
+
+        function setupBoss() {
+            gameState.boss = {
+                x: AREA_WIDTH + 140,
+                y: GROUND_Y - 50,
+                vx: -2,
+                width: 40,
+                height: 40,
+                hp: config.boss_hp,
+                maxHp: config.boss_hp,
+                patrol: [AREA_WIDTH + 80, AREA_WIDTH + 260],
+                direction: -1,
+                attackCooldown: 0,
+                areaId: 1
+            };
+        }
+
+        function attack() {
+            if (!gameState.running) return;
+            if (gameState.player.attackCooldown > 0) return;
+            gameState.player.attacking = true;
+            gameState.player.attackFrame = 10;
+            gameState.player.attackCooldown = 20;
+
+            const attackRange = { x: gameState.player.x + gameState.player.direction * 30, y: gameState.player.y, width: 20, height: 30 };
+
+            // Hit enemies
+            for (let enemy of gameState.enemies) {
+                if (checkCollision(attackRange, { x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height })) {
+                    enemy.hp -= config.player_atk;
+                    if (enemy.hp <= 0) {
+                        gameState.enemies.splice(gameState.enemies.indexOf(enemy), 1);
+                    }
+                    break;
+                }
+            }
+
+            // Hit boss
+            if (gameState.boss && checkCollision(attackRange, { x: gameState.boss.x, y: gameState.boss.y, width: gameState.boss.width, height: gameState.boss.height })) {
+                gameState.boss.hp -= config.player_atk;
+            }
+        }
+
+        function update() {
+            if (!gameState.running) return;
+
+            const p = gameState.player;
+
+            // Movement
+            p.vx = 0;
+            if (keys['a'] || keys['A'] || keys['ArrowLeft']) p.vx = -3;
+            if (keys['d'] || keys['D'] || keys['ArrowRight']) p.vx = 3;
+            p.direction = p.vx < 0 ? -1 : (p.vx > 0 ? 1 : p.direction);
+
+            // Jump
+            if ((keys[' '] || keys['w'] || keys['W']) && p.vy === 0) {
+                p.vy = config.jump_force;
+            }
+
+            // Gravity
+            p.vy += config.gravity;
+            if (p.vy > 8) p.vy = 8;
+
+            // Position update
+            p.x += p.vx;
+            p.y += p.vy;
+
+            // Platform collision
+            if (p.y + p.height >= GROUND_Y) {
+                p.y = GROUND_Y - p.height;
+                p.vy = 0;
+            }
+
+            // Area transition
+            if (p.x < 0) {
+                if (gameState.currentArea > 0) {
+                    gameState.currentArea--;
+                    p.x = canvas.width - 30;
+                } else {
+                    p.x = 0;
+                }
+            }
+            if (p.x + p.width > canvas.width) {
+                if (gameState.currentArea < 2) {
+                    gameState.currentArea++;
+                    p.x = 10;
+                } else {
+                    p.x = canvas.width - p.width;
+                }
+            }
+
+            // Fall damage
+            if (p.y > canvas.height) {
+                p.hp -= 1;
+                p.x = 20;
+                p.y = GROUND_Y - 30;
+                p.vy = 0;
+                if (p.hp <= 0) {
+                    gameState.running = false;
+                    document.getElementById('gameOverScreen').style.display = 'flex';
+                    return;
+                }
+            }
+
+            // Key pickup
+            if (gameState.currentArea === 2 && !p.hasKey) {
+                const keyX = AREA_WIDTH * 2 + 150;
+                const keyY = GROUND_Y - 120;
+                if (Math.hypot(p.x - keyX, p.y - keyY) < 40) {
+                    p.hasKey = true;
+                    gameState.doorOpen = true;
+                }
+            }
+
+            // Enemy updates and collisions
+            for (let enemy of gameState.enemies) {
+                // Patrol
+                if (enemy.x <= enemy.patrol[0]) enemy.direction = 1;
+                if (enemy.x >= enemy.patrol[1]) enemy.direction = -1;
+                enemy.x += enemy.vx * enemy.direction;
+
+                // Collision with player
+                if (checkCollision({ x: p.x, y: p.y, width: p.width, height: p.height },
+                    { x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height })) {
+                    p.hp -= 1;
+                    p.x = 20;
+                    p.y = GROUND_Y - 30;
+                    if (p.hp <= 0) {
+                        gameState.running = false;
+                        document.getElementById('gameOverScreen').style.display = 'flex';
+                        return;
+                    }
+                }
+            }
+
+            // Boss update
+            if (gameState.boss) {
+                if (!gameState.doorOpen) {
+                    gameState.boss.x = AREA_WIDTH + 140;
+                    gameState.boss.y = GROUND_Y - 50;
+                } else {
+                    // Patrol
+                    if (gameState.boss.x <= gameState.boss.patrol[0]) gameState.boss.direction = 1;
+                    if (gameState.boss.x >= gameState.boss.patrol[1]) gameState.boss.direction = -1;
+                    gameState.boss.x += gameState.boss.vx * gameState.boss.direction;
+
+                    // Collision
+                    if (checkCollision({ x: p.x, y: p.y, width: p.width, height: p.height },
+                        { x: gameState.boss.x, y: gameState.boss.y, width: gameState.boss.width, height: gameState.boss.height })) {
+                        p.hp -= 1;
+                        p.x = 20;
+                        p.y = GROUND_Y - 30;
+                        if (p.hp <= 0) {
+                            gameState.running = false;
+                            document.getElementById('gameOverScreen').style.display = 'flex';
+                            return;
+                        }
+                    }
+
+                    // Boss defeated
+                    if (gameState.boss.hp <= 0) {
+                        gameState.running = false;
+                        document.getElementById('clearScreen').style.display = 'flex';
+                        return;
+                    }
+                }
+            }
+
+            // Cooldowns
+            if (p.attackCooldown > 0) p.attackCooldown--;
+            if (p.attackFrame > 0) p.attackFrame--;
+            if (p.attacking && p.attackFrame === 0) p.attacking = false;
+
+            // Update HUD
+            document.getElementById('hpDisplay').textContent = gameState.player.hp;
+            document.getElementById('keyDisplay').textContent = gameState.player.hasKey ? 'YES' : 'NO';
+            const areaNames = ['LEFT', 'CENTER', 'RIGHT'];
+            document.getElementById('areaDisplay').textContent = areaNames[gameState.currentArea];
+        }
+
+        function draw() {
+            // Background
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Platforms
+            ctx.fillStyle = config.platform_color;
+            ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+            ctx.fillRect(AREA_WIDTH * 2 + 100, GROUND_Y - 150, 80, 30);
+
+            // Door to boss room (closes when no key)
+            if (!gameState.doorOpen) {
+                ctx.fillStyle = '#666';
+                ctx.fillRect(AREA_WIDTH + 80, GROUND_Y - 70, 40, 70);
+            }
+
+            // Key
+            if (!gameState.player.hasKey) {
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(AREA_WIDTH * 2 + 150, GROUND_Y - 120, 12, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Enemies
+            ctx.fillStyle = config.enemy_color;
+            for (let enemy of gameState.enemies) {
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            }
+
+            // Boss
+            if (gameState.boss && gameState.doorOpen) {
+                ctx.fillStyle = config.boss_color;
+                ctx.fillRect(gameState.boss.x, gameState.boss.y, gameState.boss.width, gameState.boss.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(gameState.boss.hp, gameState.boss.x + gameState.boss.width / 2, gameState.boss.y + gameState.boss.height / 2 + 4);
+            }
+
+            // Player
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height);
+
+            // Attack indicator
+            if (gameState.player.attacking) {
+                ctx.strokeStyle = config.player_color;
+                ctx.lineWidth = 2;
+                const atkX = gameState.player.x + gameState.player.direction * 30;
+                ctx.beginPath();
+                ctx.arc(atkX, gameState.player.y + gameState.player.height / 2, 15, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Area guides (grid)
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(AREA_WIDTH, 0);
+            ctx.lineTo(AREA_WIDTH, canvas.height);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(AREA_WIDTH * 2, 0);
+            ctx.lineTo(AREA_WIDTH * 2, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function checkCollision(a, b) {
+            return a.x < b.x + b.width && a.x + a.width > b.x &&
+                   a.y < b.y + b.height && a.y + a.height > b.y;
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        function gameLoop() {
+            if (gameState.running) {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>

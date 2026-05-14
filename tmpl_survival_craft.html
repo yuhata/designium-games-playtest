@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<!--
+// theme:           string  // param生成への入力。HTMLには出ない
+// title:           string  // config.title = '{{title}}'
+// bg_color:        string  // config.bg_color = '{{bg_color}}'
+// tree_color:      string  // config.tree_color = '{{tree_color}}'
+// stone_color:     string  // config.stone_color = '{{stone_color}}'
+// player_color:    string  // config.player_color = '{{player_color}}'
+// resource_count:  int     // default: 15
+// max_hunger:      int     // default: 100
+// hunger_rate:     float   // default: 0.05
+-->
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SURVIVAL</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background-color: #1a3a1a;
+        }
+        #gameContainer {
+            position: relative;
+            border: 3px solid #333;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            text-align: center;
+        }
+        #startScreen {
+            background-color: #1a3a1a;
+        }
+        #gameOverScreen, #clearScreen {
+            display: none;
+            background-color: rgba(0, 0, 0, 0.95);
+            z-index: 1001;
+        }
+        #fieldPanel {
+            flex: 1;
+            position: relative;
+            background-color: #1a3a1a;
+            border-bottom: 2px solid #0a1a0a;
+        }
+        .resource {
+            position: absolute;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            user-select: none;
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+            transition: transform 0.1s;
+        }
+        .resource:hover {
+            transform: scale(1.15);
+            filter: brightness(1.2);
+        }
+        #statusPanel {
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            color: white;
+            font-size: 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+        }
+        #hungerBar {
+            width: 120px;
+            height: 18px;
+            border: 2px solid white;
+            margin: 5px 0;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        #hungerFill {
+            height: 100%;
+            background-color: #ff4444;
+            transition: width 0.1s;
+        }
+        #inventory {
+            padding: 8px 10px;
+            background-color: rgba(0, 0, 0, 0.2);
+            color: white;
+            font-size: 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+        }
+        #craftPanel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.15);
+        }
+        .craftButton {
+            padding: 8px 6px;
+            background-color: rgba(76, 175, 80, 0.7);
+            color: white;
+            border: 2px solid #4CAF50;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+        .craftButton:hover:not(:disabled) {
+            background-color: rgba(76, 175, 80, 1);
+            transform: scale(1.05);
+        }
+        .craftButton:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        #startScreen h1 {
+            font-size: 48px;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+        }
+        #startScreen p {
+            margin: 8px;
+            font-size: 14px;
+        }
+        #startScreen button, #gameOverScreen button, #clearScreen button {
+            padding: 12px 28px;
+            margin-top: 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+        #startScreen button:hover, #gameOverScreen button:hover, #clearScreen button:hover {
+            background-color: #45a049;
+            transform: scale(1.05);
+        }
+        #gameOverScreen h1, #clearScreen h1 {
+            font-size: 44px;
+            margin-bottom: 15px;
+        }
+        #gameOverScreen p, #clearScreen p {
+            font-size: 15px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1>SURVIVAL</h1>
+            <p>資源採取とクラフトで生き残ろう</p>
+            <p style="font-size: 13px; color: #aaa; margin-top: 15px;">目標: 斧 AND 小屋をクラフト</p>
+            <button onclick="startGame()">START</button>
+        </div>
+
+        <div id="statusPanel">
+            <div>Hunger: 
+                <div id="hungerBar"><div id="hungerFill"></div></div>
+            </div>
+            <div style="margin-top: 5px;">目標: 斧 × <span id="goalAxe">0</span>/1 | 小屋 × <span id="goalHouse">0</span>/1</div>
+            <div style="font-size: 11px; margin-top: 3px; color: #ddd;">資源をクリックで採取 → クラフトで制作</div>
+        </div>
+
+        <div id="fieldPanel"></div>
+
+        <div id="inventory">木材: 0 | 石材: 0 | 草: 0</div>
+
+        <div id="craftPanel"></div>
+
+        <div id="gameOverScreen">
+            <h1>GAME OVER</h1>
+            <p>お腹がすいてしまった...</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+
+        <div id="clearScreen">
+            <h1>CLEAR!</h1>
+            <p>斧と小屋を手に入れた！生き残った！</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'SURVIVAL',
+            bg_color: '#1a3a1a',
+            tree_color: '#2d6a2d',
+            stone_color: '#718096',
+            player_color: '#f6e05e',
+            resource_count: 15,
+            max_hunger: 100,
+            hunger_rate: 0.05
+        };
+
+        const gameState = {
+            wood: 0,
+            stone: 0,
+            grass: 0,
+            hunger: config.max_hunger,
+            axe: false,
+            house: false,
+            running: false
+        };
+
+        const recipes = [
+            { name: '斧', inputs: { wood: 3 }, action: 'axe' },
+            { name: '小屋', inputs: { wood: 5, stone: 3 }, action: 'house' },
+            { name: 'たいまつ', inputs: { wood: 2, grass: 1 }, action: 'torch' },
+            { name: 'ベリー', inputs: { grass: 2 }, action: 'berry' }
+        ];
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.hunger = config.max_hunger;
+            gameState.wood = 0;
+            gameState.stone = 0;
+            gameState.grass = 0;
+            gameState.axe = false;
+            gameState.house = false;
+            initField();
+            initCraft();
+            updateUI();
+            startGameLoop();
+        }
+
+        function initField() {
+            const field = document.getElementById('fieldPanel');
+            field.innerHTML = '';
+            
+            const types = [
+                { name: 'wood', emoji: '🌲', color: config.tree_color },
+                { name: 'stone', emoji: '⛏️', color: config.stone_color },
+                { name: 'grass', emoji: '🌾', color: '#90EE90' }
+            ];
+
+            for (let i = 0; i < config.resource_count; i++) {
+                const type = types[Math.floor(Math.random() * types.length)];
+                const x = Math.random() * 360;
+                const y = Math.random() * 360;
+                
+                const el = document.createElement('div');
+                el.className = 'resource';
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+                el.style.backgroundColor = type.color;
+                el.textContent = type.emoji;
+                
+                el.onclick = () => {
+                    gameState[type.name]++;
+                    el.remove();
+                    updateUI();
+                };
+                
+                field.appendChild(el);
+            }
+        }
+
+        function initCraft() {
+            const panel = document.getElementById('craftPanel');
+            panel.innerHTML = '';
+            
+            recipes.forEach((recipe, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'craftButton';
+                btn.textContent = recipe.name;
+                btn.onclick = () => craft(idx);
+                panel.appendChild(btn);
+            });
+        }
+
+        function craft(idx) {
+            const recipe = recipes[idx];
+            
+            let canCraft = true;
+            for (const [res, amount] of Object.entries(recipe.inputs)) {
+                if (gameState[res] < amount) {
+                    canCraft = false;
+                    break;
+                }
+            }
+            
+            if (canCraft) {
+                for (const [res, amount] of Object.entries(recipe.inputs)) {
+                    gameState[res] -= amount;
+                }
+                
+                if (recipe.action === 'axe') gameState.axe = true;
+                else if (recipe.action === 'house') gameState.house = true;
+                else if (recipe.action === 'berry') {
+                    gameState.hunger = Math.min(gameState.hunger + 20, config.max_hunger);
+                }
+                
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            const hunPct = (gameState.hunger / config.max_hunger) * 100;
+            document.getElementById('hungerFill').style.width = hunPct + '%';
+            document.getElementById('goalAxe').textContent = gameState.axe ? 1 : 0;
+            document.getElementById('goalHouse').textContent = gameState.house ? 1 : 0;
+            document.getElementById('inventory').textContent = 
+                '木材: ' + gameState.wood + ' | 石材: ' + gameState.stone + ' | 草: ' + gameState.grass;
+        }
+
+        function startGameLoop() {
+            const loop = setInterval(() => {
+                if (!gameState.running) {
+                    clearInterval(loop);
+                    return;
+                }
+                
+                gameState.hunger -= config.hunger_rate;
+                updateUI();
+                
+                if (gameState.hunger <= 0) {
+                    gameState.running = false;
+                    clearInterval(loop);
+                    document.getElementById('gameOverScreen').style.display = 'flex';
+                }
+                
+                if (gameState.axe && gameState.house) {
+                    gameState.running = false;
+                    clearInterval(loop);
+                    document.getElementById('clearScreen').style.display = 'flex';
+                }
+            }, 16);
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const c = document.getElementById('gameContainer');
+            c.style.width = '400px';
+            c.style.height = '560px';
+        });
+    </script>
+</body>
+</html>
