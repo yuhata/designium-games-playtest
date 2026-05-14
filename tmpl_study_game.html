@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Study Game - 学習クイズ</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .game-container {
+      width: 100%;
+      max-width: 600px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px 30px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+
+    /* Screen visibility */
+    .screen {
+      display: none;
+    }
+
+    .screen.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Start Screen */
+    #startScreen {
+      gap: 20px;
+    }
+
+    .start-text {
+      color: #666;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .start-text strong {
+      color: #667eea;
+      display: block;
+      margin-top: 10px;
+      font-size: 18px;
+    }
+
+    /* Game Screen */
+    #gameScreen {
+      gap: 30px;
+    }
+
+    .progress-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .progress-text {
+      font-size: 14px;
+      color: #666;
+      font-weight: 600;
+    }
+
+    .score-display {
+      font-size: 18px;
+      color: #667eea;
+      font-weight: bold;
+    }
+
+    .question-section {
+      gap: 20px;
+    }
+
+    #questionNum {
+      font-size: 12px;
+      color: #999;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    #questionText {
+      font-size: 24px;
+      color: #333;
+      font-weight: 600;
+      line-height: 1.5;
+      min-height: 60px;
+    }
+
+    .choices {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .choice-btn {
+      padding: 20px;
+      font-size: 16px;
+      font-weight: 600;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      background: white;
+      color: #333;
+      transition: all 0.3s ease;
+    }
+
+    .choice-btn:hover:not(:disabled) {
+      border-color: #667eea;
+      background: #f0f4ff;
+      transform: translateY(-2px);
+    }
+
+    .choice-btn:disabled {
+      cursor: not-allowed;
+    }
+
+    #feedbackArea {
+      min-height: 80px;
+      padding: 15px;
+      border-radius: 8px;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    #feedbackArea.show {
+      display: flex;
+    }
+
+    .feedback-correct {
+      background: #e8f5e9;
+      border: 2px solid #4caf50;
+      color: #2e7d32;
+    }
+
+    .feedback-wrong {
+      background: #ffebee;
+      border: 2px solid #f44336;
+      color: #c62828;
+    }
+
+    .feedback-message {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .feedback-correct-answer {
+      font-size: 14px;
+      margin-top: 5px;
+      opacity: 0.9;
+    }
+
+    .feedback-hint {
+      font-size: 13px;
+      font-weight: 500;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid currentColor;
+      opacity: 0.8;
+    }
+
+    .next-btn {
+      margin-top: 15px;
+      padding: 12px 30px;
+      font-size: 14px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s ease;
+      display: none;
+    }
+
+    .next-btn.show {
+      display: inline-block;
+    }
+
+    .next-btn:hover {
+      background: #5568d3;
+    }
+
+    /* Clear & Game Over Screens */
+    .result-screen {
+      gap: 30px;
+    }
+
+    .result-score {
+      font-size: 48px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .result-message {
+      font-size: 24px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .result-detail {
+      font-size: 16px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 14px 28px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #333;
+      border: 2px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #efefef;
+      border-color: #bbb;
+    }
+
+    @media (max-width: 480px) {
+      .game-container {
+        padding: 25px 20px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      #questionText {
+        font-size: 20px;
+      }
+
+      .choice-btn {
+        padding: 16px;
+        font-size: 14px;
+      }
+
+      .result-score {
+        font-size: 40px;
+      }
+
+      .result-message {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>📚 Study Game</h1>
+    <p class="subtitle">学習クイズで知識を深める</p>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen active">
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 20px;">
+        <p class="start-text">
+          漢字・計算・英単語の問題に挑戦しましょう。
+          <strong>10問に答えて、7問以上正解を目指してください！</strong>
+        </p>
+        <p style="color: #999; font-size: 14px;">
+          ✨ 間違えても大丈夫。正解と解説が表示されます。
+        </p>
+      </div>
+      <button class="btn-primary" onclick="startGame()" style="width: 100%;">ゲームを開始</button>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+      <div class="progress-bar">
+        <span class="progress-text">問題進捗</span>
+        <span id="questionNum" style="font-size: 16px; color: #667eea; font-weight: bold;">Q1 / 10</span>
+        <span class="progress-text">正解数</span>
+        <span id="scoreDisplay" class="score-display">0</span>
+      </div>
+
+      <div class="question-section" style="display: flex; flex-direction: column; gap: 20px;">
+        <div id="questionText"></div>
+        <div class="choices">
+          <button class="choice-btn" data-index="0" onclick="answerQuestion(0)">A</button>
+          <button class="choice-btn" data-index="1" onclick="answerQuestion(1)">B</button>
+          <button class="choice-btn" data-index="2" onclick="answerQuestion(2)">C</button>
+          <button class="choice-btn" data-index="3" onclick="answerQuestion(3)">D</button>
+        </div>
+      </div>
+
+      <div id="feedbackArea"></div>
+      <button class="next-btn" onclick="nextQuestion()">次の問題へ</button>
+    </div>
+
+    <!-- Clear Screen -->
+    <div id="clearScreen" class="screen result-screen">
+      <div>
+        <div style="font-size: 60px; margin-bottom: 15px;">🎉</div>
+        <div class="result-message">クリア！</div>
+        <div class="result-score" id="clearScore">7/10</div>
+        <div class="result-detail">
+          素晴らしい成績です。学習を続けましょう！
+        </div>
+      </div>
+      <div class="button-group">
+        <button class="btn-primary" onclick="retryGame()">もう一度挑戦</button>
+        <button class="btn-secondary" onclick="returnStart()">メニューに戻る</button>
+      </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="screen result-screen">
+      <div>
+        <div style="font-size: 60px; margin-bottom: 15px;">📖</div>
+        <div class="result-message">もう少しです</div>
+        <div class="result-score" id="gameOverScore">5/10</div>
+        <div class="result-detail">
+          7問以上の正解を目指して、もう一度チャレンジしましょう。
+        </div>
+      </div>
+      <div class="button-group">
+        <button class="btn-primary" onclick="retryGame()">もう一度挑戦</button>
+        <button class="btn-secondary" onclick="returnStart()">メニューに戻る</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Question bank
+    var questions = [
+      // Kanji
+      {q:"「山」の読み方は？", choices:["やま","かわ","うみ","そら"], answer:0, hint:"登山の「さん」とも読む"},
+      {q:"「火」の読み方は？", choices:["みず","つち","ひ","かぜ"], answer:2, hint:"火曜日の「か」とも読む"},
+      {q:"「木」の読み方は？", choices:["かね","いし","つち","き"], answer:3, hint:"木曜日の「もく」とも読む"},
+      {q:"「日」の読み方は？", choices:["つき","ひ","ほし","くも"], answer:1, hint:"日曜日の「にち」とも読む"},
+      {q:"「水」の読み方は？", choices:["ひ","みず","かぜ","つち"], answer:1, hint:"水曜日の「すい」とも読む"},
+      // Math
+      {q:"12 × 8 = ?", choices:["86","96","106","76"], answer:1, hint:"10×8=80、2×8=16"},
+      {q:"144 ÷ 12 = ?", choices:["10","11","12","13"], answer:2, hint:"12の段を思い出して"},
+      {q:"25% of 200 = ?", choices:["25","50","75","100"], answer:1, hint:"1/4 of 200"},
+      {q:"√64 = ?", choices:["6","7","8","9"], answer:2, hint:"8×8=64"},
+      {q:"3³ = ?", choices:["9","18","27","36"], answer:2, hint:"3×3×3"},
+      // English vocabulary
+      {q:"「嬉しい」を英語で言うと？", choices:["Sad","Happy","Angry","Tired"], answer:1, hint:"I'm happy!"},
+      {q:"「りんご」を英語で言うと？", choices:["Orange","Banana","Apple","Grape"], answer:2, hint:"Apple Inc."},
+      {q:"「猫」を英語で言うと？", choices:["Dog","Cat","Bird","Fish"], answer:1, hint:"CAT"},
+      {q:"「本」を英語で言うと？", choices:["Pen","Paper","Book","Desk"], answer:2, hint:"Notebook"},
+      {q:"「走る」を英語で言うと？", choices:["Walk","Jump","Run","Swim"], answer:2, hint:"Running shoes"}
+    ];
+
+    // Game state
+    var gameState = {
+      running: false,
+      questionList: [],
+      currentQ: 0,
+      score: 0,
+      answered: false,
+      frameCount: 0
+    };
+
+    // Game loop using setInterval (MANDATORY)
+    var gameLoopInterval;
+
+    function gameLoop() {
+      gameState.frameCount++;
+      // Game logic updates can go here
+    }
+
+    function startGameLoop() {
+      gameLoopInterval = setInterval(gameLoop, 16); // ~60fps
+    }
+
+    function stopGameLoop() {
+      clearInterval(gameLoopInterval);
+    }
+
+    function shuffleArray(arr) {
+      var copy = arr.slice();
+      for (var i = copy.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = copy[i];
+        copy[i] = copy[j];
+        copy[j] = temp;
+      }
+      return copy;
+    }
+
+    function showScreen(screenId) {
+      var screens = document.querySelectorAll('.screen');
+      for (var i = 0; i < screens.length; i++) {
+        screens[i].style.display = 'none';
+      }
+      document.getElementById(screenId).style.display = 'flex';
+    }
+
+    function startGame() {
+      gameState.running = true;
+      gameState.questionList = shuffleArray(questions).slice(0, 10);
+      gameState.currentQ = 0;
+      gameState.score = 0;
+      gameState.answered = false;
+      gameState.frameCount = 0;
+
+      showScreen('gameScreen');
+      startGameLoop();
+      displayQuestion();
+    }
+
+    function displayQuestion() {
+      var q = gameState.questionList[gameState.currentQ];
+
+      document.getElementById('questionNum').textContent = 'Q' + (gameState.currentQ + 1) + ' / 10';
+      document.getElementById('questionText').textContent = q.q;
+
+      var choiceButtons = document.querySelectorAll('.choice-btn');
+      for (var i = 0; i < choiceButtons.length; i++) {
+        choiceButtons[i].textContent = String.fromCharCode(65 + i) + '. ' + q.choices[i];
+        choiceButtons[i].style.background = 'white';
+        choiceButtons[i].style.borderColor = '#ddd';
+        choiceButtons[i].style.color = '#333';
+        choiceButtons[i].disabled = false;
+      }
+
+      var feedbackArea = document.getElementById('feedbackArea');
+      feedbackArea.style.display = 'none';
+
+      var nextBtn = document.querySelector('.next-btn');
+      nextBtn.style.display = 'none';
+
+      gameState.answered = false;
+    }
+
+    function answerQuestion(index) {
+      if (gameState.answered) return;
+
+      gameState.answered = true;
+      var q = gameState.questionList[gameState.currentQ];
+      var isCorrect = (index === q.answer);
+
+      if (isCorrect) {
+        gameState.score++;
+      }
+
+      var choiceButtons = document.querySelectorAll('.choice-btn');
+      for (var i = 0; i < choiceButtons.length; i++) {
+        choiceButtons[i].disabled = true;
+      }
+
+      // Highlight selected button and correct answer
+      choiceButtons[index].style.background = isCorrect ? '#c8e6c9' : '#ffcdd2';
+      choiceButtons[index].style.borderColor = isCorrect ? '#4caf50' : '#f44336';
+      choiceButtons[index].style.color = isCorrect ? '#2e7d32' : '#c62828';
+
+      if (!isCorrect) {
+        choiceButtons[q.answer].style.background = '#c8e6c9';
+        choiceButtons[q.answer].style.borderColor = '#4caf50';
+        choiceButtons[q.answer].style.color = '#2e7d32';
+      }
+
+      // Show feedback
+      showFeedback(isCorrect, q.choices[q.answer], q.hint);
+      updateScore();
+    }
+
+    function showFeedback(isCorrect, correctAnswer, hint) {
+      var feedbackArea = document.getElementById('feedbackArea');
+
+      if (isCorrect) {
+        feedbackArea.className = 'feedback-correct';
+        feedbackArea.innerHTML =
+          '<div class="feedback-message">✅ 正解！</div>' +
+          '<div class="feedback-hint">💡 ' + hint + '</div>';
+      } else {
+        feedbackArea.className = 'feedback-wrong';
+        feedbackArea.innerHTML =
+          '<div class="feedback-message">❌ 不正解</div>' +
+          '<div class="feedback-correct-answer">正解：' + correctAnswer + '</div>' +
+          '<div class="feedback-hint">💡 ' + hint + '</div>';
+      }
+
+      feedbackArea.style.display = 'flex';
+
+      var nextBtn = document.querySelector('.next-btn');
+      nextBtn.style.display = 'inline-block';
+    }
+
+    function updateScore() {
+      document.getElementById('scoreDisplay').textContent = gameState.score;
+    }
+
+    function nextQuestion() {
+      gameState.currentQ++;
+
+      if (gameState.currentQ >= 10) {
+        endGame();
+      } else {
+        displayQuestion();
+      }
+    }
+
+    function endGame() {
+      gameState.running = false;
+      stopGameLoop();
+
+      var finalScore = gameState.score;
+
+      if (finalScore >= 7) {
+        document.getElementById('clearScore').textContent = finalScore + '/10';
+        showScreen('clearScreen');
+      } else {
+        document.getElementById('gameOverScore').textContent = finalScore + '/10';
+        showScreen('gameOverScreen');
+      }
+    }
+
+    function retryGame() {
+      gameState.running = false;
+      stopGameLoop();
+      startGame();
+    }
+
+    function returnStart() {
+      gameState.running = false;
+      stopGameLoop();
+      showScreen('startScreen');
+    }
+  </script>
+</body>
+</html>

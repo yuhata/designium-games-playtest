@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スクラッチ運試し</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: white;
+      border-radius: 20px;
+      padding: 40px 30px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2em;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .screen {
+      display: none;
+    }
+
+    /* Start Screen */
+    #startScreen p {
+      font-size: 1.1em;
+      color: #666;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+
+    .rules {
+      background: #f5f5f5;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 30px;
+      text-align: left;
+      font-size: 0.95em;
+      color: #555;
+    }
+
+    .rules li {
+      margin: 8px 0 8px 20px;
+    }
+
+    /* Game Screen */
+    #gameScreen {
+      padding: 20px 0;
+    }
+
+    .gameStatus {
+      font-size: 1.1em;
+      color: #333;
+      margin-bottom: 20px;
+      min-height: 30px;
+    }
+
+    .cardsContainer {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 30px;
+      align-items: center;
+    }
+
+    @media (min-width: 600px) {
+      .cardsContainer {
+        flex-direction: row;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+    }
+
+    .scratchCard {
+      width: 140px;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      border: 3px solid #ccc;
+      transition: border-color 0.3s;
+    }
+
+    .scratchCard.won {
+      border-color: #ffd700;
+      box-shadow: 0 4px 10px rgba(255, 215, 0, 0.4);
+    }
+
+    .scratchCard.lost {
+      border-color: #999;
+      opacity: 0.7;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-gap: 0;
+      background: #fff;
+    }
+
+    .cell {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      cursor: pointer;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2em;
+      font-weight: bold;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: all 0.2s;
+    }
+
+    .cell:hover:not(.revealed) {
+      background: #f9f9f9;
+    }
+
+    .cellOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #c0c0c0 0%, #a8a8a8 50%, #b0b0b0 100%);
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.7em;
+      color: #999;
+      border: 1px solid #999;
+    }
+
+    .cell.revealed .cellOverlay {
+      background: transparent;
+      border: none;
+      cursor: default;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 1em;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+    }
+
+    .btnPrimary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btnPrimary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btnSecondary {
+      background: #f5f5f5;
+      color: #333;
+      border: 2px solid #ddd;
+    }
+
+    .btnSecondary:hover {
+      background: #e8e8e8;
+    }
+
+    /* Result Screens */
+    .resultScreen h2 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      min-height: 60px;
+    }
+
+    #clearScreen h2 {
+      color: #4caf50;
+    }
+
+    #gameOverScreen h2 {
+      color: #f44336;
+    }
+
+    .resultMessage {
+      font-size: 1.1em;
+      color: #666;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+
+    .statsBox {
+      background: #f5f5f5;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 30px;
+      font-size: 1.1em;
+      color: #333;
+    }
+
+    .statsBox p {
+      margin: 10px 0;
+    }
+
+    .stat-value {
+      font-weight: bold;
+      color: #667eea;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen" style="display:block;">
+      <h1>🎰 スクラッチ運試し</h1>
+      <p>運を試して、ゴールを目指そう！</p>
+      <div class="rules">
+        <ul>
+          <li>3枚のスクラッチカードが与えられます</li>
+          <li>各カードは9つのマスを銀色でカバーしています</li>
+          <li>クリック＆ドラッグして銀色を削り、シンボルを見つけよう</li>
+          <li>1つのカードで同じシンボルが3個以上出たらそのカードの勝ち</li>
+          <li>3枚中2枚以上勝つと、ゲームクリア！</li>
+        </ul>
+      </div>
+      <button class="btnPrimary" onclick="startGame()">ゲーム開始</button>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+      <h1>🎰 スクラッチ運試し</h1>
+      <div class="gameStatus" id="gameStatus">スクラッチしよう</div>
+      <div class="controls">
+        <button class="btnSecondary" onclick="revealAll()">すべて表示</button>
+        <button class="btnSecondary" onclick="returnToStart()">最初に戻る</button>
+      </div>
+      <div class="cardsContainer" id="cardsContainer"></div>
+    </div>
+
+    <!-- Clear Screen -->
+    <div id="clearScreen" class="screen resultScreen">
+      <h1>🎰 スクラッチ運試し</h1>
+      <h2>🎉 クリア！</h2>
+      <div class="resultMessage">
+        <p>2枚以上のカードが当選しました！</p>
+        <p>あなたの運は最高です！</p>
+      </div>
+      <div class="statsBox">
+        <p>当選カード: <span class="stat-value" id="clearWonCards">-</span> / 3</p>
+        <p>スクラッチ合計: <span class="stat-value" id="clearScratched">-</span> マス</p>
+      </div>
+      <button class="btnPrimary" onclick="retryGame()">もう一度チャレンジ</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="screen resultScreen">
+      <h1>🎰 スクラッチ運試し</h1>
+      <h2>💔 ゲームオーバー</h2>
+      <div class="resultMessage">
+        <p>残念ながら今回は当選しませんでした。</p>
+        <p>次は運が来るかも！</p>
+      </div>
+      <div class="statsBox">
+        <p>当選カード: <span class="stat-value" id="gameOverWonCards">-</span> / 3</p>
+        <p>スクラッチ合計: <span class="stat-value" id="gameOverScratched">-</span> マス</p>
+      </div>
+      <button class="btnPrimary" onclick="retryGame()">もう一度チャレンジ</button>
+    </div>
+  </div>
+
+  <script>
+    // Global game state
+    const gameState = {
+      running: false,
+      cards: [],
+      scratchedCells: 0,
+      wonCards: 0,
+      frameCount: 0
+    };
+
+    // Symbols for scratch cards
+    const SYMBOLS = ['🍒', '🍋', '🔔', '💎', '🍀', '⭐'];
+
+    // Generate a scratch card
+    function generateCard() {
+      const card = {
+        cells: [],
+        won: false
+      };
+
+      // Generate 9 cells with random symbols
+      for (let i = 0; i < 9; i++) {
+        card.cells.push({
+          symbol: SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
+          revealed: false
+        });
+      }
+
+      // Ensure at least one card has a winner (3+ matching symbols)
+      const randomSymbol = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+      const positions = [0, 1, 2];
+      positions.forEach(i => {
+        card.cells[i].symbol = randomSymbol;
+      });
+
+      return card;
+    }
+
+    // Initialize game
+    function startGame() {
+      gameState.running = true;
+      gameState.cards = [];
+      gameState.scratchedCells = 0;
+      gameState.wonCards = 0;
+      gameState.frameCount = 0;
+
+      // Generate 3 cards
+      for (let i = 0; i < 3; i++) {
+        gameState.cards.push(generateCard());
+      }
+
+      // Render game screen
+      renderGameScreen();
+      showScreen('gameScreen');
+    }
+
+    // Render game screen UI
+    function renderGameScreen() {
+      const container = document.getElementById('cardsContainer');
+      container.innerHTML = '';
+
+      gameState.cards.forEach((card, cardIndex) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'scratchCard';
+        cardDiv.id = `card-${cardIndex}`;
+
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+
+        card.cells.forEach((cell, cellIndex) => {
+          const cellDiv = document.createElement('div');
+          cellDiv.className = 'cell';
+          if (cell.revealed) {
+            cellDiv.style.cursor = 'default';
+          }
+          cellDiv.id = `cell-${cardIndex}-${cellIndex}`;
+
+          const overlay = document.createElement('div');
+          overlay.className = 'cellOverlay';
+          overlay.textContent = '?';
+
+          if (cell.revealed) {
+            overlay.style.background = 'transparent';
+            overlay.style.border = 'none';
+            cellDiv.textContent = cell.symbol;
+          } else {
+            overlay.style.background = 'linear-gradient(135deg, #c0c0c0 0%, #a8a8a8 50%, #b0b0b0 100%)';
+          }
+
+          cellDiv.appendChild(overlay);
+
+          // Click handler for scratching
+          cellDiv.addEventListener('click', function() {
+            revealCell(cardIndex, cellIndex);
+          });
+
+          // Drag handler
+          let isScratching = false;
+          cellDiv.addEventListener('mousedown', function() {
+            isScratching = true;
+          });
+
+          cellDiv.addEventListener('mousemove', function() {
+            if (isScratching && !cell.revealed) {
+              revealCell(cardIndex, cellIndex);
+            }
+          });
+
+          cellDiv.addEventListener('mouseup', function() {
+            isScratching = false;
+          });
+
+          cellDiv.addEventListener('mouseleave', function() {
+            isScratching = false;
+          });
+
+          grid.appendChild(cellDiv);
+        });
+
+        cardDiv.appendChild(grid);
+        container.appendChild(cardDiv);
+      });
+    }
+
+    // Reveal a cell
+    function revealCell(cardIndex, cellIndex) {
+      const cell = gameState.cards[cardIndex].cells[cellIndex];
+
+      if (cell.revealed) {
+        return;
+      }
+
+      cell.revealed = true;
+      gameState.scratchedCells++;
+
+      const cellElement = document.getElementById(`cell-${cardIndex}-${cellIndex}`);
+      cellElement.style.cursor = 'default';
+      cellElement.textContent = cell.symbol;
+
+      const overlay = cellElement.querySelector('.cellOverlay');
+      overlay.style.background = 'transparent';
+      overlay.style.border = 'none';
+
+      // Check if card is won
+      checkCardWin(cardIndex);
+
+      // Check if game is over
+      checkGameEnd();
+    }
+
+    // Check if a card has won (3+ matching symbols)
+    function checkCardWin(cardIndex) {
+      const card = gameState.cards[cardIndex];
+      const allRevealed = card.cells.every(cell => cell.revealed);
+
+      if (!allRevealed) {
+        return;
+      }
+
+      // Count symbols
+      const symbolCounts = {};
+      card.cells.forEach(cell => {
+        symbolCounts[cell.symbol] = (symbolCounts[cell.symbol] || 0) + 1;
+      });
+
+      // Check for 3+ matching
+      let hasWon = false;
+      for (const symbol in symbolCounts) {
+        if (symbolCounts[symbol] >= 3) {
+          hasWon = true;
+          break;
+        }
+      }
+
+      if (hasWon && !card.won) {
+        card.won = true;
+        gameState.wonCards++;
+        const cardElement = document.getElementById(`card-${cardIndex}`);
+        cardElement.style.borderColor = '#ffd700';
+        cardElement.style.boxShadow = '0 4px 10px rgba(255,215,0,0.4)';
+        cardElement.style.opacity = '1';
+      }
+
+      if (!hasWon && !card.won) {
+        const cardElement = document.getElementById(`card-${cardIndex}`);
+        cardElement.style.borderColor = '#999';
+        cardElement.style.opacity = '0.7';
+      }
+    }
+
+    // Check if game has ended
+    function checkGameEnd() {
+      const allRevealed = gameState.cards.every(card =>
+        card.cells.every(cell => cell.revealed)
+      );
+
+      if (!allRevealed) {
+        return;
+      }
+
+      gameState.running = false;
+
+      // Show result after a brief delay
+      setTimeout(() => {
+        if (gameState.wonCards >= 2) {
+          document.getElementById('clearWonCards').textContent = gameState.wonCards;
+          document.getElementById('clearScratched').textContent = gameState.scratchedCells;
+          showScreen('clearScreen');
+        } else {
+          document.getElementById('gameOverWonCards').textContent = gameState.wonCards;
+          document.getElementById('gameOverScratched').textContent = gameState.scratchedCells;
+          showScreen('gameOverScreen');
+        }
+      }, 500);
+    }
+
+    // Reveal all remaining cells
+    function revealAll() {
+      gameState.cards.forEach((card, cardIndex) => {
+        card.cells.forEach((cell, cellIndex) => {
+          if (!cell.revealed) {
+            revealCell(cardIndex, cellIndex);
+          }
+        });
+      });
+    }
+
+    // Retry game
+    function retryGame() {
+      gameState.running = false;
+      startGame();
+    }
+
+    // Return to start
+    function returnToStart() {
+      gameState.running = false;
+      showScreen('startScreen');
+    }
+
+    // Show specific screen
+    var allScreenIds = ['startScreen', 'gameScreen', 'clearScreen', 'gameOverScreen'];
+    function showScreen(screenId) {
+      allScreenIds.forEach(function(id) {
+        document.getElementById(id).style.display = 'none';
+      });
+      document.getElementById(screenId).style.display = 'block';
+    }
+
+    // Game loop (setInterval required)
+    function gameLoop() {
+      if (gameState.running) {
+        gameState.frameCount++;
+      }
+    }
+
+    // Start game loop
+    setInterval(gameLoop, 16);
+  </script>
+</body>
+</html>

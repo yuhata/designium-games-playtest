@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shanghai Mahjong</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+    }
+
+    #gameContainer {
+      width: 400px;
+      height: 600px;
+      background: #2d5a2d;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Screen Base */
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: #2d5a2d;
+      z-index: 10;
+    }
+
+    /* Start Screen */
+    #startScreen {
+      display: flex;
+    }
+
+    #startScreen h1 {
+      font-size: 3rem;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    #startScreen p {
+      font-size: 1rem;
+      margin-bottom: 30px;
+      text-align: center;
+      line-height: 1.6;
+      color: #ddd;
+    }
+
+    button {
+      padding: 12px 30px;
+      font-size: 1.1rem;
+      background: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #357abe;
+    }
+
+    button:active {
+      transform: scale(0.95);
+    }
+
+    /* Game Screen */
+    #gameScreen {
+      display: none;
+    }
+
+    #gameHUD {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      color: #ddd;
+      z-index: 5;
+    }
+
+    #pairsLeft {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 6px 12px;
+      border-radius: 4px;
+    }
+
+    #matchedCount {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 6px 12px;
+      border-radius: 4px;
+    }
+
+    #tilesBoard {
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 340px;
+      height: 480px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      gap: 6px;
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .tile {
+      background: #f5deb3;
+      border: 2px solid #8b7355;
+      border-radius: 4px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      position: relative;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .tile:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    }
+
+    .tile.selected {
+      border: 3px solid #ff4444;
+      background: #ffe4b5;
+    }
+
+    .tile.blocked {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .tile.matched {
+      display: none;
+    }
+
+    /* Clear Screen */
+    #clearScreen {
+      display: none;
+      background: linear-gradient(135deg, #2d5a2d, #4a90a4);
+    }
+
+    #clearScreen h2 {
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      color: #ffd700;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    #clearScreen p {
+      font-size: 1.1rem;
+      margin-bottom: 30px;
+      color: #ddd;
+    }
+
+    /* Game Over Screen */
+    #gameOverScreen {
+      display: none;
+      background: linear-gradient(135deg, #4a2a2a, #6a3a3a);
+    }
+
+    #gameOverScreen h2 {
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      color: #ff6b6b;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    #gameOverScreen p {
+      font-size: 1.1rem;
+      margin-bottom: 30px;
+      color: #ddd;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+    }
+
+    button.secondary {
+      background: #666;
+    }
+
+    button.secondary:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen">
+      <h1>🀄</h1>
+      <h2>Shanghai Mahjong</h2>
+      <p>Match pairs of tiles by clicking them.<br>Clear all tiles to win!</p>
+      <button onclick="startGame()">Play</button>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+      <div id="gameHUD">
+        <div id="pairsLeft">Pairs: <span id="tileCount">0</span></div>
+        <div id="matchedCount">Matched: <span id="matchedDisplay">0</span></div>
+      </div>
+      <div id="tilesBoard"></div>
+    </div>
+
+    <!-- Clear Screen -->
+    <div id="clearScreen" class="screen">
+      <h2>Victory!</h2>
+      <p>All tiles cleared!</p>
+      <button onclick="startGame()">Play Again</button>
+      <button class="secondary" onclick="gotoStart()">Home</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="screen">
+      <h2>Game Over</h2>
+      <p>No more moves available.</p>
+      <button onclick="startGame()">Retry</button>
+      <button class="secondary" onclick="gotoStart()">Home</button>
+    </div>
+  </div>
+
+  <script>
+    // Global Game State
+    const gameState = {
+      running: false,
+      tiles: [],
+      selectedTiles: [],
+      matchedPairs: 0,
+      totalPairs: 16,
+      gameLoopId: null
+    };
+
+    // Tile symbols (16 pairs)
+    const SYMBOLS = ['🀇', '🀈', '🀉', '🀊', '🀋', '🀌', '🀍', '🀎', '🀙', '🀚', '🀛', '🀜', '🀝', '🀞', '🀟', '🀠'];
+
+    /**
+     * Initialize game
+     */
+    function startGame() {
+      gameState.running = false;
+      gameState.tiles = [];
+      gameState.selectedTiles = [];
+      gameState.matchedPairs = 0;
+      gameState.totalPairs = 16;
+
+      // Hide all screens
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+
+      // Show game screen
+      document.getElementById('gameScreen').style.display = 'flex';
+
+      // Create tiles
+      createTiles();
+      renderTiles();
+
+      // Start game loop
+      gameState.running = true;
+      if (gameState.gameLoopId) clearInterval(gameState.gameLoopId);
+      gameState.gameLoopId = setInterval(gameLoop, 16);
+
+      updateHUD();
+    }
+
+    /**
+     * Create and arrange tiles
+     */
+    function createTiles() {
+      const tileArray = [];
+
+      // Create 16 pairs (32 tiles total)
+      for (let i = 0; i < SYMBOLS.length; i++) {
+        tileArray.push({ symbol: SYMBOLS[i], pair: i });
+        tileArray.push({ symbol: SYMBOLS[i], pair: i });
+      }
+
+      // Shuffle
+      for (let i = tileArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [tileArray[i], tileArray[j]] = [tileArray[j], tileArray[i]];
+      }
+
+      // Arrange in pyramid-like grid with layers
+      // Bottom layer (8 tiles): positions 0-7 (2 rows, 4 cols centered)
+      // Top layer (24 tiles): positions 8-31 (6 rows, 4 cols)
+      let id = 0;
+      let boardIndex = 0;
+
+      // Layer 0 (bottom): 2 rows × 4 cols = 8 tiles
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 4; col++) {
+          gameState.tiles.push({
+            id: id,
+            symbol: tileArray[boardIndex].symbol,
+            pair: tileArray[boardIndex].pair,
+            layer: 0,
+            row: 6 + row,
+            col: 2 + col,
+            matched: false,
+            selected: false,
+            boardIndex: boardIndex
+          });
+          id++;
+          boardIndex++;
+        }
+      }
+
+      // Layer 1 (top): 3 rows × 8 cols = 24 tiles
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 8; col++) {
+          gameState.tiles.push({
+            id: id,
+            symbol: tileArray[boardIndex].symbol,
+            pair: tileArray[boardIndex].pair,
+            layer: 1,
+            row: row * 2,
+            col: col,
+            matched: false,
+            selected: false,
+            boardIndex: boardIndex
+          });
+          id++;
+          boardIndex++;
+        }
+      }
+    }
+
+    /**
+     * Render tiles on board
+     */
+    function renderTiles() {
+      const board = document.getElementById('tilesBoard');
+      board.innerHTML = '';
+
+      gameState.tiles.forEach((tile) => {
+        if (!tile.matched) {
+          const tileEl = document.createElement('div');
+          tileEl.className = 'tile';
+          tileEl.id = `tile-${tile.id}`;
+          tileEl.textContent = tile.symbol;
+
+          if (tile.selected) {
+            tileEl.style.border = '3px solid #ff4444';
+          }
+
+          if (isBlocked(tile)) {
+            tileEl.style.opacity = '0.5';
+            tileEl.style.cursor = 'not-allowed';
+          } else {
+            tileEl.style.opacity = '1';
+            tileEl.style.cursor = 'pointer';
+            tileEl.onclick = () => selectTile(tile.id);
+          }
+
+          board.appendChild(tileEl);
+        }
+      });
+    }
+
+    /**
+     * Check if tile is blocked by tiles above it
+     */
+    function isBlocked(tile) {
+      if (tile.layer === 1) return false; // Top layer tiles are never blocked
+
+      // Check if any layer 1 tile covers this tile's position
+      for (const other of gameState.tiles) {
+        if (other.matched) continue;
+        if (other.layer !== 1) continue;
+
+        // Simple coverage check: layer 1 tile at (row, col) blocks layer 0 tiles
+        // in 2x2 range below it
+        if (other.row + 1 >= tile.row && other.row <= tile.row &&
+            other.col + 1 >= tile.col && other.col <= tile.col) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    /**
+     * Handle tile selection
+     */
+    function selectTile(tileId) {
+      const tile = gameState.tiles.find(t => t.id === tileId);
+      if (!tile || tile.matched || isBlocked(tile)) return;
+      if (gameState.selectedTiles.length >= 2) return;
+
+      // Deselect if clicking same tile
+      if (gameState.selectedTiles.some(t => t.id === tileId)) {
+        gameState.selectedTiles = gameState.selectedTiles.filter(t => t.id !== tileId);
+        tile.selected = false;
+        renderTiles();
+        return;
+      }
+
+      gameState.selectedTiles.push(tile);
+      tile.selected = true;
+      renderTiles();
+
+      // Check match if 2 tiles selected
+      if (gameState.selectedTiles.length === 2) {
+        checkMatch();
+      }
+    }
+
+    /**
+     * Check if two selected tiles match
+     */
+    function checkMatch() {
+      const [t1, t2] = gameState.selectedTiles;
+
+      if (t1.pair === t2.pair) {
+        // Match!
+        t1.matched = true;
+        t2.matched = true;
+        gameState.matchedPairs++;
+        gameState.selectedTiles = [];
+        renderTiles();
+        updateHUD();
+      } else {
+        // No match - deselect after delay
+        setTimeout(() => {
+          gameState.selectedTiles.forEach(t => t.selected = false);
+          gameState.selectedTiles = [];
+          renderTiles();
+        }, 500);
+      }
+    }
+
+    /**
+     * Update HUD
+     */
+    function updateHUD() {
+      const pairsRemaining = gameState.totalPairs - gameState.matchedPairs;
+      document.getElementById('tileCount').textContent = pairsRemaining;
+      document.getElementById('matchedDisplay').textContent = gameState.matchedPairs;
+    }
+
+    /**
+     * Check for valid moves
+     */
+    function hasValidMoves() {
+      const unmatched = gameState.tiles.filter(t => !t.matched);
+
+      for (let i = 0; i < unmatched.length; i++) {
+        if (isBlocked(unmatched[i])) continue;
+        for (let j = i + 1; j < unmatched.length; j++) {
+          if (isBlocked(unmatched[j])) continue;
+          if (unmatched[i].pair === unmatched[j].pair) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    /**
+     * Game loop (16ms = ~60fps)
+     */
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      // Check win condition
+      if (gameState.matchedPairs === gameState.totalPairs) {
+        gameState.running = false;
+        clearInterval(gameState.gameLoopId);
+        setTimeout(() => {
+          document.getElementById('gameScreen').style.display = 'none';
+          document.getElementById('clearScreen').style.display = 'flex';
+        }, 300);
+        return;
+      }
+
+      // Check lose condition
+      if (!hasValidMoves()) {
+        gameState.running = false;
+        clearInterval(gameState.gameLoopId);
+        setTimeout(() => {
+          document.getElementById('gameScreen').style.display = 'none';
+          document.getElementById('gameOverScreen').style.display = 'flex';
+        }, 300);
+        return;
+      }
+    }
+
+    /**
+     * Retry game
+     */
+    function retryGame() {
+      gameState.running = false;
+      startGame();
+    }
+
+    /**
+     * Go to start screen
+     */
+    function gotoStart() {
+      gameState.running = false;
+      if (gameState.gameLoopId) clearInterval(gameState.gameLoopId);
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('startScreen').style.display = 'flex';
+    }
+  </script>
+</body>
+</html>

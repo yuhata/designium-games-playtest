@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Athlete Training Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #333;
+        }
+
+        #gameContainer {
+            width: 400px;
+            height: 600px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 4px solid #222;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .screen {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 10;
+        }
+
+        #startScreen {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #gameScreen {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: none;
+        }
+
+        #clearScreen {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            display: none;
+        }
+
+        #gameOverScreen {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            display: none;
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 36px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h2 {
+            color: #fff;
+            font-size: 28px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            color: #fff;
+            font-size: 18px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        button {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .game-content {
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .athlete-header {
+            text-align: center;
+            color: #fff;
+        }
+
+        .athlete-emoji {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .athlete-name {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .stats-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .stat-row {
+            margin-bottom: 12px;
+        }
+
+        .stat-label {
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stat-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .stat-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #ffff00);
+            transition: width 0.3s ease;
+        }
+
+        .fatigue-indicator {
+            text-align: center;
+            color: #fff;
+            font-size: 16px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .day-counter {
+            text-align: center;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .phase-indicator {
+            text-align: center;
+            color: #fff;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+
+        .training-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .training-btn {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .training-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.02);
+        }
+
+        .training-btn:active {
+            transform: scale(0.98);
+        }
+
+        .result-message {
+            text-align: center;
+            color: #fff;
+            font-size: 16px;
+            margin: 10px 0;
+            font-weight: bold;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .opponent-stats {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #fff;
+        }
+
+        .opponent-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .opponent-emoji {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .opponent-stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .compete-btn {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .compete-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .compete-btn:active {
+            transform: scale(0.95);
+        }
+
+        .start-btn {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .start-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .start-btn:active {
+            transform: scale(0.95);
+        }
+
+        .retry-btn {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .retry-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .retry-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- START SCREEN -->
+        <div id="startScreen" class="screen">
+            <div style="text-align: center;">
+                <h1>🏃 Athlete Training</h1>
+                <p>Train your athlete for 10 days</p>
+                <p>then compete in the tournament!</p>
+                <button class="start-btn" onclick="startGame()">START GAME</button>
+            </div>
+        </div>
+
+        <!-- GAME SCREEN -->
+        <div id="gameScreen" class="screen">
+            <div class="game-content">
+                <div class="athlete-header">
+                    <div class="athlete-emoji">🏃</div>
+                    <div class="athlete-name">YOUR ATHLETE</div>
+                </div>
+
+                <div class="stats-container">
+                    <div class="day-counter" id="dayCount">Day 1 / 10</div>
+                    <div class="phase-indicator" id="phaseIndicator">TRAINING PHASE</div>
+
+                    <div class="stat-row">
+                        <div class="stat-label">
+                            <span>Speed</span>
+                            <span id="speedVal">20</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-fill" id="speedBar" style="width: 20%"></div>
+                        </div>
+                    </div>
+
+                    <div class="stat-row">
+                        <div class="stat-label">
+                            <span>Power</span>
+                            <span id="powerVal">20</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-fill" id="powerBar" style="width: 20%"></div>
+                        </div>
+                    </div>
+
+                    <div class="stat-row">
+                        <div class="stat-label">
+                            <span>Stamina</span>
+                            <span id="staminaVal">20</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-fill" id="staminaBar" style="width: 20%"></div>
+                        </div>
+                    </div>
+
+                    <div class="fatigue-indicator">
+                        🔥 Fatigue: <span id="fatigueVal">0</span>
+                    </div>
+                </div>
+
+                <div class="result-message" id="resultMessage"></div>
+
+                <div id="trainingPhaseContainer" class="training-buttons">
+                    <button class="training-btn" onclick="doTraining('speedRun')">🏃 Speed Run (+Speed +15, +Stamina +5)</button>
+                    <button class="training-btn" onclick="doTraining('weightLift')">🏋️ Weight Lift (+Power +20)</button>
+                    <button class="training-btn" onclick="doTraining('recovery')">🧘 Recovery (-Fatigue -20)</button>
+                </div>
+
+                <div id="tournamentPhaseContainer" style="display: none; text-align: center;">
+                    <p style="font-size: 20px; margin-bottom: 15px;">TOURNAMENT TIME!</p>
+                    <div class="opponent-stats">
+                        <div class="opponent-header">Opponent 🏆</div>
+                        <div class="opponent-stat">
+                            <span>Speed:</span>
+                            <span id="opponentSpeed">0</span>
+                        </div>
+                        <div class="opponent-stat">
+                            <span>Power:</span>
+                            <span id="opponentPower">0</span>
+                        </div>
+                        <div class="opponent-stat">
+                            <span>Stamina:</span>
+                            <span id="opponentStamina">0</span>
+                        </div>
+                        <div class="opponent-stat" style="margin-top: 10px; font-weight: bold; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 10px;">
+                            <span>Total:</span>
+                            <span id="opponentTotal">0</span>
+                        </div>
+                    </div>
+                    <button class="compete-btn" onclick="compete()">COMPETE!</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLEAR SCREEN -->
+        <div id="clearScreen" class="screen">
+            <div style="text-align: center;">
+                <h1>🏆 YOU WON!</h1>
+                <p style="font-size: 20px; margin-bottom: 20px;">Tournament Champion!</p>
+                <p id="finalStatsText" style="margin-bottom: 20px;"></p>
+                <button class="retry-btn" onclick="retryGame()">PLAY AGAIN</button>
+            </div>
+        </div>
+
+        <!-- GAME OVER SCREEN -->
+        <div id="gameOverScreen" class="screen">
+            <div style="text-align: center;">
+                <h1>💔 GAME OVER</h1>
+                <p style="font-size: 20px; margin-bottom: 20px;">You lost the tournament...</p>
+                <p id="gameOverStatsText" style="margin-bottom: 20px;"></p>
+                <button class="retry-btn" onclick="retryGame()">TRY AGAIN</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var gameState = {
+            running: false,
+            phase: 'training',
+            day: 1,
+            speed: 20,
+            power: 20,
+            stamina: 20,
+            fatigue: 0,
+            frameCount: 0,
+            opponentSpeed: 0,
+            opponentPower: 0,
+            opponentStamina: 0
+        };
+
+        function startGame() {
+            gameState.running = true;
+            gameState.phase = 'training';
+            gameState.day = 1;
+            gameState.speed = 20;
+            gameState.power = 20;
+            gameState.stamina = 20;
+            gameState.fatigue = 0;
+            gameState.frameCount = 0;
+
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'flex';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('trainingPhaseContainer').style.display = 'flex';
+            document.getElementById('tournamentPhaseContainer').style.display = 'none';
+
+            updateUI();
+        }
+
+        function doTraining(type) {
+            if (!gameState.running) return;
+
+            var fatigueMultiplier = gameState.fatigue > 70 ? 0.5 : 1.0;
+
+            if (type === 'speedRun') {
+                gameState.speed = Math.min(100, gameState.speed + Math.floor(15 * fatigueMultiplier));
+                gameState.stamina = Math.min(100, gameState.stamina + Math.floor(5 * fatigueMultiplier));
+                gameState.fatigue = Math.min(100, gameState.fatigue + 10);
+                document.getElementById('resultMessage').textContent = '🏃 Speed Run completed!';
+            } else if (type === 'weightLift') {
+                gameState.power = Math.min(100, gameState.power + Math.floor(20 * fatigueMultiplier));
+                gameState.fatigue = Math.min(100, gameState.fatigue + 15);
+                document.getElementById('resultMessage').textContent = '🏋️ Weight Lift completed!';
+            } else if (type === 'recovery') {
+                gameState.fatigue = Math.max(0, gameState.fatigue - 20);
+                gameState.stamina = Math.min(100, gameState.stamina + 10);
+                document.getElementById('resultMessage').textContent = '🧘 Recovery completed!';
+            }
+
+            updateUI();
+
+            setTimeout(function() {
+                gameState.day++;
+                if (gameState.day > 10) {
+                    enterTournament();
+                } else {
+                    document.getElementById('resultMessage').textContent = '';
+                    updateUI();
+                }
+            }, 1000);
+        }
+
+        function enterTournament() {
+            gameState.phase = 'tournament';
+            document.getElementById('trainingPhaseContainer').style.display = 'none';
+            document.getElementById('tournamentPhaseContainer').style.display = 'block';
+            document.getElementById('phaseIndicator').textContent = 'TOURNAMENT PHASE';
+            document.getElementById('resultMessage').textContent = '';
+
+            gameState.opponentSpeed = 30 + Math.floor(Math.random() * 40);
+            gameState.opponentPower = 30 + Math.floor(Math.random() * 40);
+            gameState.opponentStamina = 30 + Math.floor(Math.random() * 40);
+
+            document.getElementById('opponentSpeed').textContent = gameState.opponentSpeed;
+            document.getElementById('opponentPower').textContent = gameState.opponentPower;
+            document.getElementById('opponentStamina').textContent = gameState.opponentStamina;
+            document.getElementById('opponentTotal').textContent = gameState.opponentSpeed + gameState.opponentPower + gameState.opponentStamina;
+        }
+
+        function compete() {
+            if (!gameState.running) return;
+
+            var playerTotal = gameState.speed + gameState.power + gameState.stamina;
+            var opponentTotal = gameState.opponentSpeed + gameState.opponentPower + gameState.opponentStamina;
+
+            var playerVariance = (Math.random() - 0.5) * 40;
+            var opponentVariance = (Math.random() - 0.5) * 40;
+
+            var playerFinal = playerTotal + playerVariance;
+            var opponentFinal = opponentTotal + opponentVariance;
+
+            gameState.running = false;
+
+            if (playerFinal > opponentFinal) {
+                showClear();
+            } else {
+                showGameOver();
+            }
+        }
+
+        function showClear() {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'flex';
+            document.getElementById('finalStatsText').textContent = 'Speed: ' + gameState.speed + ' | Power: ' + gameState.power + ' | Stamina: ' + gameState.stamina;
+        }
+
+        function showGameOver() {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'flex';
+            document.getElementById('gameOverStatsText').textContent = 'Speed: ' + gameState.speed + ' | Power: ' + gameState.power + ' | Stamina: ' + gameState.stamina;
+        }
+
+        function retryGame() {
+            gameState.running = false;
+            startGame();
+        }
+
+        function updateUI() {
+            document.getElementById('dayCount').textContent = 'Day ' + gameState.day + ' / 10';
+            document.getElementById('speedVal').textContent = gameState.speed;
+            document.getElementById('powerVal').textContent = gameState.power;
+            document.getElementById('staminaVal').textContent = gameState.stamina;
+            document.getElementById('fatigueVal').textContent = gameState.fatigue;
+
+            document.getElementById('speedBar').style.width = (gameState.speed / 100 * 100) + '%';
+            document.getElementById('powerBar').style.width = (gameState.power / 100 * 100) + '%';
+            document.getElementById('staminaBar').style.width = (gameState.stamina / 100 * 100) + '%';
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+            gameState.frameCount++;
+        }
+        var mainInterval = setInterval(gameLoop, 16);
+    </script>
+</body>
+</html>

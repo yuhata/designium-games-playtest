@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suika Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 400px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        .info-item {
+            font-size: 14px;
+            color: #555;
+        }
+        .info-item span {
+            font-weight: bold;
+            color: #000;
+        }
+        #gameScreen {
+            position: relative;
+            width: 380px;
+            height: 500px;
+            background: #fafafa;
+            border: 2px solid #333;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            cursor: crosshair;
+            display: none;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #nextFruitPreview {
+            text-align: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 5px;
+            font-size: 18px;
+            display: none;
+        }
+        #nextFruitPreview span {
+            font-size: 32px;
+        }
+        #startScreen {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        #startScreen h2 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        #startScreen p {
+            margin-bottom: 15px;
+            color: #666;
+            line-height: 1.6;
+        }
+        #startScreen button {
+            padding: 12px 30px;
+            font-size: 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        #startScreen button:hover {
+            background: #5568d3;
+        }
+        #clearScreen {
+            text-align: center;
+            padding: 40px 20px;
+            display: none;
+        }
+        #clearScreen h2 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #28a745;
+        }
+        #clearScreen p {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        #gameOverScreen {
+            text-align: center;
+            padding: 40px 20px;
+            display: none;
+        }
+        #gameOverScreen h2 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #dc3545;
+        }
+        #gameOverScreen p {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .button-group {
+            margin-top: 20px;
+        }
+        .button-group button {
+            padding: 10px 20px;
+            font-size: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button-group button:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <h1>🍉 Suika Game</h1>
+
+        <div id="startScreen">
+            <h2>Drop & Merge Fruits</h2>
+            <p>Drop fruits by clicking. When two same-size fruits touch, they merge into a bigger one!</p>
+            <p><strong>Goal:</strong> Reach a score of 300</p>
+            <p><strong>Danger:</strong> Fruits above the red line = Game Over</p>
+            <p>Fruit sizes: 🍒 → 🍓 → 🍇 → 🍊 → 🍎 → 🍈</p>
+            <button onclick="startGame()">Start Game</button>
+        </div>
+
+        <div id="gamePlayArea" style="display: none;">
+            <div class="info-bar">
+                <div class="info-item">Score: <span id="scoreDisplay">0</span></div>
+                <div class="info-item">Next: <span id="nextFruitDisplay">🍒</span></div>
+            </div>
+            <div id="nextFruitPreview">
+                Next fruit: <span id="nextFruitIcon">🍒</span>
+            </div>
+            <div id="gameScreen">
+                <canvas id="gameCanvas" width="380" height="500"></canvas>
+            </div>
+        </div>
+
+        <div id="clearScreen">
+            <h2>🎉 You Win!</h2>
+            <p id="clearScoreText">Score: 0</p>
+            <p>You reached a score of 300!</p>
+            <div class="button-group">
+                <button onclick="retryGame()">Play Again</button>
+                <button onclick="goToMenu()">Back to Menu</button>
+            </div>
+        </div>
+
+        <div id="gameOverScreen">
+            <h2>💥 Game Over</h2>
+            <p id="gameOverScoreText">Score: 0</p>
+            <p>Fruits stacked above the danger line!</p>
+            <div class="button-group">
+                <button onclick="retryGame()">Try Again</button>
+                <button onclick="goToMenu()">Back to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ Game State ============
+        var gameState = {
+            running: false,
+            score: 0,
+            fruits: [],
+            nextLevel: 1,
+            dropping: false,
+            frameCount: 0,
+            mergedThisFrame: false
+        };
+
+        // ============ Fruit Data ============
+        const fruitData = [
+            { level: 1, radius: 15, emoji: '🍒', color: '#d4143c' },
+            { level: 2, radius: 22, emoji: '🍓', color: '#e63946' },
+            { level: 3, radius: 30, emoji: '🍇', color: '#8b008b' },
+            { level: 4, radius: 40, emoji: '🍊', color: '#ff8c00' },
+            { level: 5, radius: 52, emoji: '🍎', color: '#dc143c' },
+            { level: 6, radius: 65, emoji: '🍈', color: '#90ee90' }
+        ];
+
+        const dangerY = 80;
+        const canvasWidth = 380;
+        const canvasHeight = 500;
+
+        // ============ Canvas Setup ============
+        var canvas = document.getElementById('gameCanvas');
+        var ctx = canvas.getContext('2d');
+
+        // ============ Start Game ============
+        function startGame() {
+            gameState = {
+                running: true,
+                score: 0,
+                fruits: [],
+                nextLevel: 1,
+                dropping: false,
+                frameCount: 0,
+                mergedThisFrame: false
+            };
+
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gamePlayArea').style.display = 'block';
+            document.getElementById('gameScreen').style.display = 'block';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+
+            updateNextFruit();
+            startGameLoop();
+        }
+
+        // ============ Update Next Fruit Display ============
+        function updateNextFruit() {
+            var fruit = fruitData[gameState.nextLevel - 1];
+            document.getElementById('nextFruitDisplay').textContent = fruit.emoji;
+            document.getElementById('nextFruitIcon').textContent = fruit.emoji;
+        }
+
+        // ============ Drop Fruit on Click ============
+        canvas.addEventListener('click', function(e) {
+            if (!gameState.running || gameState.dropping) return;
+
+            var rect = canvas.getBoundingClientRect();
+            var x = e.clientX - rect.left;
+
+            if (x < 0 || x > canvasWidth) return;
+
+            dropFruit(x);
+        });
+
+        function dropFruit(clickX) {
+            if (gameState.dropping) return;
+            gameState.dropping = true;
+
+            var fruit = fruitData[gameState.nextLevel - 1];
+            var newFruit = {
+                level: gameState.nextLevel,
+                radius: fruit.radius,
+                emoji: fruit.emoji,
+                color: fruit.color,
+                x: Math.max(fruit.radius, Math.min(clickX, canvasWidth - fruit.radius)),
+                y: fruit.radius,
+                vx: 0,
+                vy: 0,
+                settled: false,
+                mergedThisFrame: false
+            };
+
+            gameState.fruits.push(newFruit);
+
+            // Pick next fruit randomly
+            gameState.nextLevel = Math.floor(Math.random() * 5) + 1;
+            updateNextFruit();
+
+            setTimeout(function() {
+                gameState.dropping = false;
+            }, 300);
+        }
+
+        // ============ Game Loop ============
+        var mainInterval = null;
+
+        function startGameLoop() {
+            if (mainInterval) clearInterval(mainInterval);
+            mainInterval = setInterval(gameLoop, 16);
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            gameState.frameCount++;
+
+            // Apply gravity and update positions
+            gameState.fruits.forEach(function(f) {
+                if (!f.settled) {
+                    f.vy += 0.3; // gravity
+                    f.y += f.vy;
+                    f.x += f.vx;
+
+                    // Air resistance
+                    f.vx *= 0.98;
+                }
+            });
+
+            // Wall and floor collisions
+            gameState.fruits.forEach(function(f) {
+                // Left and right walls
+                if (f.x - f.radius < 0) {
+                    f.x = f.radius;
+                    f.vx *= -0.5;
+                }
+                if (f.x + f.radius > canvasWidth) {
+                    f.x = canvasWidth - f.radius;
+                    f.vx *= -0.5;
+                }
+
+                // Bottom floor
+                if (f.y + f.radius > canvasHeight) {
+                    f.y = canvasHeight - f.radius;
+                    f.vy *= -0.3;
+                    if (Math.abs(f.vy) < 0.5) {
+                        f.settled = true;
+                        f.vy = 0;
+                        f.vx = 0;
+                    }
+                }
+            });
+
+            // Circle-circle collision
+            for (var i = 0; i < gameState.fruits.length; i++) {
+                for (var j = i + 1; j < gameState.fruits.length; j++) {
+                    var f1 = gameState.fruits[i];
+                    var f2 = gameState.fruits[j];
+
+                    var dx = f2.x - f1.x;
+                    var dy = f2.y - f1.y;
+                    var dist = Math.sqrt(dx * dx + dy * dy);
+                    var minDist = f1.radius + f2.radius;
+
+                    if (dist < minDist) {
+                        // Merge if same level
+                        if (f1.level === f2.level && !f1.mergedThisFrame && !f2.mergedThisFrame) {
+                            mergeFruits(i, j);
+                            return; // Restart collision checks
+                        }
+
+                        // Push apart
+                        if (dist === 0) dist = 0.1;
+                        var overlap = minDist - dist;
+                        var pushX = (dx / dist) * (overlap / 2);
+                        var pushY = (dy / dist) * (overlap / 2);
+
+                        f1.x -= pushX;
+                        f1.y -= pushY;
+                        f2.x += pushX;
+                        f2.y += pushY;
+
+                        // Damping
+                        f1.vx *= 0.8;
+                        f1.vy *= 0.8;
+                        f2.vx *= 0.8;
+                        f2.vy *= 0.8;
+                    }
+                }
+            }
+
+            // Check danger zone
+            gameState.fruits.forEach(function(f) {
+                if (f.settled && f.y - f.radius < dangerY) {
+                    endGame();
+                }
+            });
+
+            // Check clear condition
+            if (gameState.score >= 300) {
+                clearGame();
+                return;
+            }
+
+            // Draw
+            draw();
+        }
+
+        // ============ Merge Fruits ============
+        function mergeFruits(idx1, idx2) {
+            var f1 = gameState.fruits[idx1];
+            var f2 = gameState.fruits[idx2];
+
+            if (f1.level >= fruitData.length) return; // Already max level
+
+            var mergedLevel = f1.level + 1;
+            var mergedFruit = fruitData[mergedLevel - 1];
+
+            var newFruit = {
+                level: mergedLevel,
+                radius: mergedFruit.radius,
+                emoji: mergedFruit.emoji,
+                color: mergedFruit.color,
+                x: (f1.x + f2.x) / 2,
+                y: (f1.y + f2.y) / 2,
+                vx: (f1.vx + f2.vx) / 2,
+                vy: (f1.vy + f2.vy) / 2,
+                settled: false,
+                mergedThisFrame: true
+            };
+
+            var points = mergedLevel * mergedLevel * 10;
+            gameState.score += points;
+
+            // Remove old fruits and add new one
+            gameState.fruits.splice(Math.max(idx1, idx2), 1);
+            gameState.fruits.splice(Math.min(idx1, idx2), 1);
+            gameState.fruits.push(newFruit);
+
+            // Clear merged flag next frame
+            setTimeout(function() {
+                newFruit.mergedThisFrame = false;
+            }, 16);
+        }
+
+        // ============ Draw ============
+        function draw() {
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // Draw danger line
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, dangerY);
+            ctx.lineTo(canvasWidth, dangerY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw fruits
+            gameState.fruits.forEach(function(f) {
+                // Circle
+                ctx.fillStyle = f.color;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Emoji
+                ctx.font = (f.radius * 1.2) + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(f.emoji, f.x, f.y);
+            });
+
+            // Update score display
+            document.getElementById('scoreDisplay').textContent = gameState.score;
+        }
+
+        // ============ End Game ============
+        function endGame() {
+            gameState.running = false;
+            document.getElementById('gameOverScoreText').textContent = 'Score: ' + gameState.score;
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('gamePlayArea').style.display = 'block';
+            document.getElementById('gameOverScreen').style.display = 'block';
+        }
+
+        function clearGame() {
+            gameState.running = false;
+            document.getElementById('clearScoreText').textContent = 'Score: ' + gameState.score;
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('gamePlayArea').style.display = 'block';
+            document.getElementById('clearScreen').style.display = 'block';
+        }
+
+        // ============ Retry / Menu ============
+        function retryGame() {
+            gameState.running = false;
+            startGame();
+        }
+
+        function goToMenu() {
+            gameState.running = false;
+            document.getElementById('gamePlayArea').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'block';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

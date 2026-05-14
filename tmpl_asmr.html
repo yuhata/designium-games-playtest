@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASMR TAP</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #f5e6d3 0%, #e8d4f1 100%);
+    }
+
+    #gameContainer {
+      position: relative;
+      width: 400px;
+      height: 600px;
+      background: linear-gradient(180deg, #fef9f3 0%, #f0e6f6 100%);
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+      font-size: 16px;
+    }
+
+    /* Screen base styles */
+    .screen {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+
+    #startScreen {
+      background: linear-gradient(180deg, #f9f5f0 0%, #ede5f2 100%);
+      display: flex;
+    }
+
+    #gameScreen {
+      background: linear-gradient(180deg, #fef9f3 0%, #f0e6f6 100%);
+      display: flex;
+    }
+
+    #clearScreen {
+      background: linear-gradient(180deg, #d4f1d4 0%, #c8e6c9 100%);
+      display: none;
+    }
+
+    #gameOverScreen {
+      background: linear-gradient(180deg, #f1d4d4 0%, #f0d4c8 100%);
+      display: none;
+    }
+
+    /* Start Screen */
+    .startContent {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .gameTitle {
+      font-size: 48px;
+      font-weight: bold;
+      color: #b8a7d4;
+      margin-bottom: 20px;
+      letter-spacing: 3px;
+    }
+
+    .gameSubtitle {
+      font-size: 16px;
+      color: #9b8ab5;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    .startButton {
+      padding: 14px 40px;
+      font-size: 18px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #d4b5e8 0%, #c99dd9 100%);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(212, 181, 232, 0.4);
+      margin-top: 20px;
+    }
+
+    .startButton:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(212, 181, 232, 0.6);
+    }
+
+    .startButton:active {
+      transform: translateY(0);
+    }
+
+    /* Game Screen HUD */
+    .gameHUD {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.8);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      border-bottom: 2px solid rgba(212, 181, 232, 0.3);
+      z-index: 20;
+    }
+
+    .hudItem {
+      text-align: center;
+    }
+
+    .hudLabel {
+      font-size: 12px;
+      color: #9b8ab5;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hudValue {
+      font-size: 28px;
+      font-weight: bold;
+      color: #d4b5e8;
+      margin-top: 4px;
+    }
+
+    /* Game Canvas Area */
+    #gameCanvas {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      background: transparent;
+      cursor: crosshair;
+    }
+
+    /* Tap Zones */
+    .tapZone {
+      position: absolute;
+      cursor: pointer;
+      background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2));
+      border: 2px solid rgba(212, 181, 232, 0.5);
+      transition: all 0.1s ease;
+    }
+
+    .tapZone:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(212, 181, 232, 0.4);
+    }
+
+    .tapZone:active {
+      transform: scale(0.95);
+    }
+
+    #zone1 {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      top: 80px;
+      left: 50px;
+      background: radial-gradient(circle at 30% 30%, rgba(212, 181, 232, 0.6), rgba(212, 181, 232, 0.2));
+    }
+
+    #zone2 {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      top: 100px;
+      right: 60px;
+      background: radial-gradient(circle at 30% 30%, rgba(200, 230, 201, 0.6), rgba(200, 230, 201, 0.2));
+    }
+
+    #zone3 {
+      width: 75px;
+      height: 75px;
+      border-radius: 15px;
+      top: 230px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: radial-gradient(circle at 30% 30%, rgba(255, 204, 188, 0.6), rgba(255, 204, 188, 0.2));
+    }
+
+    #zone4 {
+      width: 65px;
+      height: 65px;
+      border-radius: 50%;
+      bottom: 120px;
+      left: 45px;
+      background: radial-gradient(circle at 30% 30%, rgba(179, 229, 252, 0.6), rgba(179, 229, 252, 0.2));
+    }
+
+    #zone5 {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      bottom: 100px;
+      right: 50px;
+      background: radial-gradient(circle at 30% 30%, rgba(240, 230, 140, 0.6), rgba(240, 230, 140, 0.2));
+    }
+
+    #zone6 {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: radial-gradient(circle at 30% 30%, rgba(216, 191, 216, 0.6), rgba(216, 191, 216, 0.2));
+    }
+
+    /* End Screens */
+    .endContent {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .endTitle {
+      font-size: 42px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+
+    #clearScreen .endTitle {
+      color: #66bb6a;
+    }
+
+    #gameOverScreen .endTitle {
+      color: #ef5350;
+    }
+
+    .endMessage {
+      font-size: 18px;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+
+    #clearScreen .endMessage {
+      color: #558b2f;
+    }
+
+    #gameOverScreen .endMessage {
+      color: #c62828;
+    }
+
+    .finalStats {
+      background: rgba(255, 255, 255, 0.6);
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 30px;
+      font-size: 16px;
+    }
+
+    .statLine {
+      margin: 8px 0;
+    }
+
+    .statLabel {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .statValue {
+      color: #d4b5e8;
+      font-weight: bold;
+    }
+
+    .retryButton {
+      padding: 12px 35px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 20px;
+    }
+
+    #clearScreen .retryButton {
+      background: linear-gradient(135deg, #66bb6a 0%, #558b2f 100%);
+      box-shadow: 0 4px 15px rgba(102, 187, 106, 0.4);
+    }
+
+    #clearScreen .retryButton:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 187, 106, 0.6);
+    }
+
+    #gameOverScreen .retryButton {
+      background: linear-gradient(135deg, #ef5350 0%, #c62828 100%);
+      box-shadow: 0 4px 15px rgba(239, 83, 80, 0.4);
+    }
+
+    #gameOverScreen .retryButton:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(239, 83, 80, 0.6);
+    }
+
+    .retryButton:active {
+      transform: translateY(0);
+    }
+
+    /* Particle effects */
+    .particle {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    /* Ripple effect */
+    @keyframes ripple {
+      to {
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid;
+      opacity: 1;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen">
+      <div class="startContent">
+        <div class="gameTitle">ASMR TAP</div>
+        <div class="gameSubtitle">
+          Tap the zones to create<br>
+          satisfying visual feedback.<br>
+          Reach 50 taps in 60 seconds!
+        </div>
+        <button class="startButton" onclick="startGame()">START</button>
+      </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+      <div class="gameHUD">
+        <div class="hudItem">
+          <div class="hudLabel">Taps</div>
+          <div class="hudValue" id="tapCount">0</div>
+        </div>
+        <div class="hudItem">
+          <div class="hudLabel">Time</div>
+          <div class="hudValue" id="timeLeft">60</div>
+        </div>
+      </div>
+
+      <canvas id="gameCanvas" width="400" height="540"></canvas>
+
+      <!-- Tap Zones -->
+      <div id="zone1" class="tapZone" onclick="onZoneTapped(event)"></div>
+      <div id="zone2" class="tapZone" onclick="onZoneTapped(event)"></div>
+      <div id="zone3" class="tapZone" onclick="onZoneTapped(event)"></div>
+      <div id="zone4" class="tapZone" onclick="onZoneTapped(event)"></div>
+      <div id="zone5" class="tapZone" onclick="onZoneTapped(event)"></div>
+      <div id="zone6" class="tapZone" onclick="onZoneTapped(event)"></div>
+    </div>
+
+    <!-- Clear Screen (Win) -->
+    <div id="clearScreen" class="screen">
+      <div class="endContent">
+        <div class="endTitle">🎉 CLEAR!</div>
+        <div class="endMessage">
+          You reached 50 taps!<br>
+          Amazing rhythm!
+        </div>
+        <div class="finalStats">
+          <div class="statLine">
+            <span class="statLabel">Final Taps:</span>
+            <span class="statValue" id="finalTapsClear">0</span>
+          </div>
+          <div class="statLine">
+            <span class="statLabel">Time Remaining:</span>
+            <span class="statValue" id="finalTimeClear">0</span>s
+          </div>
+        </div>
+        <button class="retryButton" onclick="retryGame()">PLAY AGAIN</button>
+      </div>
+    </div>
+
+    <!-- Game Over Screen (Lose) -->
+    <div id="gameOverScreen" class="screen">
+      <div class="endContent">
+        <div class="endTitle">TIME'S UP</div>
+        <div class="endMessage">
+          You tapped <strong id="finalTapsGameOver">0</strong> times.<br>
+          Get to 50 for a CLEAR!
+        </div>
+        <div class="finalStats">
+          <div class="statLine">
+            <span class="statLabel">Taps Achieved:</span>
+            <span class="statValue" id="finalTapsGameOverDetail">0</span>
+          </div>
+          <div class="statLine">
+            <span class="statLabel">Target:</span>
+            <span class="statValue">50</span>
+          </div>
+        </div>
+        <button class="retryButton" onclick="retryGame()">TRY AGAIN</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Game state
+    var gameState = {
+      running: false,
+      tapCount: 0,
+      timeLeft: 60,
+      frameCount: 0,
+      particles: []
+    };
+
+    var gameLoopInterval = null;
+    var timerInterval = null;
+    var gameCanvas = null;
+    var gameCtx = null;
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', function() {
+      gameCanvas = document.getElementById('gameCanvas');
+      gameCtx = gameCanvas.getContext('2d');
+    });
+
+    // Start Game
+    function startGame() {
+      // Reset state
+      gameState.running = true;
+      gameState.tapCount = 0;
+      gameState.timeLeft = 60;
+      gameState.frameCount = 0;
+      gameState.particles = [];
+
+      // Hide start screen, show game screen
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'flex';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+
+      // Start game loop
+      gameLoopInterval = setInterval(gameLoop, 16);
+
+      // Start timer
+      timerInterval = setInterval(function() {
+        if (gameState.running) {
+          gameState.timeLeft--;
+          document.getElementById('timeLeft').textContent = gameState.timeLeft;
+
+          if (gameState.timeLeft <= 0) {
+            endGame(false);
+          }
+        }
+      }, 1000);
+    }
+
+    // Game Loop (16ms = ~60fps)
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      gameState.frameCount++;
+
+      // Update particles
+      for (var i = gameState.particles.length - 1; i >= 0; i--) {
+        var particle = gameState.particles[i];
+        particle.life--;
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+
+        if (particle.life <= 0) {
+          gameState.particles.splice(i, 1);
+        }
+      }
+
+      // Clear canvas
+      gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+      // Draw particles
+      for (var i = 0; i < gameState.particles.length; i++) {
+        var particle = gameState.particles[i];
+        var alpha = particle.life / particle.maxLife;
+
+        gameCtx.save();
+        gameCtx.globalAlpha = alpha;
+        gameCtx.fillStyle = particle.color;
+        gameCtx.beginPath();
+        gameCtx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        gameCtx.fill();
+        gameCtx.restore();
+      }
+    }
+
+    // Zone Tap Handler
+    function onZoneTapped(event) {
+      if (!gameState.running) return;
+
+      var zone = event.target;
+      var rect = zone.getBoundingClientRect();
+      var containerRect = document.getElementById('gameContainer').getBoundingClientRect();
+
+      var centerX = rect.left - containerRect.left + rect.width / 2;
+      var centerY = rect.top - containerRect.top + rect.height / 2;
+
+      // Increment tap count
+      gameState.tapCount++;
+      document.getElementById('tapCount').textContent = gameState.tapCount;
+
+      // Create particle burst
+      createParticleBurst(centerX, centerY, zone.id);
+
+      // Create ripple effect
+      createRipple(zone);
+
+      // Check win condition
+      if (gameState.tapCount >= 50) {
+        endGame(true);
+      }
+    }
+
+    // Create Particle Burst
+    function createParticleBurst(centerX, centerY, zoneId) {
+      var colors = ['#d4b5e8', '#c8e6c9', '#ffccbc', '#b3e5fc', '#fff59d', '#d8bfd8'];
+      var colorIndex = Math.abs(zoneId.charCodeAt(4) % colors.length);
+      var color = colors[colorIndex];
+
+      for (var i = 0; i < 12; i++) {
+        var angle = (i / 12) * Math.PI * 2;
+        var speed = 2 + Math.random() * 2;
+
+        var particle = {
+          x: centerX,
+          y: centerY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: 4 + Math.random() * 4,
+          color: color,
+          life: 30 + Math.random() * 20,
+          maxLife: 30 + Math.random() * 20
+        };
+
+        gameState.particles.push(particle);
+      }
+    }
+
+    // Create Ripple Effect
+    function createRipple(zone) {
+      var ripple = document.createElement('div');
+      ripple.className = 'ripple';
+
+      var size = Math.max(zone.offsetWidth, zone.offsetHeight);
+      ripple.style.width = size + 'px';
+      ripple.style.height = size + 'px';
+      ripple.style.left = (zone.offsetWidth - size) / 2 + 'px';
+      ripple.style.top = (zone.offsetHeight - size) / 2 + 'px';
+      ripple.style.borderColor = getComputedStyle(zone).backgroundColor || '#d4b5e8';
+
+      zone.style.position = 'absolute'; // ensure position is set
+      zone.appendChild(ripple);
+
+      ripple.animate(
+        [
+          { transform: 'scale(1)', opacity: 1 },
+          { transform: 'scale(2)', opacity: 0 }
+        ],
+        {
+          duration: 600,
+          easing: 'ease-out'
+        }
+      );
+
+      setTimeout(function() {
+        if (ripple.parentNode) {
+          ripple.parentNode.removeChild(ripple);
+        }
+      }, 600);
+    }
+
+    // End Game
+    function endGame(isWin) {
+      gameState.running = false;
+      clearInterval(gameLoopInterval);
+      clearInterval(timerInterval);
+
+      document.getElementById('gameScreen').style.display = 'none';
+
+      if (isWin) {
+        document.getElementById('finalTapsClear').textContent = gameState.tapCount;
+        document.getElementById('finalTimeClear').textContent = gameState.timeLeft;
+        document.getElementById('clearScreen').style.display = 'flex';
+      } else {
+        document.getElementById('finalTapsGameOver').textContent = gameState.tapCount;
+        document.getElementById('finalTapsGameOverDetail').textContent = gameState.tapCount;
+        document.getElementById('gameOverScreen').style.display = 'flex';
+      }
+    }
+
+    // Retry Game
+    function retryGame() {
+      gameState.running = false;
+      gameState.tapCount = 0;
+      gameState.timeLeft = 60;
+      gameState.frameCount = 0;
+      gameState.particles = [];
+
+      document.getElementById('startScreen').style.display = 'flex';
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+
+      clearInterval(gameLoopInterval);
+      clearInterval(timerInterval);
+    }
+  </script>
+</body>
+</html>

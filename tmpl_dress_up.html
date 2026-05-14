@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Style Master - Dress Up Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+    #gameContainer {
+      width: 400px;
+      height: 600px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .screen {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+    }
+    #startScreen {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      z-index: 10;
+    }
+    #gameScreen {
+      background: #fff;
+      display: none;
+      flex-direction: column;
+      z-index: 9;
+      overflow-y: auto;
+      padding: 15px;
+    }
+    #clearScreen {
+      background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      z-index: 11;
+    }
+    #gameOverScreen {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      z-index: 11;
+    }
+    .title {
+      font-size: 48px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .subtitle {
+      font-size: 18px;
+      margin-bottom: 30px;
+      text-align: center;
+      max-width: 90%;
+    }
+    .button {
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 15px 40px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin: 10px;
+    }
+    .button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    .button:active {
+      transform: scale(0.98);
+    }
+    .gameHeader {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    .gameTitle {
+      font-size: 24px;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 10px;
+    }
+    .outfitPreview {
+      background: #f5f5f5;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 15px;
+      text-align: center;
+      min-height: 100px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .characterDisplay {
+      font-size: 60px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .scoreDisplay {
+      font-size: 28px;
+      font-weight: bold;
+      color: #667eea;
+      text-align: center;
+    }
+    .slotRow {
+      margin-bottom: 12px;
+    }
+    .slotLabel {
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 5px;
+      display: block;
+    }
+    .slotButtons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .optionButton {
+      background: #f0f0f0;
+      border: 3px solid transparent;
+      border-radius: 10px;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex: 1;
+      min-width: 80px;
+      text-align: center;
+    }
+    .optionButton:hover {
+      background: #e8e8e8;
+    }
+    .optionButton.selected {
+      border-color: #667eea;
+      background: #e8d5ff;
+    }
+    .optionEmoji {
+      font-size: 24px;
+      display: block;
+      margin-bottom: 3px;
+    }
+    .optionLabel {
+      font-size: 12px;
+      color: #333;
+    }
+    .submitButton {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 15px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .submitButton:hover {
+      background: #5568d3;
+      transform: scale(1.02);
+    }
+    .submitButton:active {
+      transform: scale(0.98);
+    }
+    .feedbackMessage {
+      color: #667eea;
+      text-align: center;
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: bold;
+      min-height: 20px;
+    }
+    .clearTitle {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    .clearMessage {
+      font-size: 22px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    .finalScore {
+      font-size: 36px;
+      font-weight: bold;
+      margin-bottom: 30px;
+    }
+    .gameOverTitle {
+      font-size: 44px;
+      margin-bottom: 20px;
+    }
+    .gameOverMessage {
+      font-size: 20px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="startScreen" class="screen">
+      <div class="title">👗 Style Master</div>
+      <div class="subtitle">Create the perfect outfit! Earn a Style Score of 80+ to win!</div>
+      <button class="button" onclick="startGame()">Start Game</button>
+    </div>
+
+    <div id="gameScreen" class="screen">
+      <div class="gameHeader">
+        <div class="gameTitle">👗 Create Your Style</div>
+      </div>
+
+      <div class="outfitPreview">
+        <div class="characterDisplay" id="characterDisplay">
+          <span id="topEmoji">?</span>
+          <span id="bottomEmoji">?</span>
+          <span id="shoesEmoji">?</span>
+          <span id="accessoryEmoji">?</span>
+        </div>
+        <div class="scoreDisplay">STYLE SCORE: <span id="styleScore">0</span></div>
+      </div>
+
+      <div class="slotRow">
+        <label class="slotLabel">👔 Tops</label>
+        <div class="slotButtons" id="topsSlot"></div>
+      </div>
+
+      <div class="slotRow">
+        <label class="slotLabel">👖 Bottoms</label>
+        <div class="slotButtons" id="bottomsSlot"></div>
+      </div>
+
+      <div class="slotRow">
+        <label class="slotLabel">👞 Shoes</label>
+        <div class="slotButtons" id="shoesSlot"></div>
+      </div>
+
+      <div class="slotRow">
+        <label class="slotLabel">💼 Accessories</label>
+        <div class="slotButtons" id="accessoriesSlot"></div>
+      </div>
+
+      <button class="submitButton" onclick="submitOutfit()">SUBMIT OUTFIT</button>
+      <div class="feedbackMessage" id="feedbackMessage"></div>
+    </div>
+
+    <div id="clearScreen" class="screen">
+      <div class="clearTitle">🎉</div>
+      <div class="clearMessage">Perfect Style!</div>
+      <div class="finalScore" id="finalScore">SCORE: 100</div>
+      <button class="button" onclick="retryGame()">Play Again</button>
+    </div>
+
+    <div id="gameOverScreen" class="screen">
+      <div class="gameOverTitle">✨ Keep Trying!</div>
+      <div class="gameOverMessage">Your style score is not quite there yet.</div>
+      <div class="finalScore" id="gameOverScore">SCORE: 45</div>
+      <button class="button" onclick="retryGame()">Try Again</button>
+    </div>
+  </div>
+
+  <script>
+    var tops = [
+      { emoji: '👗', label: 'Dress', theme: 'elegant', color: 'pink' },
+      { emoji: '👚', label: 'Casual Tee', theme: 'casual', color: 'blue' },
+      { emoji: '🥻', label: 'Kimono', theme: 'traditional', color: 'red' },
+      { emoji: '🧥', label: 'Blazer', theme: 'formal', color: 'navy' }
+    ];
+
+    var bottoms = [
+      { emoji: '👖', label: 'Jeans', theme: 'casual', color: 'blue' },
+      { emoji: '🩱', label: 'Skirt', theme: 'elegant', color: 'white' },
+      { emoji: '👘', label: 'Obi Belt', theme: 'traditional', color: 'gold' },
+      { emoji: '👔', label: 'Dress Pants', theme: 'formal', color: 'black' }
+    ];
+
+    var shoes = [
+      { emoji: '👟', label: 'Sneakers', theme: 'casual', color: 'white' },
+      { emoji: '👠', label: 'Heels', theme: 'elegant', color: 'red' },
+      { emoji: '🥿', label: 'Sandals', theme: 'traditional', color: 'brown' },
+      { emoji: '👞', label: 'Oxfords', theme: 'formal', color: 'black' }
+    ];
+
+    var accessories = [
+      { emoji: '👜', label: 'Handbag', theme: 'elegant', bonus: 10 },
+      { emoji: '🎒', label: 'Backpack', theme: 'casual', bonus: 10 },
+      { emoji: '🧣', label: 'Obi Sash', theme: 'traditional', bonus: 10 },
+      { emoji: '💼', label: 'Briefcase', theme: 'formal', bonus: 10 }
+    ];
+
+    var gameState = {
+      running: false,
+      top: -1,
+      bottom: -1,
+      shoes: -1,
+      accessory: -1,
+      score: 0,
+      frameCount: 0
+    };
+
+    function calculateScore() {
+      var selected = [gameState.top, gameState.bottom, gameState.shoes, gameState.accessory];
+      var themes = [];
+      if (selected[0] >= 0) themes.push(tops[selected[0]].theme);
+      if (selected[1] >= 0) themes.push(bottoms[selected[1]].theme);
+      if (selected[2] >= 0) themes.push(shoes[selected[2]].theme);
+      if (selected[3] >= 0) themes.push(accessories[selected[3]].theme);
+
+      if (themes.length === 0) return 0;
+
+      var themeCounts = {};
+      for (var i = 0; i < themes.length; i++) {
+        var t = themes[i];
+        themeCounts[t] = (themeCounts[t] || 0) + 1;
+      }
+
+      var maxTheme = 0;
+      for (var key in themeCounts) {
+        if (themeCounts[key] > maxTheme) {
+          maxTheme = themeCounts[key];
+        }
+      }
+
+      var themeScore = maxTheme * 25;
+      var accessoryBonus = selected[3] >= 0 ? 10 : 0;
+      var total = Math.min(100, themeScore + accessoryBonus);
+      return total;
+    }
+
+    function updateScore() {
+      gameState.score = calculateScore();
+      document.getElementById('styleScore').textContent = gameState.score;
+      updateCharacterDisplay();
+    }
+
+    function updateCharacterDisplay() {
+      var topEmoji = gameState.top >= 0 ? tops[gameState.top].emoji : '?';
+      var bottomEmoji = gameState.bottom >= 0 ? bottoms[gameState.bottom].emoji : '?';
+      var shoesEmoji = gameState.shoes >= 0 ? shoes[gameState.shoes].emoji : '?';
+      var accessoryEmoji = gameState.accessory >= 0 ? accessories[gameState.accessory].emoji : '?';
+
+      document.getElementById('topEmoji').textContent = topEmoji;
+      document.getElementById('bottomEmoji').textContent = bottomEmoji;
+      document.getElementById('shoesEmoji').textContent = shoesEmoji;
+      document.getElementById('accessoryEmoji').textContent = accessoryEmoji;
+    }
+
+    function renderSlots() {
+      var topsContainer = document.getElementById('topsSlot');
+      topsContainer.innerHTML = '';
+      for (var i = 0; i < tops.length; i++) {
+        var btn = document.createElement('button');
+        btn.className = 'optionButton';
+        if (gameState.top === i) btn.className += ' selected';
+        btn.innerHTML = '<span class="optionEmoji">' + tops[i].emoji + '</span><span class="optionLabel">' + tops[i].label + '</span>';
+        btn.onclick = (function(index) {
+          return function() {
+            gameState.top = index;
+            updateScore();
+            renderSlots();
+          };
+        })(i);
+        topsContainer.appendChild(btn);
+      }
+
+      var bottomsContainer = document.getElementById('bottomsSlot');
+      bottomsContainer.innerHTML = '';
+      for (var i = 0; i < bottoms.length; i++) {
+        var btn = document.createElement('button');
+        btn.className = 'optionButton';
+        if (gameState.bottom === i) btn.className += ' selected';
+        btn.innerHTML = '<span class="optionEmoji">' + bottoms[i].emoji + '</span><span class="optionLabel">' + bottoms[i].label + '</span>';
+        btn.onclick = (function(index) {
+          return function() {
+            gameState.bottom = index;
+            updateScore();
+            renderSlots();
+          };
+        })(i);
+        bottomsContainer.appendChild(btn);
+      }
+
+      var shoesContainer = document.getElementById('shoesSlot');
+      shoesContainer.innerHTML = '';
+      for (var i = 0; i < shoes.length; i++) {
+        var btn = document.createElement('button');
+        btn.className = 'optionButton';
+        if (gameState.shoes === i) btn.className += ' selected';
+        btn.innerHTML = '<span class="optionEmoji">' + shoes[i].emoji + '</span><span class="optionLabel">' + shoes[i].label + '</span>';
+        btn.onclick = (function(index) {
+          return function() {
+            gameState.shoes = index;
+            updateScore();
+            renderSlots();
+          };
+        })(i);
+        shoesContainer.appendChild(btn);
+      }
+
+      var accessoriesContainer = document.getElementById('accessoriesSlot');
+      accessoriesContainer.innerHTML = '';
+      for (var i = 0; i < accessories.length; i++) {
+        var btn = document.createElement('button');
+        btn.className = 'optionButton';
+        if (gameState.accessory === i) btn.className += ' selected';
+        btn.innerHTML = '<span class="optionEmoji">' + accessories[i].emoji + '</span><span class="optionLabel">' + accessories[i].label + '</span>';
+        btn.onclick = (function(index) {
+          return function() {
+            gameState.accessory = index;
+            updateScore();
+            renderSlots();
+          };
+        })(i);
+        accessoriesContainer.appendChild(btn);
+      }
+    }
+
+    function startGame() {
+      gameState.running = true;
+      gameState.top = -1;
+      gameState.bottom = -1;
+      gameState.shoes = -1;
+      gameState.accessory = -1;
+      gameState.score = 0;
+      gameState.frameCount = 0;
+
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'flex';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('feedbackMessage').textContent = '';
+
+      renderSlots();
+      updateCharacterDisplay();
+    }
+
+    function submitOutfit() {
+      if (gameState.top === -1 || gameState.bottom === -1 || gameState.shoes === -1 || gameState.accessory === -1) {
+        document.getElementById('feedbackMessage').textContent = 'Please select all outfit pieces!';
+        return;
+      }
+
+      if (gameState.score >= 80) {
+        gameState.running = false;
+        document.getElementById('finalScore').textContent = 'SCORE: ' + gameState.score;
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('clearScreen').style.display = 'flex';
+        document.getElementById('gameOverScreen').style.display = 'none';
+      } else {
+        document.getElementById('gameOverScore').textContent = 'SCORE: ' + gameState.score;
+        document.getElementById('feedbackMessage').textContent = 'Try a matching theme! Score: ' + gameState.score + '/80';
+      }
+    }
+
+    function retryGame() {
+      gameState.running = false;
+      document.getElementById('startScreen').style.display = 'flex';
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+    }
+
+    function gameLoop() {
+      if (gameState.running) {
+        gameState.frameCount++;
+      }
+    }
+
+    setInterval(gameLoop, 16);
+  </script>
+</body>
+</html>

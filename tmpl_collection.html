@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collection Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .game-container {
+      width: 100%;
+      max-width: 480px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .screen {
+      padding: 24px;
+      text-align: center;
+      min-height: 600px;
+      display: none;
+    }
+
+    .screen.active {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    /* Start Screen */
+    #startScreen h1 {
+      font-size: 36px;
+      margin-bottom: 16px;
+      color: #333;
+    }
+
+    #startScreen p {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .start-btn {
+      padding: 12px 32px;
+      font-size: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .start-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Game Screen */
+    #gameScreen {
+      padding: 16px;
+    }
+
+    .game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding: 12px;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+
+    .collected-info {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .energy-container {
+      flex: 1;
+      margin: 0 16px;
+    }
+
+    .energy-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .energy-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: #ddd;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .energy-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+      transition: width 0.3s ease;
+    }
+
+    .collection-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .collection-item {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-size: 32px;
+      background: #e5e5e5;
+      color: #999;
+      font-weight: bold;
+    }
+
+    .collection-item.collected {
+      background: white;
+      border: 2px solid #667eea;
+      color: inherit;
+    }
+
+    .explore-btn {
+      padding: 16px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .explore-btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .explore-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    /* Popup */
+    .popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 32px;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      z-index: 1000;
+      display: none;
+      animation: popupAppear 0.3s ease;
+    }
+
+    .popup.show {
+      display: block;
+    }
+
+    @keyframes popupAppear {
+      from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+    }
+
+    .popup-emoji {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .popup-text {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .popup-sub {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .popup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      z-index: 999;
+      display: none;
+    }
+
+    .popup-overlay.show {
+      display: block;
+    }
+
+    /* Clear Screen */
+    #clearScreen h1 {
+      font-size: 42px;
+      color: #667eea;
+      margin-bottom: 16px;
+    }
+
+    #clearScreen .emoji-large {
+      font-size: 80px;
+      margin-bottom: 16px;
+    }
+
+    #clearScreen p {
+      font-size: 16px;
+      color: #666;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .retry-btn {
+      padding: 12px 32px;
+      font-size: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .retry-btn:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen active">
+      <h1>🎨 Collection Game</h1>
+      <p>
+        動物の図鑑を完成させよう！<br>
+        エネルギーを使って探検し、20種類の動物をコレクション。<br>
+        16種類以上集めればクリア！
+      </p>
+      <button class="start-btn" onclick="startGame()">ゲーム開始</button>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+      <div class="game-header">
+        <div class="collected-info">
+          <span id="collectedCount">0</span>/20 集めた
+        </div>
+        <div class="energy-container">
+          <div class="energy-label" id="energyLabel">5/5 ⚡</div>
+          <div class="energy-bar-bg">
+            <div class="energy-bar" id="energyBar" style="width: 100%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="collection-grid" id="collectionGrid"></div>
+
+      <button class="explore-btn" id="exploreBtn" onclick="explore()">
+        🔍 探検する
+      </button>
+    </div>
+
+    <!-- Clear Screen -->
+    <div id="clearScreen" class="screen">
+      <div class="emoji-large">🎉</div>
+      <h1>クリア！</h1>
+      <p>
+        図鑑が16種類以上になりました！<br>
+        素晴らしい冒険でした！
+      </p>
+      <button class="retry-btn" onclick="retryGame()">もう一度遊ぶ</button>
+    </div>
+  </div>
+
+  <!-- Popup -->
+  <div id="popupOverlay" class="popup-overlay"></div>
+  <div id="itemPopup" class="popup">
+    <div class="popup-emoji" id="popupEmoji"></div>
+    <div class="popup-text" id="popupText"></div>
+    <div class="popup-sub" id="popupSub"></div>
+  </div>
+
+  <script>
+    var gameState = {
+      running: false,
+      energy: 5,
+      maxEnergy: 5,
+      energyTimer: 0,
+      collection: [],
+      frameCount: 0,
+      collectedCount: 0
+    };
+
+    var items = [
+      { emoji: '🦋', name: 'Butterfly' },
+      { emoji: '🐸', name: 'Frog' },
+      { emoji: '🦎', name: 'Lizard' },
+      { emoji: '🐢', name: 'Turtle' },
+      { emoji: '🦜', name: 'Parrot' },
+      { emoji: '🐙', name: 'Octopus' },
+      { emoji: '🦑', name: 'Squid' },
+      { emoji: '🦐', name: 'Shrimp' },
+      { emoji: '🦞', name: 'Lobster' },
+      { emoji: '🦀', name: 'Crab' },
+      { emoji: '🐡', name: 'Blowfish' },
+      { emoji: '🐠', name: 'Tropical Fish' },
+      { emoji: '🐟', name: 'Fish' },
+      { emoji: '🦈', name: 'Shark' },
+      { emoji: '🐬', name: 'Dolphin' },
+      { emoji: '🐳', name: 'Whale' },
+      { emoji: '🦭', name: 'Seal' },
+      { emoji: '🦦', name: 'Otter' },
+      { emoji: '🦥', name: 'Sloth' },
+      { emoji: '🦨', name: 'Skunk' }
+    ];
+
+    function startGame() {
+      gameState.running = true;
+      gameState.energy = 5;
+      gameState.maxEnergy = 5;
+      gameState.energyTimer = 0;
+      gameState.collection = items.map((item) => ({
+        emoji: item.emoji,
+        name: item.name,
+        collected: false
+      }));
+      gameState.collectedCount = 0;
+      gameState.frameCount = 0;
+
+      showScreen('gameScreen');
+      renderCollectionGrid();
+      updateEnergyDisplay();
+      updateCollectedCount();
+    }
+
+    function explore() {
+      if (gameState.energy <= 0) return;
+
+      gameState.energy--;
+      gameState.energyTimer = 0;
+      updateEnergyDisplay();
+
+      var uncollectedIndices = gameState.collection
+        .map((item, index) => (item.collected ? null : index))
+        .filter((index) => index !== null);
+
+      if (uncollectedIndices.length === 0) {
+        showItemPopup('🎁', 'All items collected!', '');
+        return;
+      }
+
+      var count = Math.random() > 0.6 ? 2 : 1;
+      var revealed = 0;
+
+      for (var i = 0; i < count && uncollectedIndices.length > 0; i++) {
+        var randomPos = Math.floor(Math.random() * uncollectedIndices.length);
+        var itemIndex = uncollectedIndices[randomPos];
+        uncollectedIndices.splice(randomPos, 1);
+
+        if (!gameState.collection[itemIndex].collected) {
+          gameState.collection[itemIndex].collected = true;
+          gameState.collectedCount++;
+          revealed++;
+
+          showItemPopup(
+            gameState.collection[itemIndex].emoji,
+            'New item: ' + gameState.collection[itemIndex].emoji + ' ' + gameState.collection[itemIndex].name,
+            ''
+          );
+        }
+      }
+
+      renderCollectionGrid();
+      updateCollectedCount();
+      updateEnergyDisplay();
+
+      if (gameState.collectedCount >= 16) {
+        showScreen('clearScreen');
+        gameState.running = false;
+      }
+    }
+
+    function showItemPopup(emoji, text, sub) {
+      document.getElementById('popupEmoji').textContent = emoji;
+      document.getElementById('popupText').textContent = text;
+      document.getElementById('popupSub').textContent = sub;
+
+      document.getElementById('popupOverlay').className = 'popup-overlay show';
+      document.getElementById('itemPopup').className = 'popup show';
+
+      setTimeout(function () {
+        document.getElementById('popupOverlay').className = 'popup-overlay';
+        document.getElementById('itemPopup').className = 'popup';
+      }, 1800);
+    }
+
+    function renderCollectionGrid() {
+      var grid = document.getElementById('collectionGrid');
+      grid.innerHTML = '';
+
+      gameState.collection.forEach(function (item) {
+        var div = document.createElement('div');
+        div.className = 'collection-item';
+        if (item.collected) {
+          div.className += ' collected';
+          div.textContent = item.emoji;
+        } else {
+          div.textContent = '❓';
+        }
+        grid.appendChild(div);
+      });
+    }
+
+    function updateEnergyDisplay() {
+      var percentage = (gameState.energy / gameState.maxEnergy) * 100;
+      document.getElementById('energyBar').style.width = percentage + '%';
+      document.getElementById('energyLabel').textContent = gameState.energy + '/' + gameState.maxEnergy + ' ⚡';
+      document.getElementById('exploreBtn').disabled = gameState.energy <= 0;
+    }
+
+    function updateCollectedCount() {
+      document.getElementById('collectedCount').textContent = gameState.collectedCount;
+    }
+
+    function retryGame() {
+      gameState.running = false;
+      startGame();
+    }
+
+    function showScreen(screenId) {
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById(screenId).style.display = 'flex';
+    }
+
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      gameState.frameCount++;
+
+      gameState.energyTimer++;
+      if (gameState.energyTimer >= 1800 && gameState.energy < gameState.maxEnergy) {
+        gameState.energy++;
+        gameState.energyTimer = 0;
+        updateEnergyDisplay();
+      }
+
+      document.getElementById('exploreBtn').disabled = gameState.energy <= 0;
+    }
+
+    setInterval(gameLoop, 16);
+  </script>
+</body>
+</html>

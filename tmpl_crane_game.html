@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crane Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    #gameContainer {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+    }
+    .screen {
+      text-align: center;
+      min-height: 500px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    #startScreen {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 40px 20px;
+    }
+    #gameScreen {
+      background: #f8f9fa;
+    }
+    #clearScreen {
+      background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 40px 20px;
+    }
+    #gameOverScreen {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    p {
+      font-size: 1.1em;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      font-size: 1.1em;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin: 10px;
+      font-weight: bold;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    #gameCanvas {
+      border: 3px solid #333;
+      background: linear-gradient(to bottom, #87ceeb 0%, #e0f6ff 100%);
+      display: block;
+      margin: 0 auto 20px;
+      border-radius: 8px;
+    }
+    .gameHUD {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      font-size: 1.1em;
+      font-weight: bold;
+      color: #333;
+    }
+    .hudItem {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      background: #f0f0f0;
+      border-radius: 6px;
+      margin: 0 5px;
+    }
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .controls button {
+      margin: 5px;
+      padding: 10px 16px;
+      font-size: 1em;
+    }
+    .collectionArea {
+      background: #ffe5e5;
+      border: 2px dashed #ff69b4;
+      border-radius: 8px;
+      padding: 15px;
+      min-height: 60px;
+      margin-bottom: 15px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
+    }
+    .collectedItem {
+      font-size: 2em;
+      animation: popIn 0.5s ease-out;
+    }
+    @keyframes popIn {
+      0% {
+        transform: scale(0) rotate(0deg);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+      }
+    }
+    @keyframes grab {
+      0% {
+        transform: translateY(0);
+      }
+      100% {
+        transform: translateY(-300px);
+      }
+    }
+    .prizeFloat {
+      position: absolute;
+      font-size: 2em;
+      animation: grab 0.6s ease-out forwards;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- START SCREEN -->
+    <div id="startScreen" class="screen">
+      <h1>🎮 Crane Game</h1>
+      <p>Prize-grabbing adventure!</p>
+      <p style="font-size: 0.95em;">Collect 5 prizes before running out of attempts.</p>
+      <button onclick="startGame()">START GAME</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="gameScreen" class="screen" style="display: none;">
+      <div class="gameHUD">
+        <div class="hudItem">Collected: <span id="collected">0</span>/5</div>
+        <div class="hudItem">Attempts: <span id="attempts">10</span></div>
+      </div>
+      <canvas id="gameCanvas" width="380" height="400"></canvas>
+      <div class="collectionArea" id="collectionArea"></div>
+      <div class="controls">
+        <button onclick="moveCraneLef()">← LEFT</button>
+        <button onclick="dropClaw()" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); font-weight: bold;">📍 DROP</button>
+        <button onclick="moveCraneRight()">RIGHT →</button>
+      </div>
+      <p style="font-size: 0.9em; color: #666; margin-top: 10px;">Keyboard: A/D or ← →, SPACE to drop</p>
+    </div>
+
+    <!-- CLEAR SCREEN -->
+    <div id="clearScreen" class="screen" style="display: none;">
+      <h1>🎉 CLEAR!</h1>
+      <p>Congratulations! You collected 5 prizes!</p>
+      <p id="finalStats" style="font-size: 0.95em;"></p>
+      <button onclick="retryGame()" style="background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);">PLAY AGAIN</button>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="gameOverScreen" class="screen" style="display: none;">
+      <h1>💔 GAME OVER</h1>
+      <p>You ran out of attempts!</p>
+      <p id="finalStats2" style="font-size: 0.95em;"></p>
+      <button onclick="retryGame()" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">TRY AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    // Global game state
+    const gameState = {
+      running: false,
+      phase: 'moving', // moving, dropping, rising
+      craneX: 190,
+      clawY: 50,
+      collected: 0,
+      attempts: 0,
+      grabbed: false,
+      prizes: [],
+      frameCount: 0,
+      selectedPrize: null,
+      prizeEmojis: ['🎁', '🧸', '🎀', '🎪', '🎨', '⭐', '🎭', '🎸', '🍭', '🎂']
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Initialize prizes at game start
+    function initPrizes() {
+      gameState.prizes = [];
+      for (let i = 0; i < 5; i++) {
+        gameState.prizes.push({
+          x: Math.random() * (canvas.width - 40) + 20,
+          y: canvas.height - 100 + Math.random() * 80,
+          emoji: gameState.prizeEmojis[Math.floor(Math.random() * gameState.prizeEmojis.length)],
+          grabbed: false
+        });
+      }
+    }
+
+    function startGame() {
+      gameState.running = true;
+      gameState.phase = 'moving';
+      gameState.craneX = 190;
+      gameState.clawY = 50;
+      gameState.collected = 0;
+      gameState.attempts = 0;
+      gameState.grabbed = false;
+      gameState.frameCount = 0;
+      gameState.selectedPrize = null;
+
+      initPrizes();
+
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'flex';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('collectionArea').innerHTML = '';
+
+      updateHUD();
+    }
+
+    function updateHUD() {
+      document.getElementById('collected').textContent = gameState.collected;
+      document.getElementById('attempts').textContent = 10 - gameState.attempts;
+    }
+
+    function moveCraneLef() {
+      if (gameState.running && gameState.phase === 'moving') {
+        gameState.craneX = Math.max(30, gameState.craneX - 3);
+      }
+    }
+
+    function moveCraneRight() {
+      if (gameState.running && gameState.phase === 'moving') {
+        gameState.craneX = Math.min(canvas.width - 30, gameState.craneX + 3);
+      }
+    }
+
+    function dropClaw() {
+      if (gameState.running && gameState.phase === 'moving') {
+        gameState.phase = 'dropping';
+        gameState.grabbed = false;
+        gameState.selectedPrize = null;
+      }
+    }
+
+    function retryGame() {
+      gameState.running = false;
+      startGame();
+    }
+
+    function checkGameEnd() {
+      if (gameState.collected >= 5) {
+        gameState.running = false;
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('clearScreen').style.display = 'flex';
+        document.getElementById('finalStats').textContent = `You used ${gameState.attempts} attempts.`;
+      } else if (gameState.attempts >= 10) {
+        gameState.running = false;
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+        document.getElementById('finalStats2').textContent = `You collected ${gameState.collected} prizes.`;
+      }
+    }
+
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      gameState.frameCount++;
+
+      // Handle dropping phase
+      if (gameState.phase === 'dropping') {
+        gameState.clawY += 4;
+
+        // Claw reaches prize zone
+        if (gameState.clawY >= canvas.height - 80 && !gameState.grabbed) {
+          // Check for grab
+          gameState.prizes.forEach(prize => {
+            if (!prize.grabbed &&
+                Math.abs(gameState.craneX - prize.x) < 40 &&
+                Math.abs(gameState.clawY - prize.y) < 40) {
+              if (Math.random() < 0.7) { // 70% grab chance
+                prize.grabbed = true;
+                gameState.selectedPrize = prize;
+                gameState.grabbed = true;
+              }
+            }
+          });
+        }
+
+        // Start rising
+        if (gameState.clawY >= canvas.height - 20) {
+          gameState.phase = 'rising';
+        }
+      }
+
+      // Handle rising phase
+      if (gameState.phase === 'rising') {
+        gameState.clawY -= 5;
+
+        if (gameState.clawY <= 50) {
+          gameState.clawY = 50;
+          gameState.phase = 'moving';
+
+          // Count attempt
+          gameState.attempts++;
+
+          // If grabbed, add to collection
+          if (gameState.grabbed && gameState.selectedPrize) {
+            gameState.collected++;
+            const collectionArea = document.getElementById('collectionArea');
+            const emoji = gameState.selectedPrize.emoji;
+            const item = document.createElement('div');
+            item.className = 'collectedItem';
+            item.textContent = emoji;
+            collectionArea.appendChild(item);
+          }
+
+          updateHUD();
+          checkGameEnd();
+        }
+      }
+
+      drawGame();
+    }
+
+    function drawGame() {
+      // Clear canvas
+      ctx.fillStyle = 'rgba(135, 206, 235, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw crane arm (vertical line from top to claw)
+      ctx.strokeStyle = '#8B4513';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(gameState.craneX, 0);
+      ctx.lineTo(gameState.craneX, gameState.clawY);
+      ctx.stroke();
+
+      // Draw crane base
+      ctx.fillStyle = '#D2691E';
+      ctx.fillRect(gameState.craneX - 15, -15, 30, 15);
+
+      // Draw claw (two curved fingers)
+      ctx.strokeStyle = '#FFD700';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(gameState.craneX - 8, gameState.clawY, 8, 0, Math.PI, false);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(gameState.craneX + 8, gameState.clawY, 8, Math.PI, Math.PI * 2, false);
+      ctx.stroke();
+
+      // Draw claw center
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(gameState.craneX, gameState.clawY, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw prizes
+      gameState.prizes.forEach(prize => {
+        if (!prize.grabbed) {
+          ctx.font = 'bold 40px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(prize.emoji, prize.x, prize.y);
+        }
+      });
+
+      // Draw prize zone boundary
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height - 150);
+      ctx.lineTo(canvas.width, canvas.height - 150);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw hint text
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Prize Zone', canvas.width / 2, canvas.height - 130);
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+        moveCraneLef();
+      }
+      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+        moveCraneRight();
+      }
+      if (e.key === ' ') {
+        dropClaw();
+        e.preventDefault();
+      }
+    });
+
+    // Main game loop with setInterval (MANDATORY)
+    setInterval(gameLoop, 16);
+  </script>
+</body>
+</html>

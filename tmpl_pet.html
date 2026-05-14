@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pet Care Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #333;
+    }
+
+    #gameContainer {
+      width: 100%;
+      height: 100vh;
+      max-width: 500px;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .screen {
+      display: none;
+      flex: 1;
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+
+    #startScreen {
+      display: flex;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    #startScreen h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+
+    #startScreen p {
+      font-size: 18px;
+      margin-bottom: 30px;
+      opacity: 0.9;
+    }
+
+    #gameScreen {
+      display: flex;
+      background: #f8f9ff;
+    }
+
+    #clearScreen {
+      display: none;
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      color: white;
+    }
+
+    #gameOverScreen {
+      display: none;
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      color: white;
+    }
+
+    .screen h2 {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+
+    .screen p {
+      font-size: 20px;
+      margin-bottom: 30px;
+      opacity: 0.9;
+    }
+
+    button {
+      background: white;
+      color: #333;
+      border: none;
+      padding: 15px 40px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 30px;
+      cursor: pointer;
+      margin: 10px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .game-content {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      justify-content: space-between;
+    }
+
+    .game-header {
+      padding: 20px;
+      background: white;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .game-title {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #667eea;
+    }
+
+    .gauge-container {
+      margin-bottom: 20px;
+    }
+
+    .gauge-label {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .gauge-bar-bg {
+      width: 100%;
+      height: 24px;
+      background: #e0e0e0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid #ccc;
+    }
+
+    .gauge-bar {
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.1s linear;
+    }
+
+    #hungerBar {
+      background: linear-gradient(90deg, #ff6b6b, #ff8787);
+    }
+
+    #happinessBar {
+      background: linear-gradient(90deg, #ffd93d, #ffed4e);
+    }
+
+    .pet-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    #petEmoji {
+      font-size: 120px;
+      margin-bottom: 30px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-20px); }
+    }
+
+    .pet-name {
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .time-display {
+      font-size: 20px;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 20px;
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 20px;
+      background: white;
+      border-top: 2px solid #e0e0e0;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 15px 20px;
+      font-size: 16px;
+      background: white;
+      border: 2px solid #667eea;
+      color: #667eea;
+      border-radius: 15px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover {
+      background: #667eea;
+      color: white;
+      transform: translateY(-2px);
+    }
+
+    .action-btn:active {
+      transform: translateY(0);
+    }
+
+    .start-button {
+      padding: 20px 60px;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .retry-button {
+      padding: 20px 60px;
+      font-size: 24px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen">
+      <div>
+        <h1>🐱 Pet Care</h1>
+        <p>Take care of your virtual pet!</p>
+        <p style="font-size: 16px; margin-top: 20px;">Feed, pet, and play with your furry friend to keep it happy.</p>
+        <p style="font-size: 16px;">Reach happiness for 3 minutes to win!</p>
+        <button class="start-button" onclick="startGame()">Start Game</button>
+      </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+      <div class="game-content">
+        <div class="game-header">
+          <div class="game-title">Pet Care</div>
+
+          <div class="gauge-container">
+            <div class="gauge-label">
+              <span>🍖 Hunger</span>
+              <span id="hungerVal">80</span>
+            </div>
+            <div class="gauge-bar-bg">
+              <div id="hungerBar" class="gauge-bar" style="width: 80%;"></div>
+            </div>
+          </div>
+
+          <div class="gauge-container">
+            <div class="gauge-label">
+              <span>😊 Happiness</span>
+              <span id="happinessVal">40</span>
+            </div>
+            <div class="gauge-bar-bg">
+              <div id="happinessBar" class="gauge-bar" style="width: 40%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pet-area">
+          <div id="petEmoji">🐱</div>
+          <div class="pet-name">My Pet</div>
+          <div class="time-display">Time: <span id="timeLeft">0</span>s</div>
+        </div>
+
+        <div class="action-buttons">
+          <div class="button-row">
+            <button class="action-btn" onclick="feedPet()">🍖 FEED</button>
+            <button class="action-btn" onclick="petPet()">🤗 PET</button>
+            <button class="action-btn" onclick="playPet()">🎾 PLAY</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Clear Screen -->
+    <div id="clearScreen" class="screen">
+      <div>
+        <h2>🎉 You Win!</h2>
+        <p>Your pet is happy and well-fed!</p>
+        <p style="font-size: 18px; margin-top: 20px;">Final Score</p>
+        <p id="finalScore" style="font-size: 32px; font-weight: bold; margin: 20px 0;">---</p>
+        <button class="retry-button" onclick="retryGame()">Play Again</button>
+      </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="screen">
+      <div>
+        <h2>💀 Game Over</h2>
+        <p>Your pet got too hungry!</p>
+        <p style="font-size: 18px; margin-top: 20px;">Survived: <span id="survivalTime">0</span>s</p>
+        <button class="retry-button" onclick="retryGame()">Try Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global game state
+    var gameState = {
+      running: false,
+      hunger: 80,
+      happiness: 40,
+      elapsed: 0,
+      fullGaugeTimer: 0,
+      frameCount: 0
+    };
+
+    function startGame() {
+      gameState.running = true;
+      gameState.hunger = 80;
+      gameState.happiness = 40;
+      gameState.elapsed = 0;
+      gameState.fullGaugeTimer = 0;
+      gameState.frameCount = 0;
+
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'flex';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+
+      updateUI();
+    }
+
+    function feedPet() {
+      if (!gameState.running) return;
+      gameState.hunger = Math.min(100, gameState.hunger + 20);
+      gameState.happiness = Math.min(100, gameState.happiness + 5);
+    }
+
+    function petPet() {
+      if (!gameState.running) return;
+      gameState.happiness = Math.min(100, gameState.happiness + 15);
+    }
+
+    function playPet() {
+      if (!gameState.running) return;
+      gameState.happiness = Math.min(100, gameState.happiness + 25);
+      gameState.hunger = Math.max(0, gameState.hunger - 5);
+    }
+
+    function updateUI() {
+      // Update gauges
+      document.getElementById('hungerBar').style.width = gameState.hunger + '%';
+      document.getElementById('happinessBar').style.width = gameState.happiness + '%';
+
+      // Update labels
+      document.getElementById('hungerVal').textContent = Math.floor(gameState.hunger);
+      document.getElementById('happinessVal').textContent = Math.floor(gameState.happiness);
+
+      // Update time
+      document.getElementById('timeLeft').textContent = Math.floor(gameState.elapsed / 60);
+
+      // Update pet emoji
+      var petEmoji = document.getElementById('petEmoji');
+      if (gameState.hunger < 30) {
+        petEmoji.textContent = '😿';
+      } else if (gameState.happiness > 70) {
+        petEmoji.textContent = '😸';
+      } else {
+        petEmoji.textContent = '🐱';
+      }
+    }
+
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      // Decrease hunger
+      gameState.hunger = Math.max(0, gameState.hunger - 0.02);
+
+      // Increase happiness passively
+      gameState.happiness = Math.min(100, gameState.happiness + 0.01);
+
+      // Update elapsed time
+      gameState.elapsed += 0.016; // 16ms per frame
+
+      gameState.frameCount++;
+
+      // Check if both gauges are maxed (80+)
+      if (gameState.hunger >= 80 && gameState.happiness >= 80) {
+        gameState.fullGaugeTimer++;
+      } else {
+        gameState.fullGaugeTimer = 0;
+      }
+
+      // Check clear condition: 10 consecutive seconds = 600 frames
+      if (gameState.fullGaugeTimer >= 600) {
+        winGame();
+      }
+
+      // Check game over condition
+      if (gameState.hunger <= 0) {
+        loseGame();
+      }
+
+      updateUI();
+    }
+
+    function winGame() {
+      gameState.running = false;
+
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'flex';
+
+      var finalScore = Math.floor(gameState.happiness);
+      document.getElementById('finalScore').textContent = finalScore;
+    }
+
+    function loseGame() {
+      gameState.running = false;
+
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'flex';
+
+      var survivalSeconds = Math.floor(gameState.elapsed / 60);
+      document.getElementById('survivalTime').textContent = survivalSeconds;
+    }
+
+    function retryGame() {
+      gameState.running = false;
+      gameState.hunger = 80;
+      gameState.happiness = 40;
+      gameState.elapsed = 0;
+      gameState.fullGaugeTimer = 0;
+      gameState.frameCount = 0;
+
+      document.getElementById('startScreen').style.display = 'flex';
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+    }
+
+    // Game loop with setInterval (MANDATORY)
+    setInterval(gameLoop, 16);
+  </script>
+</body>
+</html>
