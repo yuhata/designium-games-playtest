@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,137 +10,138 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
+            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: Arial, sans-serif;
         }
-        
+
         #gameContainer {
-            position: relative;
-            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
         }
-        
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
         canvas {
-            border: 2px solid #fff;
+            border: 2px solid;
             display: block;
+            cursor: crosshair;
         }
-        
+
+        #hud {
+            font-size: 14px;
+            text-align: center;
+            height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 3px;
+            min-width: 300px;
+        }
+
+        #controls {
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .screen {
-            position: absolute;
+            display: none;
+            position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            display: none;
+            background: rgba(0, 0, 0, 0.95);
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            z-index: 100;
+            gap: 20px;
+            z-index: 1000;
         }
-        
-        #startScreen {
-            display: flex;
-        }
-        
-        .screen h1 {
-            color: #58a6ff;
-            font-size: 56px;
-            margin-bottom: 30px;
-            text-transform: uppercase;
-            letter-spacing: 4px;
-        }
-        
+
         .screen h2 {
-            color: #fff;
-            font-size: 32px;
+            font-size: 48px;
             margin-bottom: 20px;
         }
-        
+
         .screen p {
-            color: #aaa;
             font-size: 16px;
-            margin-bottom: 8px;
             text-align: center;
-            max-width: 400px;
+            max-width: 600px;
+            line-height: 1.6;
         }
-        
-        .instructions {
-            color: #f78166;
+
+        .screen button {
             margin-top: 20px;
-            font-weight: bold;
-            text-align: center;
-        }
-        
-        button {
-            padding: 14px 32px;
-            font-size: 18px;
-            background: #58a6ff;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-            margin-top: 30px;
-            border-radius: 4px;
-            transition: background 0.2s;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        
-        button:hover {
-            background: #3d8de8;
-        }
-        
-        button:active {
-            background: #2a5cbf;
-        }
-        
-        #endTurnBtn {
-            position: absolute;
-            bottom: 15px;
-            right: 15px;
-            padding: 10px 20px;
-            font-size: 14px;
-            z-index: 50;
-        }
-        
-        #endTurnBtn:disabled {
-            background: #555;
-            cursor: not-allowed;
-            opacity: 0.5;
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
+        <h1>TACTICS</h1>
+        <div id="hud">
+            <div id="turnInfo">PLAYER TURN</div>
+            <div id="unitInfo">Enemies: 3 | Units: 3</div>
+            <div id="instructionInfo">Click to select • Click to move/attack</div>
+        </div>
         <canvas id="gameCanvas"></canvas>
-        
-        <div id="startScreen" class="screen">
-            <h1>TACTICS</h1>
-            <p class="instructions">Lead your troops to victory</p>
-            <p>Click to select your units and attack enemies</p>
-            <p>Move 2 spaces per turn, attack once per turn</p>
-            <p>Defeat all 3 enemy units to win</p>
-            <button onclick="startGame()">START GAME</button>
-        </div>
-        
-        <div id="clearScreen" class="screen">
-            <h2>VICTORY!</h2>
-            <p>All enemies defeated!</p>
-            <button onclick="retryGame()">PLAY AGAIN</button>
-        </div>
-        
-        <div id="gameOverScreen" class="screen">
-            <h2>GAME OVER</h2>
-            <p>All your units were defeated</p>
-            <button onclick="retryGame()">RETRY</button>
+        <div id="controls">
+            <button id="endTurnBtn" disabled onclick="endPlayerTurn()">END TURN</button>
         </div>
     </div>
-    
+
+    <div id="startScreen" class="screen" style="display: flex;">
+        <h2>TACTICS</h2>
+        <p>Grid-based turn strategy game</p>
+        <p style="font-size: 14px;">
+            Your units: 2 Soldiers (HP10, ATK3) + 1 Archer (HP6, ATK2 ranged)<br>
+            Enemies: 2 Soldiers (HP10, ATK3) + 1 Heavy (HP20, ATK5)<br>
+            Objective: Defeat all enemies to win!
+        </p>
+        <button onclick="startGame()" style="margin-top: 30px;">START GAME</button>
+    </div>
+
+    <div id="clearScreen" class="screen">
+        <h2>CLEAR!</h2>
+        <p>All enemies defeated! Victory!</p>
+        <button onclick="retryGame()">PLAY AGAIN</button>
+    </div>
+
+    <div id="gameOverScreen" class="screen">
+        <h2>GAME OVER</h2>
+        <p>All your units were defeated.</p>
+        <button onclick="retryGame()">RETRY</button>
+    </div>
+
     <script>
+        const CELL_SIZE = 50;
+
         const config = {
             title: 'TACTICS',
             bg_color: '#1a1a2e',
@@ -154,356 +155,365 @@
             archer_hp: 6,
             archer_atk: 2
         };
-        
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
-        canvas.width = 400;
-        canvas.height = 360;
-        
+
+        canvas.width = config.grid_cols * CELL_SIZE;
+        canvas.height = config.grid_rows * CELL_SIZE;
         document.getElementById('gameContainer').style.width = canvas.width + 'px';
-        document.getElementById('gameContainer').style.height = canvas.height + 'px';
-        
+
         document.body.style.background = config.bg_color;
-        
-        const CELL_SIZE = 50;
-        const GRID_HEIGHT = config.grid_rows * CELL_SIZE;
-        const HUD_HEIGHT = canvas.height - GRID_HEIGHT;
-        
-        const gameState = {
-            running: false,
-            currentPhase: 'player',
-            units: [],
-            selectedUnit: null,
-            validMoves: [],
-            validAttacks: [],
-            turnInProgress: false
-        };
-        
+        document.body.style.color = '#e0e0e0';
+        document.querySelector('h1').style.color = config.player_color;
+        document.getElementById('hud').style.color = '#e0e0e0';
+        document.getElementById('endTurnBtn').style.background = config.player_color;
+        document.getElementById('endTurnBtn').style.color = config.bg_color;
+        document.querySelectorAll('.screen h2').forEach(el => el.style.color = config.player_color);
+        document.querySelectorAll('.screen p').forEach(el => el.style.color = '#e0e0e0');
+        document.querySelectorAll('.screen button').forEach(el => {
+            el.style.background = config.player_color;
+            el.style.color = config.bg_color;
+        });
+
         class Unit {
-            constructor(id, type, team, x, y) {
-                this.id = id;
+            constructor(col, row, type, isPlayer) {
+                this.col = col;
+                this.row = row;
                 this.type = type;
-                this.team = team;
-                this.x = x;
-                this.y = y;
+                this.isPlayer = isPlayer;
                 this.moved = false;
                 this.attacked = false;
-                
+
                 if (type === 'soldier') {
                     this.maxHp = config.soldier_hp;
                     this.atk = config.soldier_atk;
-                    this.range = 1;
-                    this.movement = 2;
+                    this.moveRange = 2;
+                    this.atkRange = 1;
                 } else if (type === 'archer') {
                     this.maxHp = config.archer_hp;
                     this.atk = config.archer_atk;
-                    this.range = 2;
-                    this.movement = 2;
+                    this.moveRange = 2;
+                    this.atkRange = 2;
                 } else if (type === 'heavy') {
                     this.maxHp = 20;
                     this.atk = 5;
-                    this.range = 1;
-                    this.movement = 1;
+                    this.moveRange = 1;
+                    this.atkRange = 1;
                 }
-                
+
                 this.hp = this.maxHp;
             }
-            
-            getDistance(other) {
-                return Math.abs(this.x - other.x) + Math.abs(this.y - other.y);
-            }
-        }
-        
-        function initGame() {
-            gameState.units = [];
-            gameState.selectedUnit = null;
-            gameState.currentPhase = 'player';
-            gameState.running = true;
-            gameState.turnInProgress = false;
-            gameState.validMoves = [];
-            gameState.validAttacks = [];
-            
-            gameState.units.push(new Unit('p1', 'soldier', 'player', 1, 2));
-            gameState.units.push(new Unit('p2', 'soldier', 'player', 1, 3));
-            gameState.units.push(new Unit('p3', 'archer', 'player', 2, 1));
-            
-            gameState.units.push(new Unit('e1', 'soldier', 'enemy', 6, 2));
-            gameState.units.push(new Unit('e2', 'soldier', 'enemy', 6, 3));
-            gameState.units.push(new Unit('e3', 'heavy', 'enemy', 6, 1));
-        }
-        
-        function startGame() {
-            document.getElementById('startScreen').style.display = 'none';
-            initGame();
-            gameLoop();
-        }
-        
-        function retryGame() {
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            document.getElementById('startScreen').style.display = 'flex';
-            gameState.running = false;
-        }
-        
-        function getValidMoves(unit) {
-            const moves = [];
-            for (let x = 0; x < config.grid_cols; x++) {
-                for (let y = 0; y < config.grid_rows; y++) {
-                    const dist = Math.abs(unit.x - x) + Math.abs(unit.y - y);
-                    if (dist > 0 && dist <= unit.movement) {
-                        const occupied = gameState.units.some(u => u.x === x && u.y === y);
-                        if (!occupied) {
-                            moves.push({x, y});
-                        }
-                    }
-                }
-            }
-            return moves;
-        }
-        
-        function getValidAttacks(unit) {
-            const attacks = [];
-            for (const other of gameState.units) {
-                if (other.team !== unit.team && unit.getDistance(other) <= unit.range && other.hp > 0) {
-                    const exists = attacks.some(a => a.x === other.x && a.y === other.y);
-                    if (!exists) {
-                        attacks.push({x: other.x, y: other.y, unit: other});
-                    }
-                }
-            }
-            return attacks;
-        }
-        
-        function moveUnit(unit, x, y) {
-            unit.x = x;
-            unit.y = y;
-            unit.moved = true;
-            gameState.validMoves = [];
-            gameState.validAttacks = getValidAttacks(unit);
-        }
-        
-        function attackUnit(attacker, target) {
-            target.hp -= attacker.atk;
-            attacker.attacked = true;
-            gameState.validAttacks = [];
-            
-            if (target.hp <= 0) {
-                gameState.units = gameState.units.filter(u => u !== target);
-            }
-        }
-        
-        function endPlayerTurn() {
-            gameState.currentPhase = 'enemy';
-            gameState.selectedUnit = null;
-            gameState.validMoves = [];
-            gameState.validAttacks = [];
-            gameState.turnInProgress = true;
-        }
-        
-        function endEnemyTurn() {
-            gameState.units.forEach(u => {
-                u.moved = false;
-                u.attacked = false;
-            });
-            gameState.currentPhase = 'player';
-            gameState.turnInProgress = false;
-        }
-        
-        function executeEnemyAI() {
-            const enemyUnits = gameState.units.filter(u => u.team === 'enemy' && u.hp > 0);
-            
-            for (const enemy of enemyUnits) {
-                const playerUnits = gameState.units.filter(u => u.team === 'player' && u.hp > 0);
-                if (playerUnits.length === 0) break;
-                
-                const nearest = playerUnits.reduce((prev, curr) => 
-                    enemy.getDistance(curr) < enemy.getDistance(prev) ? curr : prev
-                );
-                
-                const distance = enemy.getDistance(nearest);
-                
-                if (distance <= enemy.range && !enemy.attacked) {
-                    attackUnit(enemy, nearest);
-                } else if (!enemy.moved && distance > 0) {
-                    const dx = nearest.x > enemy.x ? 1 : nearest.x < enemy.x ? -1 : 0;
-                    const dy = nearest.y > enemy.y ? 1 : nearest.y < enemy.y ? -1 : 0;
-                    
-                    let newX = enemy.x + dx;
-                    let newY = enemy.y + dy;
-                    
-                    if (newX >= 0 && newX < config.grid_cols && newY >= 0 && newY < config.grid_rows) {
-                        const occupied = gameState.units.some(u => u.x === newX && u.y === newY && u.hp > 0);
-                        if (!occupied) {
-                            enemy.x = newX;
-                            enemy.y = newY;
-                            enemy.moved = true;
-                        }
-                    }
-                }
-            }
-        }
-        
-        function checkGameEnd() {
-            const playerUnits = gameState.units.filter(u => u.team === 'player' && u.hp > 0);
-            const enemyUnits = gameState.units.filter(u => u.team === 'enemy' && u.hp > 0);
-            
-            if (enemyUnits.length === 0) {
-                gameState.running = false;
-                document.getElementById('clearScreen').style.display = 'flex';
-                return true;
-            }
-            
-            if (playerUnits.length === 0) {
-                gameState.running = false;
-                document.getElementById('gameOverScreen').style.display = 'flex';
-                return true;
-            }
-            
-            return false;
-        }
-        
-        function draw() {
-            ctx.fillStyle = config.grid_color;
-            ctx.fillRect(0, 0, canvas.width, GRID_HEIGHT);
-            
-            ctx.strokeStyle = '#444';
-            ctx.lineWidth = 1;
-            for (let x = 0; x <= config.grid_cols; x++) {
+
+            draw(ctx) {
+                const x = this.col * CELL_SIZE + CELL_SIZE / 2;
+                const y = this.row * CELL_SIZE + CELL_SIZE / 2;
+                const radius = CELL_SIZE / 3;
+
+                ctx.fillStyle = this.isPlayer ? config.player_color : config.enemy_color;
                 ctx.beginPath();
-                ctx.moveTo(x * CELL_SIZE, 0);
-                ctx.lineTo(x * CELL_SIZE, GRID_HEIGHT);
-                ctx.stroke();
-            }
-            for (let y = 0; y <= config.grid_rows; y++) {
-                ctx.beginPath();
-                ctx.moveTo(0, y * CELL_SIZE);
-                ctx.lineTo(canvas.width, y * CELL_SIZE);
-                ctx.stroke();
-            }
-            
-            gameState.validMoves.forEach(move => {
-                ctx.fillStyle = 'rgba(88, 166, 255, 0.4)';
-                ctx.fillRect(move.x * CELL_SIZE + 1, move.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-            });
-            
-            gameState.validAttacks.forEach(attack => {
-                ctx.fillStyle = 'rgba(247, 129, 102, 0.4)';
-                ctx.fillRect(attack.x * CELL_SIZE + 1, attack.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-            });
-            
-            gameState.units.forEach(unit => {
-                if (unit.hp <= 0) return;
-                
-                const x = unit.x * CELL_SIZE;
-                const y = unit.y * CELL_SIZE;
-                
-                ctx.fillStyle = unit.team === 'player' ? config.player_color : config.enemy_color;
-                ctx.fillRect(x + 4, y + 4, CELL_SIZE - 8, CELL_SIZE - 8);
-                
-                const hpPercent = unit.hp / unit.maxHp;
-                ctx.fillStyle = '#1a1a2e';
-                ctx.fillRect(x + 5, y + CELL_SIZE - 9, CELL_SIZE - 10, 4);
-                ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : '#f97316';
-                ctx.fillRect(x + 5, y + CELL_SIZE - 9, (CELL_SIZE - 10) * hpPercent, 4);
-                
-                if (gameState.selectedUnit === unit) {
-                    ctx.strokeStyle = '#fbbf24';
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-                }
-                
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 11px Arial';
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(unit.type === 'soldier' ? 'S' : unit.type === 'archer' ? 'A' : 'H', 
-                    x + CELL_SIZE / 2, y + CELL_SIZE / 2);
+                ctx.fillText(this.type[0].toUpperCase(), x, y - radius / 2);
+                ctx.fillText(this.hp, x, y + radius / 2);
+            }
+
+            distance(col, row) {
+                return Math.abs(this.col - col) + Math.abs(this.row - row);
+            }
+
+            canMoveTo(col, row, grid) {
+                if (!this.isValidPos(col, row, grid)) return false;
+                if (this.distance(col, row) > this.moveRange) return false;
+                if (grid[row][col] !== null) return false;
+                return true;
+            }
+
+            canAttack(col, row) {
+                return this.distance(col, row) <= this.atkRange && this.distance(col, row) > 0;
+            }
+
+            isValidPos(col, row) {
+                return col >= 0 && col < config.grid_cols && row >= 0 && row < config.grid_rows;
+            }
+        }
+
+        let gameState = {
+            running: false,
+            playerTurn: true,
+            turnInProgress: false,
+            selectedUnit: null,
+            units: []
+        };
+
+        function initializeGame() {
+            gameState.units = [];
+            gameState.units.push(new Unit(1, 1, 'soldier', true));
+            gameState.units.push(new Unit(2, 1, 'soldier', true));
+            gameState.units.push(new Unit(1, 2, 'archer', true));
+            gameState.units.push(new Unit(6, 4, 'soldier', false));
+            gameState.units.push(new Unit(7, 4, 'soldier', false));
+            gameState.units.push(new Unit(6, 5, 'heavy', false));
+
+            gameState.selectedUnit = null;
+            gameState.playerTurn = true;
+            gameState.turnInProgress = false;
+        }
+
+        function getGrid() {
+            const grid = Array(config.grid_rows).fill(null).map(() => Array(config.grid_cols).fill(null));
+            gameState.units.forEach((unit, idx) => {
+                if (unit.hp > 0 && grid[unit.row][unit.col] === null) {
+                    grid[unit.row][unit.col] = idx;
+                }
             });
-            
-            ctx.fillStyle = '#0a0a12';
-            ctx.fillRect(0, GRID_HEIGHT, canvas.width, HUD_HEIGHT);
-            
-            ctx.fillStyle = '#58a6ff';
-            ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            
-            const phaseText = gameState.currentPhase === 'player' ? 'YOUR TURN' : 'ENEMY TURN';
-            ctx.fillText(phaseText, 10, GRID_HEIGHT + 10);
-            
-            ctx.fillStyle = '#aaa';
-            ctx.font = '12px Arial';
-            const playerCount = gameState.units.filter(u => u.team === 'player' && u.hp > 0).length;
-            const enemyCount = gameState.units.filter(u => u.team === 'enemy' && u.hp > 0).length;
-            
-            ctx.fillText('Your Units: ' + playerCount, 10, GRID_HEIGHT + 30);
-            ctx.fillText('Enemies: ' + enemyCount, 10, GRID_HEIGHT + 45);
-            
-            ctx.fillStyle = '#666';
-            ctx.font = '11px Arial';
-            ctx.fillText('Click unit | Click move tile | Click enemy to attack', 200, GRID_HEIGHT + 30);
+            return grid;
         }
-        
+
+        function drawGame() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = config.grid_color;
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= config.grid_cols; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= config.grid_rows; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(canvas.width, i * CELL_SIZE);
+                ctx.stroke();
+            }
+
+            if (gameState.selectedUnit && gameState.playerTurn && !gameState.turnInProgress) {
+                const unit = gameState.selectedUnit;
+                const grid = getGrid();
+
+                ctx.fillStyle = 'rgba(88, 166, 255, 0.2)';
+                for (let r = 0; r < config.grid_rows; r++) {
+                    for (let c = 0; c < config.grid_cols; c++) {
+                        if (unit.canMoveTo(c, r, grid)) {
+                            ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                        }
+                    }
+                }
+
+                ctx.fillStyle = 'rgba(247, 129, 102, 0.3)';
+                for (let r = 0; r < config.grid_rows; r++) {
+                    for (let c = 0; c < config.grid_cols; c++) {
+                        if (unit.canAttack(c, r) && unit.isValidPos(c, r)) {
+                            const targetIdx = grid[r][c];
+                            if (targetIdx !== null && gameState.units[targetIdx].isPlayer === false && gameState.units[targetIdx].hp > 0) {
+                                ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                            }
+                        }
+                    }
+                }
+            }
+
+            gameState.units.forEach(unit => {
+                if (unit.hp > 0) {
+                    unit.draw(ctx);
+                }
+            });
+
+            if (gameState.selectedUnit && gameState.selectedUnit.hp > 0) {
+                const unit = gameState.selectedUnit;
+                const x = unit.col * CELL_SIZE;
+                const y = unit.row * CELL_SIZE;
+                ctx.strokeStyle = '#ffff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+            }
+        }
+
         function gameLoop() {
-            if (!gameState.running) return;
-            
-            draw();
-            
-            if (gameState.turnInProgress && gameState.currentPhase === 'enemy') {
-                executeEnemyAI();
-                endEnemyTurn();
+            drawGame();
+            updateHUD();
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
             }
-            
-            if (checkGameEnd()) return;
-            
-            requestAnimationFrame(gameLoop);
         }
-        
+
+        function updateHUD() {
+            const playerUnits = gameState.units.filter(u => u.isPlayer && u.hp > 0).length;
+            const enemyUnits = gameState.units.filter(u => !u.isPlayer && u.hp > 0).length;
+            document.getElementById('turnInfo').textContent = gameState.playerTurn ? 'PLAYER TURN' : 'ENEMY TURN';
+            document.getElementById('unitInfo').textContent = 'Enemies: ' + enemyUnits + ' | Units: ' + playerUnits;
+        }
+
         canvas.addEventListener('click', (e) => {
-            if (!gameState.running || gameState.currentPhase !== 'player' || gameState.turnInProgress) return;
-            
-            const rect = canvas.getBoundingClientRect();
-            const clickX = Math.floor((e.clientX - rect.left) / CELL_SIZE);
-            const clickY = Math.floor((e.clientY - rect.top) / CELL_SIZE);
-            
-            if (clickY >= config.grid_rows) return;
-            
-            const clickedUnit = gameState.units.find(u => u.x === clickX && u.y === clickY && u.hp > 0);
-            
-            if (clickedUnit && clickedUnit.team === 'player') {
-                gameState.selectedUnit = clickedUnit;
-                gameState.validMoves = !clickedUnit.moved ? getValidMoves(clickedUnit) : [];
-                gameState.validAttacks = !clickedUnit.attacked ? getValidAttacks(clickedUnit) : [];
-                return;
-            }
-            
-            if (gameState.selectedUnit) {
-                const isMoveTarget = gameState.validMoves.some(m => m.x === clickX && m.y === clickY);
-                if (isMoveTarget) {
-                    moveUnit(gameState.selectedUnit, clickX, clickY);
+            if (!gameState.running || gameState.turnInProgress || !gameState.playerTurn) return;
+
+            const col = Math.floor(e.offsetX / CELL_SIZE);
+            const row = Math.floor(e.offsetY / CELL_SIZE);
+
+            if (col < 0 || col >= config.grid_cols || row < 0 || row >= config.grid_rows) return;
+
+            const grid = getGrid();
+            const clickedUnitIdx = grid[row][col];
+
+            if (gameState.selectedUnit === null) {
+                if (clickedUnitIdx !== null && gameState.units[clickedUnitIdx].isPlayer && gameState.units[clickedUnitIdx].hp > 0) {
+                    gameState.selectedUnit = gameState.units[clickedUnitIdx];
+                }
+            } else {
+                const unit = gameState.selectedUnit;
+
+                if (clickedUnitIdx === gameState.units.indexOf(unit)) {
+                    gameState.selectedUnit = null;
                     return;
                 }
-                
-                const isAttackTarget = gameState.validAttacks.some(a => a.x === clickX && a.y === clickY);
-                if (isAttackTarget) {
-                    const target = gameState.validAttacks.find(a => a.x === clickX && a.y === clickY).unit;
-                    attackUnit(gameState.selectedUnit, target);
-                    gameState.validMoves = [];
-                    gameState.validAttacks = [];
+
+                if (!unit.moved && unit.canMoveTo(col, row, grid)) {
+                    unit.col = col;
+                    unit.row = row;
+                    unit.moved = true;
+                    gameState.selectedUnit = null;
+                    return;
+                }
+
+                if (!unit.attacked && unit.canAttack(col, row)) {
+                    const targetIdx = grid[row][col];
+                    if (targetIdx !== null) {
+                        const target = gameState.units[targetIdx];
+                        if (!target.isPlayer && target.hp > 0) {
+                            target.hp -= unit.atk;
+                            unit.attacked = true;
+                            gameState.selectedUnit = null;
+                            if (target.hp <= 0) {
+                                checkGameState();
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                if (clickedUnitIdx !== null && gameState.units[clickedUnitIdx].isPlayer && gameState.units[clickedUnitIdx].hp > 0) {
+                    gameState.selectedUnit = gameState.units[clickedUnitIdx];
+                } else {
+                    gameState.selectedUnit = null;
                 }
             }
         });
-        
-        const endTurnBtn = document.createElement('button');
-        endTurnBtn.id = 'endTurnBtn';
-        endTurnBtn.textContent = 'END TURN';
-        endTurnBtn.onclick = () => {
-            if (gameState.currentPhase === 'player' && !gameState.turnInProgress) {
-                endPlayerTurn();
+
+        function endPlayerTurn() {
+            if (!gameState.playerTurn) return;
+
+            gameState.turnInProgress = true;
+            gameState.selectedUnit = null;
+            gameState.playerTurn = false;
+
+            setTimeout(enemyTurn, 1000);
+        }
+
+        function enemyTurn() {
+            const grid = getGrid();
+            const enemyUnits = gameState.units.filter(u => !u.isPlayer && u.hp > 0);
+            const playerUnits = gameState.units.filter(u => u.isPlayer && u.hp > 0);
+
+            let actionCount = 0;
+            const performAction = () => {
+                if (actionCount < enemyUnits.length) {
+                    const enemy = enemyUnits[actionCount];
+                    const closestPlayer = playerUnits.reduce((closest, p) => {
+                        const dist = enemy.distance(p.col, p.row);
+                        const closestDist = closest ? enemy.distance(closest.col, closest.row) : Infinity;
+                        return dist < closestDist ? p : closest;
+                    }, null);
+
+                    if (closestPlayer) {
+                        if (!enemy.moved && enemy.distance(closestPlayer.col, closestPlayer.row) > 1) {
+                            let bestMove = null;
+                            let bestDist = enemy.distance(closestPlayer.col, closestPlayer.row);
+
+                            for (let dc = -1; dc <= 1; dc++) {
+                                for (let dr = -1; dr <= 1; dr++) {
+                                    if (dc === 0 && dr === 0) continue;
+                                    const newCol = enemy.col + dc;
+                                    const newRow = enemy.row + dr;
+                                    const newDist = Math.abs(newCol - closestPlayer.col) + Math.abs(newRow - closestPlayer.row);
+                                    if (newDist < bestDist && enemy.canMoveTo(newCol, newRow, grid)) {
+                                        bestMove = { col: newCol, row: newRow };
+                                        bestDist = newDist;
+                                    }
+                                }
+                            }
+
+                            if (bestMove) {
+                                enemy.col = bestMove.col;
+                                enemy.row = bestMove.row;
+                                enemy.moved = true;
+                            }
+                        }
+
+                        if (!enemy.attacked && enemy.canAttack(closestPlayer.col, closestPlayer.row)) {
+                            closestPlayer.hp -= enemy.atk;
+                            enemy.attacked = true;
+                            if (closestPlayer.hp <= 0) {
+                                checkGameState();
+                            }
+                        }
+                    }
+
+                    actionCount++;
+                    setTimeout(performAction, 300);
+                } else {
+                    gameState.units.forEach(u => {
+                        u.moved = false;
+                        u.attacked = false;
+                    });
+                    gameState.playerTurn = true;
+                    gameState.turnInProgress = false;
+                    document.getElementById('endTurnBtn').disabled = false;
+                }
+            };
+
+            performAction();
+        }
+
+        function checkGameState() {
+            const playerUnits = gameState.units.filter(u => u.isPlayer && u.hp > 0);
+            const enemyUnits = gameState.units.filter(u => !u.isPlayer && u.hp > 0);
+
+            if (enemyUnits.length === 0) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                document.getElementById('endTurnBtn').disabled = true;
+                return;
             }
-        };
-        document.getElementById('gameContainer').appendChild(endTurnBtn);
+
+            if (playerUnits.length === 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                document.getElementById('endTurnBtn').disabled = true;
+            }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('endTurnBtn').disabled = false;
+            gameState.running = true;
+            initializeGame();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('endTurnBtn').disabled = true;
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
     </script>
 </body>
 </html>
