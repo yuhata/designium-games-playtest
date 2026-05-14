@@ -11,45 +11,69 @@
             box-sizing: border-box;
         }
         body {
+            font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            font-family: Arial, sans-serif;
+            background: #0d4f0d;
+            color: white;
         }
-        h1 {
-            margin-bottom: 20px;
-            color: #fff;
-            font-size: 2em;
+        #startScreen {
+            text-align: center;
+        }
+        #startScreen h1 {
+            font-size: 72px;
+            margin-bottom: 30px;
+            letter-spacing: 4px;
+        }
+        #startScreen button {
+            font-size: 32px;
+            padding: 20px 60px;
+            background: #3d8b3d;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        #startScreen button:hover {
+            background: #5aad5a;
         }
         #gameContainer {
-            display: flex;
+            display: none;
             flex-direction: column;
             align-items: center;
             gap: 20px;
         }
         #hud {
-            color: #fff;
-            font-size: 1.2em;
+            font-size: 20px;
             text-align: center;
+        }
+        #turn {
+            font-size: 18px;
+            margin-top: 10px;
         }
         #board {
             display: grid;
             grid-template-columns: repeat(8, 50px);
-            grid-gap: 1px;
-            padding: 10px;
-            border-radius: 8px;
+            grid-template-rows: repeat(8, 50px);
+            gap: 1px;
+            background: #1a6b1a;
+            padding: 1px;
+            border: 2px solid #1a6b1a;
         }
         .cell {
-            width: 50px;
-            height: 50px;
+            background: #1a6b1a;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            border-radius: 4px;
             position: relative;
+        }
+        .cell.clickable {
+            cursor: pointer;
         }
         .piece {
             width: 40px;
@@ -57,95 +81,80 @@
             border-radius: 50%;
             position: absolute;
         }
-        .piece.black {
-            background-color: #1a1a1a;
+        .piece.player {
+            background: #1a1a1a;
         }
-        .piece.white {
-            background-color: #f0f0f0;
+        .piece.ai {
+            background: #f0f0f0;
         }
-        .cell.valid {
-            cursor: pointer;
-        }
-        #startScreen, #gameOverScreen, #clearScreen {
+        #gameOverScreen, #clearScreen {
+            display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            display: flex;
+            background: rgba(0, 0, 0, 0.8);
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.9);
         }
-        #gameOverScreen, #clearScreen {
-            display: none;
+        #gameOverScreen h2, #clearScreen h2 {
+            font-size: 64px;
+            margin-bottom: 40px;
         }
-        .screen-content {
-            text-align: center;
-            color: #fff;
-        }
-        .screen-content h2 {
-            font-size: 3em;
-            margin-bottom: 30px;
-        }
-        .screen-content button {
-            padding: 15px 40px;
-            font-size: 1.2em;
-            background-color: #3d8b3d;
-            color: #fff;
+        #gameOverScreen button, #clearScreen button {
+            font-size: 24px;
+            padding: 15px 50px;
+            background: #3d8b3d;
             border: none;
-            border-radius: 8px;
+            color: white;
             cursor: pointer;
-            margin-top: 20px;
+            border-radius: 8px;
         }
-        .screen-content button:hover {
-            background-color: #5aad5a;
+        #gameOverScreen button:hover, #clearScreen button:hover {
+            background: #5aad5a;
         }
-        .pass-message {
-            color: #fff;
-            font-size: 1.5em;
+        #passNotification {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            z-index: 999;
-            display: none;
+            font-size: 48px;
             background: rgba(0, 0, 0, 0.8);
-            padding: 30px 50px;
-            border-radius: 8px;
+            padding: 40px 60px;
+            border-radius: 12px;
+            display: none;
+            z-index: 500;
         }
     </style>
 </head>
 <body>
     <div id="startScreen">
-        <div class="screen-content">
-            <h2>REVERSI</h2>
-            <button onclick="startGame()">START</button>
-        </div>
+        <h1>REVERSI</h1>
+        <button onclick="startGame()">START</button>
     </div>
-    <div id="gameOverScreen">
-        <div class="screen-content">
-            <h2>GAME OVER</h2>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
-    </div>
-    <div id="clearScreen">
-        <div class="screen-content">
-            <h2>CLEAR</h2>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
-    </div>
-    <div class="pass-message" id="passMessage">PASS</div>
-    <h1>REVERSI</h1>
+
     <div id="gameContainer">
         <div id="hud">
-            <div>Player (Black): <span id="playerCount">2</span></div>
-            <div>AI (White): <span id="aiCount">2</span></div>
-            <div id="turnInfo">Your Turn</div>
+            <div>黒: <span id="playerCount">2</span> | 白: <span id="aiCount">2</span></div>
+            <div id="turn">プレイヤー（黒）のターン</div>
         </div>
         <div id="board"></div>
     </div>
+
+    <div id="gameOverScreen">
+        <h2>GAME OVER</h2>
+        <button onclick="retryGame()">RETRY</button>
+    </div>
+
+    <div id="clearScreen">
+        <h2>CLEAR</h2>
+        <button onclick="retryGame()">RETRY</button>
+    </div>
+
+    <div id="passNotification">PASS</div>
 
     <script>
         const config = {
@@ -158,92 +167,28 @@
             valid_color: '#3d8b3d'
         };
 
-        let gameState = {
-            board: [],
-            running: false
-        };
-        let isPlayerTurn = true;
+        const board = [];
+        const gameState = { running: false };
+        let isPlayerTurn = false;
 
         function initBoard() {
-            gameState.board = Array(8).fill(null).map(() => Array(8).fill(0));
-            gameState.board[3][3] = 1;
-            gameState.board[3][4] = -1;
-            gameState.board[4][3] = -1;
-            gameState.board[4][4] = 1;
-        }
-
-        function startGame() {
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            document.body.style.background = config.bg_color;
-            gameState.running = true;
-            isPlayerTurn = true;
-            initBoard();
-            drawBoard();
-            updateHUD();
-            gameLoop();
-        }
-
-        function retryGame() {
-            document.getElementById('startScreen').style.display = 'flex';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            gameState.running = false;
-        }
-
-        function drawBoard() {
-            const boardElement = document.getElementById('board');
-            boardElement.innerHTML = '';
-            boardElement.style.backgroundColor = config.grid_color;
-
-            const validMoves = getValidMoves(-1);
-
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    cell.style.backgroundColor = config.grid_color;
-
-                    const isValid = validMoves.some(m => m[0] === r && m[1] === c);
-                    if (isValid) {
-                        cell.classList.add('valid');
-                        cell.style.backgroundColor = config.valid_color;
-                        if (isPlayerTurn) {
-                            cell.onclick = () => playerMove(r, c);
-                        }
-                    }
-
-                    if (gameState.board[r][c] !== 0) {
-                        const piece = document.createElement('div');
-                        piece.className = 'piece';
-                        piece.classList.add(gameState.board[r][c] === -1 ? 'black' : 'white');
-                        cell.appendChild(piece);
-                    }
-
-                    boardElement.appendChild(cell);
+            for (let i = 0; i < 8; i++) {
+                board[i] = [];
+                for (let j = 0; j < 8; j++) {
+                    board[i][j] = 0;
                 }
             }
-        }
-
-        function updateHUD() {
-            let blackCount = 0, whiteCount = 0;
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (gameState.board[r][c] === -1) blackCount++;
-                    if (gameState.board[r][c] === 1) whiteCount++;
-                }
-            }
-            document.getElementById('playerCount').textContent = blackCount;
-            document.getElementById('aiCount').textContent = whiteCount;
-            document.getElementById('turnInfo').textContent = isPlayerTurn ? 'Your Turn' : 'AI Thinking...';
+            board[3][3] = 1;
+            board[3][4] = -1;
+            board[4][3] = -1;
+            board[4][4] = 1;
         }
 
         function getValidMoves(player) {
             const moves = [];
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    if (gameState.board[r][c] === 0 && canPlace(r, c, player)) {
+                    if (canPlacePiece(r, c, player)) {
                         moves.push([r, c]);
                     }
                 }
@@ -251,159 +196,213 @@
             return moves;
         }
 
-        function canPlace(r, c, player) {
-            const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
-            for (let [dr, dc] of directions) {
-                if (hasFlips(r, c, dr, dc, player)) return true;
-            }
-            return false;
-        }
+        function canPlacePiece(r, c, player) {
+            if (board[r][c] !== 0) return false;
 
-        function hasFlips(r, c, dr, dc, player) {
-            let nr = r + dr, nc = c + dc;
-            let hasOpponent = false;
-            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                if (gameState.board[nr][nc] === 0) return false;
-                if (gameState.board[nr][nc] === player) return hasOpponent;
-                hasOpponent = true;
-                nr += dr;
-                nc += dc;
-            }
-            return false;
-        }
+            const directions = [
+                [-1, -1], [-1, 0], [-1, 1],
+                [0, -1],           [0, 1],
+                [1, -1],  [1, 0],  [1, 1]
+            ];
 
-        function flipPieces(r, c, player) {
-            const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
             for (let [dr, dc] of directions) {
-                const toFlip = [];
-                let nr = r + dr, nc = c + dc;
+                let nr = r + dr;
+                let nc = c + dc;
+                let found = false;
+
                 while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                    if (gameState.board[nr][nc] === 0) break;
-                    if (gameState.board[nr][nc] === player) {
-                        for (let [fr, fc] of toFlip) {
-                            gameState.board[fr][fc] = player;
-                        }
+                    if (board[nr][nc] === 0) break;
+                    if (board[nr][nc] === player) {
+                        if (found) return true;
                         break;
                     }
-                    toFlip.push([nr, nc]);
+                    found = true;
                     nr += dr;
                     nc += dc;
                 }
             }
+            return false;
         }
 
-        function playerMove(r, c) {
-            if (!isPlayerTurn || !gameState.running) return;
-            if (gameState.board[r][c] !== 0) return;
-            if (!canPlace(r, c, -1)) return;
+        function placePiece(r, c, player) {
+            if (!canPlacePiece(r, c, player)) return false;
 
-            gameState.board[r][c] = -1;
-            flipPieces(r, c, -1);
-            isPlayerTurn = false;
-            drawBoard();
-            updateHUD();
-            setTimeout(aiMove, 400);
+            board[r][c] = player;
+
+            const directions = [
+                [-1, -1], [-1, 0], [-1, 1],
+                [0, -1],           [0, 1],
+                [1, -1],  [1, 0],  [1, 1]
+            ];
+
+            for (let [dr, dc] of directions) {
+                let nr = r + dr;
+                let nc = c + dc;
+                let toFlip = [];
+                let found = false;
+
+                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                    if (board[nr][nc] === 0) break;
+                    if (board[nr][nc] === player) {
+                        if (found) {
+                            for (let [fr, fc] of toFlip) {
+                                board[fr][fc] = player;
+                            }
+                        }
+                        break;
+                    }
+                    toFlip.push([nr, nc]);
+                    found = true;
+                    nr += dr;
+                    nc += dc;
+                }
+            }
+            return true;
+        }
+
+        function countPieces() {
+            let player = 0, ai = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c] === -1) player++;
+                    if (board[r][c] === 1) ai++;
+                }
+            }
+            return { player, ai };
+        }
+
+        function drawBoard() {
+            const boardDiv = document.getElementById('board');
+            boardDiv.innerHTML = '';
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.style.backgroundColor = config.grid_color;
+
+                    if (board[r][c] !== 0) {
+                        const piece = document.createElement('div');
+                        piece.className = 'piece';
+                        piece.className += board[r][c] === -1 ? ' player' : ' ai';
+                        cell.appendChild(piece);
+                    }
+
+                    if (isPlayerTurn) {
+                        if (canPlacePiece(r, c, -1)) {
+                            cell.style.backgroundColor = config.valid_color;
+                            cell.onclick = function() {
+                                placePiece(r, c, -1);
+                                isPlayerTurn = false;
+                                setTimeout(aiMove, 400);
+                            };
+                        }
+                    }
+
+                    boardDiv.appendChild(cell);
+                }
+            }
+        }
+
+        function updateHUD() {
+            const { player, ai } = countPieces();
+            document.getElementById('playerCount').textContent = player;
+            document.getElementById('aiCount').textContent = ai;
+            document.getElementById('turn').textContent = isPlayerTurn ? 'プレイヤー（黒）のターン' : 'AI（白）のターン';
+        }
+
+        function showPass() {
+            const notif = document.getElementById('passNotification');
+            notif.style.display = 'block';
+            setTimeout(() => {
+                notif.style.display = 'none';
+            }, 1000);
         }
 
         function aiMove() {
-            if (!gameState.running) return;
-
-            const validMoves = getValidMoves(1);
-            if (validMoves.length === 0) {
+            const moves = getValidMoves(1);
+            
+            if (moves.length === 0) {
                 const playerMoves = getValidMoves(-1);
                 if (playerMoves.length === 0) {
                     endGame();
                     return;
                 }
-                showPassMessage();
-                setTimeout(() => {
-                    isPlayerTurn = true;
-                    drawBoard();
-                    updateHUD();
-                }, 1000);
+                showPass();
+                isPlayerTurn = true;
+                drawBoard();
+                updateHUD();
                 return;
             }
 
-            const move = selectAIMove(validMoves);
-            gameState.board[move[0]][move[1]] = 1;
-            flipPieces(move[0], move[1], 1);
-            drawBoard();
-            updateHUD();
-
-            const playerMoves = getValidMoves(-1);
-            if (playerMoves.length === 0) {
-                const aiMoves = getValidMoves(1);
-                if (aiMoves.length === 0) {
-                    endGame();
-                    return;
-                }
-                showPassMessage();
-                setTimeout(aiMove, 1000);
-                return;
-            }
-
-            isPlayerTurn = true;
-        }
-
-        function selectAIMove(moves) {
-            let bestMove = moves[0];
-            let bestScore = -1;
-
-            for (let [r, c] of moves) {
-                let score = 0;
-                const corners = [[0, 0], [0, 7], [7, 0], [7, 7]];
-                if (corners.some(cor => cor[0] === r && cor[1] === c)) {
-                    score += 100;
-                } else if (r === 0 || r === 7 || c === 0 || c === 7) {
-                    score += 50;
-                }
-
-                let flipCount = 0;
-                const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
-                for (let [dr, dc] of directions) {
-                    let nr = r + dr, nc = c + dc;
-                    while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                        if (gameState.board[nr][nc] === 0) break;
-                        if (gameState.board[nr][nc] === 1) break;
-                        flipCount++;
-                        nr += dr;
-                        nc += dc;
+            const corners = [[0, 0], [0, 7], [7, 0], [7, 7]];
+            const edges = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if ((r === 0 || r === 7 || c === 0 || c === 7) && !corners.some(([cr, cc]) => cr === r && cc === c)) {
+                        edges.push([r, c]);
                     }
                 }
-                score += flipCount;
+            }
+
+            let bestMove = null;
+            let bestScore = -Infinity;
+
+            for (let [mr, mc] of moves) {
+                let score = 0;
+
+                if (corners.some(([cr, cc]) => cr === mr && cc === mc)) {
+                    score = 10000;
+                } else if (edges.some(([er, ec]) => er === mr && ec === mc)) {
+                    score = 100;
+                } else {
+                    score = 1;
+                }
 
                 if (score > bestScore) {
                     bestScore = score;
-                    bestMove = [r, c];
+                    bestMove = [mr, mc];
                 }
             }
 
-            return bestMove;
-        }
-
-        function showPassMessage() {
-            const msg = document.getElementById('passMessage');
-            msg.style.display = 'block';
-            setTimeout(() => {
-                msg.style.display = 'none';
-            }, 1000);
+            placePiece(bestMove[0], bestMove[1], 1);
+            isPlayerTurn = true;
+            drawBoard();
+            updateHUD();
         }
 
         function endGame() {
             gameState.running = false;
-            let blackCount = 0, whiteCount = 0;
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (gameState.board[r][c] === -1) blackCount++;
-                    if (gameState.board[r][c] === 1) whiteCount++;
-                }
-            }
+            const { player, ai } = countPieces();
 
-            if (blackCount > whiteCount) {
+            if (player > ai) {
                 document.getElementById('clearScreen').style.display = 'flex';
             } else {
                 document.getElementById('gameOverScreen').style.display = 'flex';
             }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'flex';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+
+            document.body.style.background = config.bg_color;
+
+            initBoard();
+            gameState.running = true;
+            isPlayerTurn = true;
+            drawBoard();
+            updateHUD();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('startScreen').style.display = 'block';
+            document.getElementById('gameContainer').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
         }
 
         function gameLoop() {
