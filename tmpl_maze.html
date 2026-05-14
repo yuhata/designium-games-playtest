@@ -5,153 +5,170 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAZE EXPLORER</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
         body {
+            margin: 0;
+            padding: 20px;
+            background-color: #0a0e27;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: #0a0e27;
-            font-family: 'Courier New', monospace;
+            font-family: Arial, sans-serif;
+            color: #fff;
         }
-        #container {
-            position: relative;
-            width: 480px;
-            height: 480px;
-        }
-        canvas {
-            display: block;
-            background: #0d1117;
-            border: 2px solid #30363d;
-        }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 14px;
-            color: #58a6ff;
-            pointer-events: none;
-            z-index: 10;
-        }
-        #timer {
-            font-weight: bold;
-            color: #3fb950;
-        }
-        #timer.warning {
-            color: #f85149;
-        }
-        #startScreen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(13, 17, 23, 0.98);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-        }
-        #clearScreen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(13, 17, 23, 0.98);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-        }
-        #gameOverScreen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(13, 17, 23, 0.98);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-        }
-        .screenContent {
+        
+        #gameContainer {
             text-align: center;
         }
-        .screenContent h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-            color: #3fb950;
-            text-shadow: 0 0 20px #3fb950;
+        
+        h1 {
+            margin: 0 0 20px 0;
+            color: #58a6ff;
+            font-size: 2.5em;
+            text-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
         }
-        .screenContent p {
-            font-size: 14px;
-            margin: 10px 0;
-            color: #8b949e;
-        }
-        .btn {
-            margin-top: 30px;
-            padding: 12px 32px;
-            font-size: 16px;
-            font-family: 'Courier New', monospace;
-            background: #238636;
-            color: #ffffff;
-            border: 2px solid #3fb950;
+        
+        canvas {
+            display: block;
+            border: 2px solid #30363d;
+            background-color: #0d1117;
+            margin: 0 auto;
             cursor: pointer;
-            transition: all 0.3s;
         }
+        
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+        
+        #startScreen.hidden {
+            display: none;
+        }
+        
+        #startScreen h2 {
+            font-size: 3em;
+            color: #58a6ff;
+            margin: 0 0 40px 0;
+            text-shadow: 0 0 20px rgba(88, 166, 255, 0.7);
+        }
+        
+        #startScreen p {
+            font-size: 1.2em;
+            color: #888;
+            margin: 10px 0;
+            max-width: 400px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #58a6ff, #3fb950);
+            color: white;
+            border: none;
+            padding: 15px 50px;
+            font-size: 1.5em;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 40px;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        
         .btn:hover {
-            background: #2ea043;
-            box-shadow: 0 0 15px rgba(63, 185, 80, 0.5);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(88, 166, 255, 0.5);
         }
-        #clearScreen h1 {
-            color: #ffd700;
-            text-shadow: 0 0 20px #ffd700;
+        
+        .btn:active {
+            transform: scale(0.95);
         }
-        #gameOverScreen h1 {
+        
+        #gameOverScreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+        
+        #gameOverScreen.show {
+            display: flex;
+        }
+        
+        #gameOverScreen h2 {
+            font-size: 3em;
             color: #f85149;
-            text-shadow: 0 0 20px #f85149;
+            margin: 0 0 30px 0;
+        }
+        
+        #clearScreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+        
+        #clearScreen.show {
+            display: flex;
+        }
+        
+        #clearScreen h2 {
+            font-size: 3em;
+            color: #3fb950;
+            margin: 0 0 20px 0;
+            text-shadow: 0 0 30px rgba(63, 185, 80, 0.8);
+        }
+        
+        .stats {
+            font-size: 1.3em;
+            color: #aaa;
+            margin: 15px 0;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="startScreen">
-            <div class="screenContent">
-                <h1>MAZE EXPLORER</h1>
-                <p>Navigate through the fog and find the exit</p>
-                <p style="font-size: 12px; margin-top: 20px; opacity: 0.7;">180 seconds • Click arrows to move</p>
-                <button class="btn">START</button>
-            </div>
-        </div>
-        <div id="clearScreen">
-            <div class="screenContent">
-                <h1>FOUND IT!</h1>
-                <p id="clearStats"></p>
-                <p style="font-size: 12px; margin-top: 10px; opacity: 0.7;">Excellent explorer!</p>
-                <button class="btn">RETRY</button>
-            </div>
-        </div>
-        <div id="gameOverScreen">
-            <div class="screenContent">
-                <h1>TIME UP!</h1>
-                <p>The maze consumed you...</p>
-                <button class="btn">RETRY</button>
-            </div>
-        </div>
-        <div id="info">
-            <div>Steps: <span id="steps">0</span></div>
-            <div>Time: <span id="timer">180</span>s</div>
-        </div>
+    <div id="gameContainer">
+        <h1>MAZE EXPLORER</h1>
         <canvas id="gameCanvas" width="480" height="480"></canvas>
+    </div>
+    
+    <div id="startScreen">
+        <h2>MAZE EXPLORER</h2>
+        <p>迷路の出口を見つけよう！</p>
+        <p>制限時間: 180秒</p>
+        <p>矢印ボタンで移動</p>
+        <button class="btn" id="startBtn">START GAME</button>
+    </div>
+    
+    <div id="gameOverScreen">
+        <h2>GAME OVER</h2>
+        <div class="stats">時間切れ！</div>
+        <button class="btn" id="retryBtn1">RETRY</button>
+    </div>
+    
+    <div id="clearScreen">
+        <h2>FOUND IT!</h2>
+        <div class="stats" id="clearStats"></div>
+        <button class="btn" id="retryBtn2">PLAY AGAIN</button>
     </div>
 
     <script>
@@ -170,88 +187,88 @@
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-
-        var gameState = {
+        
+        let gameState = {
             running: false,
-            maze: null,
+            maze: [],
             playerX: 1,
             playerY: 1,
             goalX: config.maze_cols - 2,
             goalY: config.maze_rows - 2,
-            steps: 0,
-            timeLeft: 180,
             visited: new Set(),
-            explored: new Set(),
-            flashCounter: 0,
-            gameStartTime: 0,
-            spotlightIntensity: 0
+            timeLeft: 180,
+            stepCount: 0,
+            gameOver: false,
+            cleared: false,
+            lastMoveBlocked: false,
+            flashCounter: 0
         };
 
-        function generateMaze(cols, rows) {
-            const maze = [];
-            for (let y = 0; y < rows; y++) {
-                maze[y] = [];
-                for (let x = 0; x < cols; x++) {
-                    maze[y][x] = 1;
-                }
-            }
-
-            const stack = [];
-            const startX = 1, startY = 1;
-            maze[startY][startX] = 0;
-            stack.push({ x: startX, y: startY });
-
-            const directions = [
-                { dx: 0, dy: -2 },
-                { dx: 2, dy: 0 },
-                { dx: 0, dy: 2 },
-                { dx: -2, dy: 0 }
-            ];
-
-            while (stack.length > 0) {
-                const current = stack[stack.length - 1];
-                const neighbors = [];
-
-                for (let i = 0; i < directions.length; i++) {
-                    const dir = directions[i];
-                    const nx = current.x + dir.dx;
-                    const ny = current.y + dir.dy;
-                    if (nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 && maze[ny][nx] === 1) {
-                        neighbors.push({ x: nx, y: ny, dx: dir.dx, dy: dir.dy });
+        function generateMaze() {
+            const maze = Array(config.maze_rows).fill(null).map(() => Array(config.maze_cols).fill(1));
+            
+            function carvePath(x, y) {
+                maze[y][x] = 0;
+                const directions = [[0, -2], [2, 0], [0, 2], [-2, 0]].sort(() => Math.random() - 0.5);
+                
+                for (let [dx, dy] of directions) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    
+                    if (nx > 0 && nx < config.maze_cols && ny > 0 && ny < config.maze_rows && maze[ny][nx] === 1) {
+                        maze[y + dy / 2][x + dx / 2] = 0;
+                        carvePath(nx, ny);
                     }
                 }
-
-                if (neighbors.length > 0) {
-                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    maze[current.y + next.dy / 2][current.x + next.dx / 2] = 0;
-                    maze[next.y][next.x] = 0;
-                    stack.push(next);
-                } else {
-                    stack.pop();
-                }
             }
-
+            
+            carvePath(1, 1);
+            maze[1][1] = 0;
+            maze[config.maze_rows - 2][config.maze_cols - 2] = 0;
+            
             return maze;
+        }
+
+        function initGame() {
+            gameState.maze = generateMaze();
+            gameState.playerX = 1;
+            gameState.playerY = 1;
+            gameState.visited.clear();
+            gameState.visited.add('1,1');
+            gameState.timeLeft = 180;
+            gameState.stepCount = 0;
+            gameState.gameOver = false;
+            gameState.cleared = false;
+            gameState.lastMoveBlocked = false;
+            gameState.flashCounter = 0;
+            gameState.running = true;
+            
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
         }
 
         function movePlayer(dx, dy) {
             if (!gameState.running) return;
+            
             const newX = gameState.playerX + dx;
             const newY = gameState.playerY + dy;
-
+            
             if (newX >= 0 && newX < config.maze_cols && newY >= 0 && newY < config.maze_rows) {
                 if (gameState.maze[newY][newX] === 0) {
                     gameState.playerX = newX;
                     gameState.playerY = newY;
-                    gameState.steps++;
-                    gameState.visited.add(newX + ',' + newY);
-                    gameState.explored.add(newX + ',' + newY);
-
-                    if (gameState.playerX === gameState.goalX && gameState.playerY === gameState.goalY) {
-                        endGameClear();
+                    gameState.stepCount++;
+                    gameState.visited.add(`${newX},${newY}`);
+                    gameState.lastMoveBlocked = false;
+                    
+                    if (newX === gameState.goalX && newY === gameState.goalY) {
+                        gameState.cleared = true;
+                        gameState.running = false;
                     }
                 } else {
-                    gameState.flashCounter = 10;
+                    gameState.lastMoveBlocked = true;
+                    gameState.flashCounter = 6;
                 }
             }
         }
@@ -259,229 +276,193 @@
         function drawMaze() {
             ctx.fillStyle = config.bg_color;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+            
+            ctx.fillStyle = config.wall_color;
             for (let y = 0; y < config.maze_rows; y++) {
                 for (let x = 0; x < config.maze_cols; x++) {
-                    const px = x * config.cell_size;
-                    const py = y * config.cell_size;
-
                     if (gameState.maze[y][x] === 1) {
-                        ctx.fillStyle = config.wall_color;
-                    } else {
-                        if (gameState.explored.has(x + ',' + y)) {
-                            ctx.fillStyle = '#161b22';
-                        } else {
-                            ctx.fillStyle = config.path_color;
-                        }
-                    }
-                    ctx.fillRect(px, py, config.cell_size, config.cell_size);
-                }
-            }
-
-            const visionRadius = 3;
-            for (let y = 0; y < config.maze_rows; y++) {
-                for (let x = 0; x < config.maze_cols; x++) {
-                    const dist = Math.max(Math.abs(x - gameState.playerX), Math.abs(y - gameState.playerY));
-                    if (dist > visionRadius) {
-                        ctx.fillStyle = config.fog_color;
                         ctx.fillRect(x * config.cell_size, y * config.cell_size, config.cell_size, config.cell_size);
                     }
                 }
             }
+        }
 
-            const playerScreenX = gameState.playerX * config.cell_size + config.cell_size / 2;
-            const playerScreenY = gameState.playerY * config.cell_size + config.cell_size / 2;
-            ctx.fillStyle = gameState.flashCounter > 0 ? '#f85149' : config.player_color;
-            ctx.beginPath();
-            ctx.arc(playerScreenX, playerScreenY, config.cell_size / 3, 0, Math.PI * 2);
-            ctx.fill();
-
-            const goalScreenX = gameState.goalX * config.cell_size + config.cell_size / 2;
-            const goalScreenY = gameState.goalY * config.cell_size + config.cell_size / 2;
-            const visionDist = Math.max(Math.abs(gameState.goalX - gameState.playerX), Math.abs(gameState.goalY - gameState.playerY));
+        function drawFog() {
+            ctx.fillStyle = config.fog_color;
             
-            if (visionDist <= 3) {
-                if (gameState.spotlightIntensity > 0) {
-                    const gradient = ctx.createRadialGradient(goalScreenX, goalScreenY, 0, goalScreenX, goalScreenY, 40);
-                    gradient.addColorStop(0, 'rgba(255, 215, 0, ' + (gameState.spotlightIntensity * 0.3) + ')');
-                    gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(goalScreenX - 40, goalScreenY - 40, 80, 80);
+            for (let y = 0; y < config.maze_rows; y++) {
+                for (let x = 0; x < config.maze_cols; x++) {
+                    const dx = x - gameState.playerX;
+                    const dy = y - gameState.playerY;
+                    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+                    
+                    if (dist > 3) {
+                        ctx.fillRect(x * config.cell_size, y * config.cell_size, config.cell_size, config.cell_size);
+                    }
                 }
-
-                ctx.fillStyle = config.goal_color;
-                ctx.beginPath();
-                ctx.moveTo(goalScreenX, goalScreenY - 8);
-                ctx.lineTo(goalScreenX + 8, goalScreenY + 8);
-                ctx.lineTo(goalScreenX - 8, goalScreenY + 8);
-                ctx.closePath();
-                ctx.fill();
             }
-
-            drawArrowButtons();
         }
 
-        function drawArrowButtons() {
-            const btnSize = 40;
-            const startX = canvas.width - 120;
-            const startY = canvas.height - 60;
-
-            ctx.fillStyle = '#30363d';
-            ctx.strokeStyle = '#58a6ff';
-            ctx.lineWidth = 2;
-
-            ctx.fillRect(startX + 40, startY, btnSize, btnSize);
-            ctx.strokeRect(startX + 40, startY, btnSize, btnSize);
-            drawArrowShape(ctx, startX + 60, startY + 20, 'up');
-
-            ctx.fillRect(startX + 40, startY + 80, btnSize, btnSize);
-            ctx.strokeRect(startX + 40, startY + 80, btnSize, btnSize);
-            drawArrowShape(ctx, startX + 60, startY + 100, 'down');
-
-            ctx.fillRect(startX, startY + 40, btnSize, btnSize);
-            ctx.strokeRect(startX, startY + 40, btnSize, btnSize);
-            drawArrowShape(ctx, startX + 20, startY + 60, 'left');
-
-            ctx.fillRect(startX + 80, startY + 40, btnSize, btnSize);
-            ctx.strokeRect(startX + 80, startY + 40, btnSize, btnSize);
-            drawArrowShape(ctx, startX + 100, startY + 60, 'right');
+        function drawVisited() {
+            ctx.fillStyle = 'rgba(58, 134, 255, 0.1)';
+            gameState.visited.forEach(key => {
+                const [x, y] = key.split(',').map(Number);
+                ctx.fillRect(x * config.cell_size + 2, y * config.cell_size + 2, config.cell_size - 4, config.cell_size - 4);
+            });
         }
 
-        function drawArrowShape(ctx, x, y, dir) {
-            ctx.fillStyle = '#58a6ff';
+        function drawPlayer() {
+            ctx.fillStyle = gameState.lastMoveBlocked && gameState.flashCounter % 2 === 0 ? '#f85149' : config.player_color;
             ctx.beginPath();
-            const size = 12;
-            if (dir === 'up') {
-                ctx.moveTo(x, y - size);
-                ctx.lineTo(x - size, y + size);
-                ctx.lineTo(x + size, y + size);
-            } else if (dir === 'down') {
-                ctx.moveTo(x, y + size);
-                ctx.lineTo(x - size, y - size);
-                ctx.lineTo(x + size, y - size);
-            } else if (dir === 'left') {
-                ctx.moveTo(x - size, y);
-                ctx.lineTo(x + size, y - size);
-                ctx.lineTo(x + size, y + size);
-            } else if (dir === 'right') {
-                ctx.moveTo(x + size, y);
-                ctx.lineTo(x - size, y - size);
-                ctx.lineTo(x - size, y + size);
-            }
-            ctx.closePath();
+            ctx.arc(
+                gameState.playerX * config.cell_size + config.cell_size / 2,
+                gameState.playerY * config.cell_size + config.cell_size / 2,
+                config.cell_size / 2.5,
+                0,
+                Math.PI * 2
+            );
             ctx.fill();
+        }
+
+        function drawGoal() {
+            const cx = gameState.goalX * config.cell_size + config.cell_size / 2;
+            const cy = gameState.goalY * config.cell_size + config.cell_size / 2;
+            
+            ctx.fillStyle = config.goal_color;
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('★', cx, cy);
+        }
+
+        function drawDpad() {
+            // UP
+            ctx.fillStyle = '#444';
+            ctx.fillRect(380, 300, 40, 40);
+            ctx.fillStyle = '#58a6ff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('▲', 400, 320);
+            
+            // LEFT
+            ctx.fillStyle = '#444';
+            ctx.fillRect(340, 340, 40, 40);
+            ctx.fillStyle = '#58a6ff';
+            ctx.fillText('◀', 360, 360);
+            
+            // RIGHT
+            ctx.fillStyle = '#444';
+            ctx.fillRect(420, 340, 40, 40);
+            ctx.fillStyle = '#58a6ff';
+            ctx.fillText('▶', 440, 360);
+            
+            // DOWN
+            ctx.fillStyle = '#444';
+            ctx.fillRect(380, 380, 40, 40);
+            ctx.fillStyle = '#58a6ff';
+            ctx.fillText('▼', 400, 400);
+        }
+
+        function drawUI() {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(0, 0, 180, 60);
+            
+            ctx.fillStyle = '#aaa';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`TIME: ${Math.ceil(gameState.timeLeft)}s`, 10, 10);
+            ctx.fillText(`STEPS: ${gameState.stepCount}`, 10, 30);
+        }
+
+        function drawClearEffect() {
+            const cx = gameState.goalX * config.cell_size + config.cell_size / 2;
+            const cy = gameState.goalY * config.cell_size + config.cell_size / 2;
+            const radius = 60 + Math.sin(Date.now() / 200) * 20;
+            
+            ctx.strokeStyle = `rgba(63, 185, 80, ${0.5 - gameState.flashCounter * 0.08})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.stroke();
         }
 
         function gameLoop() {
+            if (!gameState.running && !gameState.cleared) return;
+            
+            drawMaze();
+            drawVisited();
+            drawFog();
+            drawGoal();
+            drawPlayer();
+            drawDpad();
+            drawUI();
+            
+            if (gameState.cleared && gameState.flashCounter >= 0) {
+                drawClearEffect();
+            }
+            
+            if (gameState.flashCounter > 0) {
+                gameState.flashCounter--;
+            }
+            
             if (gameState.running) {
-                gameState.flashCounter = Math.max(0, gameState.flashCounter - 1);
-                const elapsed = Math.floor((Date.now() - gameState.gameStartTime) / 1000);
-                gameState.timeLeft = Math.max(0, 180 - elapsed);
-
+                gameState.timeLeft -= 1 / 60;
                 if (gameState.timeLeft <= 0) {
-                    endGameOver();
+                    gameState.timeLeft = 0;
+                    gameState.running = false;
+                    gameState.gameOver = true;
+                    document.getElementById('gameOverScreen').style.display = 'flex';
                 }
             }
-
-            if (gameState.spotlightIntensity > 0) {
-                gameState.spotlightIntensity -= 0.05;
+            
+            if (gameState.cleared) {
+                const elapsedTime = Math.ceil(180 - gameState.timeLeft);
+                document.getElementById('clearStats').innerText = `ステップ数: ${gameState.stepCount} | 時間: ${elapsedTime}秒`;
+                document.getElementById('clearScreen').style.display = 'flex';
+                gameState.cleared = false;
             }
-
-            drawMaze();
-            updateUI();
-        }
-
-        function updateUI() {
-            document.getElementById('steps').textContent = gameState.steps;
-            const timerEl = document.getElementById('timer');
-            timerEl.textContent = gameState.timeLeft;
-            if (gameState.timeLeft <= 30) {
-                timerEl.className = 'warning';
-            } else {
-                timerEl.className = '';
-            }
-        }
-
-        function endGameClear() {
-            gameState.running = false;
-            gameState.spotlightIntensity = 1.0;
-            const elapsed = Math.floor((Date.now() - gameState.gameStartTime) / 1000);
-            const clearScreen = document.getElementById('clearScreen');
-            const stats = document.getElementById('clearStats');
-            stats.textContent = 'Steps: ' + gameState.steps + ' | Time: ' + elapsed + 's';
-            clearScreen.style.display = 'flex';
-        }
-
-        function endGameOver() {
-            gameState.running = false;
-            document.getElementById('gameOverScreen').style.display = 'flex';
         }
 
         function retryGame() {
             gameState.running = false;
-            gameState.maze = generateMaze(config.maze_cols, config.maze_rows);
-            gameState.playerX = 1;
-            gameState.playerY = 1;
-            gameState.goalX = config.maze_cols - 2;
-            gameState.goalY = config.maze_rows - 2;
-            gameState.steps = 0;
-            gameState.timeLeft = 180;
-            gameState.visited = new Set();
-            gameState.explored = new Set();
-            gameState.visited.add('1,1');
-            gameState.explored.add('1,1');
-            gameState.flashCounter = 0;
-            gameState.spotlightIntensity = 0;
-
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
             document.getElementById('gameOverScreen').style.display = 'none';
-
-            gameState.running = true;
-            gameState.gameStartTime = Date.now();
+            document.getElementById('clearScreen').style.display = 'none';
+            initGame();
         }
 
-        canvas.addEventListener('click', function(e) {
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+            
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-
-            const btnSize = 40;
-            const startX = canvas.width - 120;
-            const startY = canvas.height - 60;
-
-            if (x >= startX + 40 && x < startX + 80 && y >= startY && y < startY + 40) {
+            
+            if (x >= 380 && x <= 420 && y >= 300 && y <= 340) {
                 movePlayer(0, -1);
             }
-            else if (x >= startX + 40 && x < startX + 80 && y >= startY + 80 && y < startY + 120) {
+            else if (x >= 380 && x <= 420 && y >= 380 && y <= 420) {
                 movePlayer(0, 1);
             }
-            else if (x >= startX && x < startX + 40 && y >= startY + 40 && y < startY + 80) {
+            else if (x >= 340 && x <= 380 && y >= 340 && y <= 380) {
                 movePlayer(-1, 0);
             }
-            else if (x >= startX + 80 && x < startX + 120 && y >= startY + 40 && y < startY + 80) {
+            else if (x >= 420 && x <= 460 && y >= 340 && y <= 380) {
                 movePlayer(1, 0);
             }
         });
 
-        document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('btn')) {
-                const screen = e.target.closest('#startScreen, #clearScreen, #gameOverScreen');
-                if (screen) {
-                    retryGame();
-                }
-            }
+        document.getElementById('startBtn').addEventListener('click', () => {
+            initGame();
         });
 
-        function init() {
-            gameState.maze = generateMaze(config.maze_cols, config.maze_rows);
-            gameState.visited.add('1,1');
-            gameState.explored.add('1,1');
-            document.getElementById('startScreen').style.display = 'flex';
-            setInterval(gameLoop, 16);
-        }
+        document.getElementById('retryBtn1').addEventListener('click', retryGame);
+        document.getElementById('retryBtn2').addEventListener('click', retryGame);
 
-        init();
+        setInterval(gameLoop, 16);
+
+        document.getElementById('startScreen').style.display = 'flex';
     </script>
 </body>
 </html>

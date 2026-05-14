@@ -5,71 +5,95 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MERGE 512</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: Arial, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            min-height: 100vh; 
-            background: #999; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        canvas { 
-            border: 2px solid #333; 
-            cursor: pointer; 
-            display: block; 
-            background: #faf8ef; 
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
         }
-        #startScreen, #gameOverScreen, #clearScreen { 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100vw; 
-            height: 100vh; 
-            background: rgba(0, 0, 0, 0.85); 
-            display: none; 
-            flex-direction: column; 
-            justify-content: center; 
-            align-items: center; 
-            z-index: 10; 
+        #gameContainer {
+            position: relative;
+            width: 480px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            overflow: hidden;
         }
-        .screenText { 
-            color: white; 
-            font-size: 48px; 
-            margin-bottom: 30px; 
-            text-align: center; 
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            background-color: #faf8ef;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 480px;
+            height: 540px;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modalTitle {
+            color: white;
+            font-size: 32px;
+            margin-bottom: 30px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .modalScore {
+            color: #ffd700;
+            font-size: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .btn {
+            padding: 12px 40px;
+            font-size: 18px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
             font-weight: bold;
         }
-        #clearScreen .screenText {
-            color: #ffd700;
-            text-shadow: 0 0 20px #ffd700;
+        .btn:hover {
+            background-color: #2980b9;
         }
-        .btn { 
-            background: #f59563; 
-            color: white; 
-            padding: 15px 40px; 
-            font-size: 20px; 
-            border: none; 
-            cursor: pointer; 
-            margin: 10px; 
-            border-radius: 4px;
+        .btn:active {
+            transform: scale(0.95);
         }
-        .btn:hover { background: #f67c5f; }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="480" height="540"></canvas>
-    <div id="startScreen" style="display: none;">
-        <div class="screenText">MERGE 512</div>
-        <button class="btn">START</button>
-    </div>
-    <div id="gameOverScreen" style="display: none;">
-        <div class="screenText">GAME OVER</div>
-        <button class="btn">RETRY</button>
-    </div>
-    <div id="clearScreen" style="display: none;">
-        <div class="screenText">MERGED!</div>
-        <button class="btn">RETRY</button>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="480" height="540"></canvas>
+        <div id="startScreen">
+            <div class="modalTitle">MERGE 512</div>
+            <button class="btn" onclick="startGame()">START</button>
+        </div>
+        <div id="gameOverScreen">
+            <div class="modalTitle">GAME OVER</div>
+            <div class="modalScore">スコア: <span id="gameOverScore">0</span></div>
+            <button class="btn" onclick="retryGame()">RETRY</button>
+        </div>
+        <div id="clearScreen">
+            <div class="modalTitle" style="color: #ffd700; text-shadow: 0 0 10px #ffd700;">MERGED!</div>
+            <div class="modalScore">スコア: <span id="clearScore">0</span></div>
+            <button class="btn" onclick="retryGame()">RETRY</button>
+        </div>
     </div>
 
     <script>
@@ -80,230 +104,305 @@
             win_value: 512,
             grid_size: 4,
             colors: {
-                2: '#eee4da', 4: '#ede0c8', 8: '#f2b179', 16: '#f59563',
-                32: '#f67c5f', 64: '#f65e3b', 128: '#edcf72', 256: '#edcc61', 512: '#edc850'
+                2:   '#eee4da',
+                4:   '#ede0c8',
+                8:   '#f2b179',
+                16:  '#f59563',
+                32:  '#f67c5f',
+                64:  '#f65e3b',
+                128: '#edcf72',
+                256: '#edcc61',
+                512: '#edc850'
             }
-        };
-
-        const gameState = {
-            running: false,
-            grid: [],
-            score: 0,
-            best: 0
         };
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        function initializeGrid() {
-            gameState.grid = Array(16).fill(0);
-            addNewTile();
-            addNewTile();
+        let gameState = {
+            board: [],
+            score: 0,
+            bestScore: localStorage.getItem('bestScore') ? parseInt(localStorage.getItem('bestScore')) : 0,
+            running: false,
+            moveInProgress: false,
+            won: false
+        };
+
+        function initBoard() {
+            gameState.board = [];
+            for (let i = 0; i < config.grid_size; i++) {
+                gameState.board[i] = [];
+                for (let j = 0; j < config.grid_size; j++) {
+                    gameState.board[i][j] = 0;
+                }
+            }
+            addRandomTile();
+            addRandomTile();
         }
 
-        function addNewTile() {
-            const empty = gameState.grid.map((v, i) => v === 0 ? i : -1).filter(i => i !== -1);
-            if (empty.length === 0) return;
-            const idx = empty[Math.floor(Math.random() * empty.length)];
-            const val = Math.random() < 0.9 ? 2 : 4;
-            gameState.grid[idx] = val;
-        }
-
-        function move(direction) {
-            if (!gameState.running) return;
-            const oldGrid = [...gameState.grid];
-            
-            if (direction === 'up') {
-                for (let col = 0; col < 4; col++) {
-                    let vals = [gameState.grid[col], gameState.grid[4 + col], gameState.grid[8 + col], gameState.grid[12 + col]].filter(v => v);
-                    vals = mergeArray(vals);
-                    for (let row = 0; row < 4; row++) {
-                        gameState.grid[row * 4 + col] = vals[row] || 0;
-                    }
-                }
-            } else if (direction === 'down') {
-                for (let col = 0; col < 4; col++) {
-                    let vals = [gameState.grid[12 + col], gameState.grid[8 + col], gameState.grid[4 + col], gameState.grid[col]].filter(v => v);
-                    vals = mergeArray(vals);
-                    for (let row = 0; row < 4; row++) {
-                        gameState.grid[(3 - row) * 4 + col] = vals[row] || 0;
-                    }
-                }
-            } else if (direction === 'left') {
-                for (let row = 0; row < 4; row++) {
-                    let vals = [gameState.grid[row * 4], gameState.grid[row * 4 + 1], gameState.grid[row * 4 + 2], gameState.grid[row * 4 + 3]].filter(v => v);
-                    vals = mergeArray(vals);
-                    for (let col = 0; col < 4; col++) {
-                        gameState.grid[row * 4 + col] = vals[col] || 0;
-                    }
-                }
-            } else if (direction === 'right') {
-                for (let row = 0; row < 4; row++) {
-                    let vals = [gameState.grid[row * 4 + 3], gameState.grid[row * 4 + 2], gameState.grid[row * 4 + 1], gameState.grid[row * 4]].filter(v => v);
-                    vals = mergeArray(vals);
-                    for (let col = 0; col < 4; col++) {
-                        gameState.grid[row * 4 + (3 - col)] = vals[col] || 0;
+        function addRandomTile() {
+            let empty = [];
+            for (let i = 0; i < config.grid_size; i++) {
+                for (let j = 0; j < config.grid_size; j++) {
+                    if (gameState.board[i][j] === 0) {
+                        empty.push({ i, j });
                     }
                 }
             }
-
-            if (JSON.stringify(oldGrid) !== JSON.stringify(gameState.grid)) {
-                addNewTile();
-                if (gameState.grid.includes(512)) {
-                    gameState.running = false;
-                    showClearScreen();
-                }
-                if (!canMove()) {
-                    gameState.running = false;
-                    showGameOverScreen();
-                }
+            if (empty.length > 0) {
+                let pos = empty[Math.floor(Math.random() * empty.length)];
+                gameState.board[pos.i][pos.j] = Math.random() < 0.9 ? 2 : 4;
             }
-        }
-
-        function mergeArray(arr) {
-            const merged = [];
-            for (let i = 0; i < arr.length; i++) {
-                if (i + 1 < arr.length && arr[i] === arr[i + 1]) {
-                    merged.push(arr[i] * 2);
-                    gameState.score += arr[i] * 2;
-                    i++;
-                } else {
-                    merged.push(arr[i]);
-                }
-            }
-            return merged;
         }
 
         function canMove() {
-            for (let i = 0; i < 16; i++) {
-                if (gameState.grid[i] === 0) return true;
-                const row = Math.floor(i / 4), col = i % 4;
-                const val = gameState.grid[i];
-                if (col > 0 && gameState.grid[i - 1] === val) return true;
-                if (col < 3 && gameState.grid[i + 1] === val) return true;
-                if (row > 0 && gameState.grid[i - 4] === val) return true;
-                if (row < 3 && gameState.grid[i + 4] === val) return true;
+            for (let i = 0; i < config.grid_size; i++) {
+                for (let j = 0; j < config.grid_size; j++) {
+                    if (gameState.board[i][j] === 0) return true;
+                    if (j < config.grid_size - 1 && gameState.board[i][j] === gameState.board[i][j + 1]) return true;
+                    if (i < config.grid_size - 1 && gameState.board[i][j] === gameState.board[i + 1][j]) return true;
+                }
             }
             return false;
         }
 
-        function draw() {
-            ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function move(direction) {
+            if (gameState.moveInProgress || !gameState.running) return;
+            gameState.moveInProgress = true;
 
-            ctx.fillStyle = '#333';
-            ctx.font = 'bold 14px Arial';
-            ctx.fillText('SCORE: ' + gameState.score, 20, 25);
+            let newBoard = JSON.parse(JSON.stringify(gameState.board));
 
-            ctx.fillStyle = config.board_color;
-            ctx.fillRect(40, 60, 400, 400);
-
-            for (let i = 0; i < 16; i++) {
-                const row = Math.floor(i / 4), col = i % 4;
-                const x = 40 + col * 110, y = 60 + row * 110;
-                ctx.fillStyle = '#cdc1b4';
-                ctx.fillRect(x + 5, y + 5, 100, 100);
-
-                if (gameState.grid[i] !== 0) {
-                    const color = config.colors[gameState.grid[i]] || '#3c3c2f';
-                    ctx.fillStyle = color;
-                    ctx.fillRect(x + 5, y + 5, 100, 100);
-
-                    ctx.fillStyle = '#776e65';
-                    ctx.font = 'bold 40px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(gameState.grid[i], x + 55, y + 55);
+            if (direction === 'up') {
+                for (let j = 0; j < config.grid_size; j++) {
+                    let col = [];
+                    for (let i = 0; i < config.grid_size; i++) {
+                        if (newBoard[i][j] !== 0) col.push(newBoard[i][j]);
+                    }
+                    col = mergeArray(col);
+                    for (let i = 0; i < config.grid_size; i++) {
+                        newBoard[i][j] = col[i] || 0;
+                    }
+                }
+            } else if (direction === 'down') {
+                for (let j = 0; j < config.grid_size; j++) {
+                    let col = [];
+                    for (let i = config.grid_size - 1; i >= 0; i--) {
+                        if (newBoard[i][j] !== 0) col.push(newBoard[i][j]);
+                    }
+                    col = mergeArray(col);
+                    for (let i = config.grid_size - 1; i >= 0; i--) {
+                        newBoard[i][j] = col[config.grid_size - 1 - i] || 0;
+                    }
+                }
+            } else if (direction === 'left') {
+                for (let i = 0; i < config.grid_size; i++) {
+                    let row = [];
+                    for (let j = 0; j < config.grid_size; j++) {
+                        if (newBoard[i][j] !== 0) row.push(newBoard[i][j]);
+                    }
+                    row = mergeArray(row);
+                    for (let j = 0; j < config.grid_size; j++) {
+                        newBoard[i][j] = row[j] || 0;
+                    }
+                }
+            } else if (direction === 'right') {
+                for (let i = 0; i < config.grid_size; i++) {
+                    let row = [];
+                    for (let j = config.grid_size - 1; j >= 0; j--) {
+                        if (newBoard[i][j] !== 0) row.push(newBoard[i][j]);
+                    }
+                    row = mergeArray(row);
+                    for (let j = config.grid_size - 1; j >= 0; j--) {
+                        newBoard[i][j] = row[config.grid_size - 1 - j] || 0;
+                    }
                 }
             }
 
-            drawButtons();
+            let moved = JSON.stringify(gameState.board) !== JSON.stringify(newBoard);
+            gameState.board = newBoard;
+
+            if (moved) {
+                addRandomTile();
+            }
+
+            setTimeout(() => {
+                gameState.moveInProgress = false;
+                if (moved) {
+                    checkWinOrLose();
+                }
+            }, 200);
         }
 
-        function drawButtons() {
-            const bx = 40, by = 480;
-            const btnSize = 40, gap = 20;
-
-            ctx.fillStyle = '#f59563';
-            ctx.font = 'bold 20px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            ctx.fillRect(bx + 110, by, btnSize, btnSize);
-            ctx.fillStyle = 'white';
-            ctx.fillText('▲', bx + 130, by + 20);
-
-            ctx.fillStyle = '#f59563';
-            ctx.fillRect(bx + 110, by + btnSize + gap, btnSize, btnSize);
-            ctx.fillStyle = 'white';
-            ctx.fillText('▼', bx + 130, by + btnSize + gap + 20);
-
-            ctx.fillStyle = '#f59563';
-            ctx.fillRect(bx + 50, by + btnSize + gap, btnSize, btnSize);
-            ctx.fillStyle = 'white';
-            ctx.fillText('◀', bx + 70, by + btnSize + gap + 20);
-
-            ctx.fillStyle = '#f59563';
-            ctx.fillRect(bx + 170, by + btnSize + gap, btnSize, btnSize);
-            ctx.fillStyle = 'white';
-            ctx.fillText('▶', bx + 190, by + btnSize + gap + 20);
+        function mergeArray(arr) {
+            let result = [];
+            for (let i = 0; i < arr.length; i++) {
+                if (result.length === 0 || result[result.length - 1] !== arr[i]) {
+                    result.push(arr[i]);
+                } else {
+                    result[result.length - 1] *= 2;
+                    gameState.score += result[result.length - 1];
+                    if (gameState.score > gameState.bestScore) {
+                        gameState.bestScore = gameState.score;
+                        localStorage.setItem('bestScore', gameState.bestScore);
+                    }
+                }
+            }
+            while (result.length < config.grid_size) {
+                result.push(0);
+            }
+            return result;
         }
 
-        function gameLoop() {
-            if (!gameState.running || !gameState.grid.length) return;
-            draw();
+        function checkWinOrLose() {
+            for (let i = 0; i < config.grid_size; i++) {
+                for (let j = 0; j < config.grid_size; j++) {
+                    if (gameState.board[i][j] === config.win_value && !gameState.won) {
+                        gameState.won = true;
+                        gameState.running = false;
+                        setTimeout(() => {
+                            document.getElementById('clearScore').textContent = gameState.score;
+                            document.getElementById('clearScreen').style.display = 'flex';
+                        }, 200);
+                        return;
+                    }
+                }
+            }
+            if (!canMove()) {
+                gameState.running = false;
+                setTimeout(() => {
+                    document.getElementById('gameOverScore').textContent = gameState.score;
+                    document.getElementById('gameOverScreen').style.display = 'flex';
+                }, 200);
+            }
         }
 
         function startGame() {
             gameState.running = false;
-            gameState.grid = [];
-            gameState.score = 0;
-            initializeGrid();
-            gameState.running = true;
+            gameState = {
+                board: [],
+                score: 0,
+                bestScore: gameState.bestScore,
+                running: true,
+                moveInProgress: false,
+                won: false
+            };
             document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            initBoard();
         }
 
         function retryGame() {
             gameState.running = false;
-            gameState.grid = [];
-            gameState.score = 0;
-            initializeGrid();
-            gameState.running = true;
+            gameState = {
+                board: [],
+                score: 0,
+                bestScore: gameState.bestScore,
+                running: true,
+                moveInProgress: false,
+                won: false
+            };
+            document.getElementById('startScreen').style.display = 'none';
             document.getElementById('gameOverScreen').style.display = 'none';
             document.getElementById('clearScreen').style.display = 'none';
+            initBoard();
         }
 
-        function showGameOverScreen() {
-            document.getElementById('gameOverScreen').style.display = 'flex';
+        function getTileColor(value) {
+            return config.colors[value] || '#cdc1b4';
         }
 
-        function showClearScreen() {
-            document.getElementById('clearScreen').style.display = 'flex';
+        function render() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, 480, 540);
+
+            // スコア表示（y=0〜45）
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('Score: ' + gameState.score, 10, 10);
+            ctx.fillText('Best: ' + gameState.bestScore, 300, 10);
+
+            // グリッド描画（y=50〜418, 372x372）
+            const cellSize = 88;
+            const margin = 4;
+            const startX = 10;
+            const startY = 50;
+            const gridSize = 4 * cellSize + 5 * margin; // 372px
+
+            ctx.fillStyle = config.board_color;
+            ctx.fillRect(startX, startY, gridSize, gridSize);
+
+            for (let i = 0; i < config.grid_size; i++) {
+                for (let j = 0; j < config.grid_size; j++) {
+                    let x = startX + margin + j * (cellSize + margin);
+                    let y = startY + margin + i * (cellSize + margin);
+
+                    // 背景セル
+                    ctx.fillStyle = '#cdc1b4';
+                    ctx.fillRect(x, y, cellSize, cellSize);
+
+                    let value = gameState.board[i][j];
+                    if (value > 0) {
+                        ctx.fillStyle = getTileColor(value);
+                        ctx.fillRect(x, y, cellSize, cellSize);
+
+                        // タイル数字
+                        ctx.fillStyle = '#776e65';
+                        ctx.font = 'bold 32px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(value, x + cellSize / 2, y + cellSize / 2);
+                    }
+                }
+            }
+
+            // D-padボタン描画（y=425〜540）
+            drawButton(215, 428, 50, 50, '▲');
+            drawButton(215, 488, 50, 50, '▼');
+            drawButton(155, 458, 50, 50, '◀');
+            drawButton(275, 458, 50, 50, '▶');
         }
 
-        document.getElementById('startScreen').querySelector('.btn').addEventListener('click', startGame);
-        document.getElementById('gameOverScreen').querySelector('.btn').addEventListener('click', retryGame);
-        document.getElementById('clearScreen').querySelector('.btn').addEventListener('click', retryGame);
+        function drawButton(x, y, w, h, label) {
+            ctx.fillStyle = '#8b7355';
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeStyle = '#5d4e37';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, w, h);
 
-        canvas.addEventListener('click', (e) => {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, x + w / 2, y + h / 2);
+        }
+
+        canvas.addEventListener('click', function(e) {
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
-            const bx = 40, by = 480, btnSize = 40, gap = 20;
-
-            if (x > bx + 110 && x < bx + 150 && y > by && y < by + btnSize) {
+            if (x >= 215 && x <= 265 && y >= 428 && y <= 478) {
                 move('up');
-            } else if (x > bx + 110 && x < bx + 150 && y > by + btnSize + gap && y < by + 2 * btnSize + gap) {
+            } else if (x >= 215 && x <= 265 && y >= 488 && y <= 538) {
                 move('down');
-            } else if (x > bx + 50 && x < bx + 90 && y > by + btnSize + gap && y < by + 2 * btnSize + gap) {
+            } else if (x >= 155 && x <= 205 && y >= 458 && y <= 508) {
                 move('left');
-            } else if (x > bx + 170 && x < bx + 210 && y > by + btnSize + gap && y < by + 2 * btnSize + gap) {
+            } else if (x >= 275 && x <= 325 && y >= 458 && y <= 508) {
                 move('right');
             }
         });
 
-        document.getElementById('startScreen').style.display = 'flex';
+        function gameLoop() {
+            if (!gameState.board || !gameState.board.length) return;
+            render();
+        }
+
         setInterval(gameLoop, 16);
+
+        document.getElementById('startScreen').style.display = 'flex';
     </script>
 </body>
 </html>
