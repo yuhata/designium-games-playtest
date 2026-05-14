@@ -11,22 +11,21 @@
             box-sizing: border-box;
         }
         body {
-            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             background-color: #333;
+            font-family: Arial, sans-serif;
         }
-        .container {
+        #gameContainer {
             position: relative;
             width: 640px;
             height: 400px;
-            background-color: #87ceeb;
-            border: 4px solid #000;
         }
         canvas {
             display: block;
+            border: 2px solid #000;
             background-color: #87ceeb;
         }
         .screen {
@@ -35,469 +34,459 @@
             left: 0;
             width: 100%;
             height: 100%;
-            display: flex;
+            display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: rgba(0, 0, 0, 0.9);
-            color: white;
-            text-align: center;
+            background-color: rgba(0, 0, 0, 0.8);
             z-index: 100;
+            color: white;
+        }
+        .screen.active {
+            display: flex;
         }
         .screen h1 {
-            font-size: 48px;
+            font-size: 3em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px #000;
+        }
+        .screen h2 {
+            font-size: 2em;
             margin-bottom: 20px;
-            color: #ffd700;
+            text-shadow: 2px 2px 4px #000;
         }
         .screen p {
-            font-size: 20px;
+            font-size: 1.2em;
             margin-bottom: 30px;
-            line-height: 1.5;
+            text-align: center;
         }
-        .screen button {
-            font-size: 24px;
-            padding: 12px 40px;
-            background-color: #ff4500;
+        button {
+            padding: 15px 40px;
+            font-size: 1.3em;
+            background-color: #ff6b6b;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.3s;
         }
-        .screen button:hover {
-            background-color: #ff6347;
+        button:hover {
+            background-color: #ff5252;
         }
-        #startScreen {
-            display: flex;
-        }
-        #gameOverScreen {
-            display: none;
-        }
-        #clearScreen {
-            display: none;
-        }
-        #stageInfo {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
-            z-index: 10;
+        button:active {
+            transform: scale(0.98);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div id="stageInfo">Stage: <span id="stageNumber">1</span>/3</div>
+    <div id="gameContainer">
         <canvas id="gameCanvas" width="640" height="400"></canvas>
         
-        <div id="startScreen" class="screen">
+        <div id="startScreen" class="screen active">
             <h1>PUZZLE JUMP</h1>
-            <p>
-                箱をスイッチに乗せて扉を開き、<br>
-                ゴールに到達しよう！<br><br>
-                <strong>操作: AD/矢印キー移動</strong><br>
-                <strong>W/スペース: ジャンプ</strong>
-            </p>
+            <p>箱をスイッチに乗せて扉を開き、<br>ゴール旗を目指そう！</p>
+            <p style="font-size: 1em; color: #aaa;">移動: AD or 矢印キー | ジャンプ: W or スペース</p>
             <button onclick="startGame()">START</button>
         </div>
         
         <div id="gameOverScreen" class="screen">
-            <h1>GAME OVER</h1>
-            <p>穴に落ちてしまいました...<br>もう一度チャレンジしましょう！</p>
+            <h2>GAME OVER</h2>
+            <p>穴に落ちてしまいました...</p>
             <button onclick="retryGame()">RETRY</button>
         </div>
         
         <div id="clearScreen" class="screen">
-            <h1>CLEAR!</h1>
-            <p id="clearMessage">ステージをクリアしました！</p>
+            <h2>STAGE CLEAR!</h2>
+            <p id="clearMessage"></p>
             <button id="nextButton" onclick="nextStage()">NEXT STAGE</button>
         </div>
     </div>
 
     <script>
-        // {{GAME_CONFIG}}
-        const config = {
-            title: 'PUZZLE JUMP',
-            bg_color: '#87ceeb',
-            platform_color: '#8b4513',
-            box_color: '#d2691e',
-            switch_color: '#ff4500',
-            door_color: '#8b0000',
-            goal_color: '#ffd700',
-            gravity: 0.5,
-            jump_force: -12,
-            stage_count: 3
+    // {{GAME_CONFIG}}
+    const config = {
+        title: 'PUZZLE JUMP',
+        bg_color: '#87ceeb',
+        platform_color: '#8b4513',
+        box_color: '#d2691e',
+        switch_color: '#ff4500',
+        door_color: '#8b0000',
+        goal_color: '#ffd700',
+        gravity: 0.5,
+        jump_force: -12,
+        stage_count: 3
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const gameState = {
+        running: false,
+        currentStage: 0,
+        player: null,
+        boxes: [],
+        platforms: [],
+        switches: [],
+        doors: [],
+        goal: null
+    };
+
+    const keys = {};
+
+    window.addEventListener('keydown', e => {
+        keys[e.key] = true;
+        e.preventDefault();
+    });
+
+    window.addEventListener('keyup', e => {
+        keys[e.key] = false;
+    });
+
+    const stageData = [
+        {
+            platforms: [
+                { x: 0, y: 350, w: 640, h: 50 }, // 底面
+                { x: 150, y: 280, w: 100, h: 20 },
+                { x: 380, y: 220, w: 100, h: 20 },
+                { x: 550, y: 300, w: 90, h: 20 }
+            ],
+            holes: [
+                { x: 0, y: 400, w: 640, h: 200 }
+            ],
+            boxes: [
+                { x: 170, y: 240, w: 30, h: 30, onSwitch: false }
+            ],
+            switches: [
+                { x: 430, y: 185, r: 10, active: false }
+            ],
+            doors: [
+                { x: 550, y: 240, w: 30, h: 60, open: false }
+            ],
+            goal: { x: 580, y: 250, w: 30, h: 50 }
+        },
+        {
+            platforms: [
+                { x: 0, y: 350, w: 640, h: 50 },
+                { x: 80, y: 280, w: 80, h: 20 },
+                { x: 220, y: 240, w: 80, h: 20 },
+                { x: 360, y: 200, w: 80, h: 20 },
+                { x: 500, y: 280, w: 100, h: 20 }
+            ],
+            holes: [
+                { x: 0, y: 400, w: 640, h: 200 }
+            ],
+            boxes: [
+                { x: 100, y: 240, w: 30, h: 30, onSwitch: false },
+                { x: 240, y: 200, w: 30, h: 30, onSwitch: false }
+            ],
+            switches: [
+                { x: 410, y: 155, r: 10, active: false },
+                { x: 550, y: 245, r: 10, active: false }
+            ],
+            doors: [
+                { x: 450, y: 160, w: 30, h: 40, open: false },
+                { x: 580, y: 270, w: 30, h: 10, open: false }
+            ],
+            goal: { x: 600, y: 230, w: 30, h: 50 }
+        },
+        {
+            platforms: [
+                { x: 0, y: 350, w: 640, h: 50 },
+                { x: 50, y: 300, w: 80, h: 20 },
+                { x: 180, y: 240, w: 100, h: 20 },
+                { x: 340, y: 180, w: 100, h: 20 },
+                { x: 500, y: 240, w: 80, h: 20 }
+            ],
+            holes: [
+                { x: 0, y: 400, w: 640, h: 200 }
+            ],
+            boxes: [
+                { x: 70, y: 260, w: 30, h: 30, onSwitch: false },
+                { x: 200, y: 200, w: 30, h: 30, onSwitch: false },
+                { x: 360, y: 140, w: 30, h: 30, onSwitch: false }
+            ],
+            switches: [
+                { x: 130, y: 265, r: 10, active: false },
+                { x: 280, y: 205, r: 10, active: false },
+                { x: 420, y: 145, r: 10, active: false }
+            ],
+            doors: [
+                { x: 150, y: 260, w: 25, h: 40, open: false },
+                { x: 310, y: 200, w: 25, h: 40, open: false },
+                { x: 470, y: 140, w: 25, h: 40, open: false }
+            ],
+            goal: { x: 600, y: 190, w: 30, h: 50 }
+        }
+    ];
+
+    function startGame() {
+        gameState.currentStage = 0;
+        loadStage();
+    }
+
+    function loadStage() {
+        const data = stageData[gameState.currentStage];
+        
+        gameState.player = {
+            x: 20,
+            y: 300,
+            w: 25,
+            h: 35,
+            vx: 0,
+            vy: 0,
+            onGround: false
         };
 
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        gameState.platforms = [...data.platforms];
+        gameState.holes = [...data.holes];
+        gameState.boxes = data.boxes.map(b => ({...b}));
+        gameState.switches = data.switches.map(s => ({...s}));
+        gameState.doors = data.doors.map(d => ({...d}));
+        gameState.goal = {...data.goal};
 
-        const keys = {};
-        window.addEventListener('keydown', e => {
-            keys[e.key] = true;
-            e.preventDefault();
-        });
-        window.addEventListener('keyup', e => {
-            keys[e.key] = false;
-        });
+        document.getElementById('startScreen').classList.remove('active');
+        document.getElementById('gameOverScreen').classList.remove('active');
+        document.getElementById('clearScreen').classList.remove('active');
 
-        const gameState = {
-            currentStage: 0,
-            running: false,
-            player: null,
-            boxes: [],
-            platforms: [],
-            switches: [],
-            doors: [],
-            goal: null
-        };
+        gameState.running = true;
+        requestAnimationFrame(gameLoop);
+    }
 
-        const stageData = [
-            {
-                // Stage 1: Simple introduction
-                platforms: [
-                    { x: 0, y: 360, w: 640, h: 40 }, // floor
-                    { x: 150, y: 300, w: 100, h: 20 },
-                    { x: 350, y: 280, w: 100, h: 20 },
-                    { x: 500, y: 250, w: 120, h: 20 }
-                ],
-                boxes: [
-                    { x: 80, y: 300, w: 40, h: 40 }
-                ],
-                switches: [
-                    { x: 400, y: 260, radius: 10, doorId: 0 }
-                ],
-                doors: [
-                    { x: 520, y: 200, w: 40, h: 80, switchId: 0 }
-                ],
-                goal: { x: 580, y: 160 }
-            },
-            {
-                // Stage 2: Multiple boxes and switches
-                platforms: [
-                    { x: 0, y: 360, w: 640, h: 40 }, // floor
-                    { x: 50, y: 300, w: 100, h: 20 },
-                    { x: 200, y: 280, w: 120, h: 20 },
-                    { x: 380, y: 260, w: 100, h: 20 },
-                    { x: 500, y: 240, w: 120, h: 20 }
-                ],
-                boxes: [
-                    { x: 60, y: 250, w: 40, h: 40 },
-                    { x: 210, y: 230, w: 40, h: 40 }
-                ],
-                switches: [
-                    { x: 250, y: 250, radius: 10, doorId: 0 },
-                    { x: 430, y: 240, radius: 10, doorId: 1 }
-                ],
-                doors: [
-                    { x: 320, y: 160, w: 40, h: 120, switchId: 0 },
-                    { x: 520, y: 120, w: 40, h: 140, switchId: 1 }
-                ],
-                goal: { x: 580, y: 80 }
-            },
-            {
-                // Stage 3: Complex terrain
-                platforms: [
-                    { x: 0, y: 360, w: 200, h: 40 }, // floor left
-                    { x: 0, y: 280, w: 80, h: 20 },
-                    { x: 120, y: 240, w: 100, h: 20 },
-                    { x: 280, y: 280, w: 120, h: 20 },
-                    { x: 450, y: 220, w: 100, h: 20 },
-                    { x: 600, y: 360, w: 40, h: 40 }, // floor right
-                    { x: 540, y: 140, w: 100, h: 20 }
-                ],
-                boxes: [
-                    { x: 70, y: 230, w: 40, h: 40 },
-                    { x: 200, y: 190, w: 40, h: 40 }
-                ],
-                switches: [
-                    { x: 330, y: 260, radius: 10, doorId: 0 },
-                    { x: 500, y: 200, radius: 10, doorId: 1 }
-                ],
-                doors: [
-                    { x: 380, y: 140, w: 40, h: 160, switchId: 0 },
-                    { x: 560, y: 60, w: 40, h: 100, switchId: 1 }
-                ],
-                goal: { x: 600, y: 100 }
-            }
-        ];
+    function handleInput() {
+        const speed = 5;
+        gameState.player.vx = 0;
 
-        function initPlayer() {
-            gameState.player = {
-                x: 20,
-                y: 300,
-                w: 30,
-                h: 40,
-                vx: 0,
-                vy: 0,
-                onGround: false
-            };
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+            gameState.player.vx = -speed;
+        }
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+            gameState.player.vx = speed;
         }
 
-        function loadStage(stageIndex) {
-            const data = stageData[stageIndex];
-            
-            gameState.platforms = data.platforms.map(p => ({ ...p }));
-            gameState.boxes = data.boxes.map(b => ({ ...b, vx: 0, vy: 0, onGround: false }));
-            gameState.switches = data.switches.map(s => ({ ...s, activated: false }));
-            gameState.doors = data.doors.map(d => ({ ...d, open: false }));
-            gameState.goal = { ...data.goal };
-            
-            initPlayer();
-            
-            document.getElementById('stageNumber').textContent = stageIndex + 1;
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            
-            gameState.running = true;
-            requestAnimationFrame(gameLoop);
+        if ((keys['ArrowUp'] || keys['w'] || keys['W'] || keys[' ']) && gameState.player.onGround) {
+            gameState.player.vy = config.jump_force;
+            gameState.player.onGround = false;
         }
+    }
 
-        function startGame() {
-            gameState.currentStage = 0;
-            loadStage(0);
-        }
+    function checkCollision(rect1, rect2) {
+        return rect1.x < rect2.x + rect2.w &&
+               rect1.x + rect1.w > rect2.x &&
+               rect1.y < rect2.y + rect2.h &&
+               rect1.y + rect1.h > rect2.y;
+    }
 
-        function nextStage() {
-            gameState.currentStage++;
-            if (gameState.currentStage >= config.stage_count) {
-                document.getElementById('startScreen').style.display = 'flex';
-                document.getElementById('clearScreen').style.display = 'none';
-                gameState.currentStage = 0;
-            } else {
-                loadStage(gameState.currentStage);
-            }
-        }
+    function update() {
+        const player = gameState.player;
 
-        function retryGame() {
-            gameState.currentStage = 0;
-            document.getElementById('startScreen').style.display = 'flex';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            gameState.running = false;
-        }
+        // 重力
+        player.vy += config.gravity;
 
-        function handleInput() {
-            const speed = 6;
-            gameState.player.vx = 0;
-            
-            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
-                gameState.player.vx = -speed;
-            }
-            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
-                gameState.player.vx = speed;
-            }
-            
-            if ((keys['ArrowUp'] || keys['w'] || keys['W'] || keys[' ']) && gameState.player.onGround) {
-                gameState.player.vy = config.jump_force;
-                gameState.player.onGround = false;
-            }
-        }
+        // プレイヤー移動
+        player.x += player.vx;
+        player.y += player.vy;
 
-        function checkCollision(rect1, rect2) {
-            return rect1.x < rect2.x + rect2.w &&
-                   rect1.x + rect1.w > rect2.x &&
-                   rect1.y < rect2.y + rect2.h &&
-                   rect1.y + rect1.h > rect2.y;
-        }
-
-        function checkPointInCircle(px, py, cx, cy, radius) {
-            const dx = px - cx;
-            const dy = py - cy;
-            return Math.sqrt(dx * dx + dy * dy) <= radius;
-        }
-
-        function updateEntity(entity, isPlayer = false) {
-            entity.vy += config.gravity;
-            entity.x += entity.vx;
-            entity.y += entity.vy;
-
-            entity.onGround = false;
-
-            // Platform collision
-            for (let platform of gameState.platforms) {
-                if (checkCollision(entity, platform)) {
-                    if (entity.vy > 0 && entity.y + entity.h - entity.vy <= platform.y + 5) {
-                        entity.y = platform.y - entity.h;
-                        entity.vy = 0;
-                        entity.onGround = true;
-                    } else if (entity.vy < 0) {
-                        entity.y = platform.y + platform.h;
-                        entity.vy = 0;
-                    } else if (entity.vx > 0) {
-                        entity.x = platform.x - entity.w;
-                    } else if (entity.vx < 0) {
-                        entity.x = platform.x + platform.w;
-                    }
+        // プラットフォーム衝突
+        player.onGround = false;
+        for (let platform of gameState.platforms) {
+            if (checkCollision(player, platform)) {
+                if (player.vy > 0) {
+                    player.y = platform.y - player.h;
+                    player.vy = 0;
+                    player.onGround = true;
+                } else if (player.vy < 0) {
+                    player.y = platform.y + platform.h;
+                    player.vy = 0;
                 }
             }
-
-            // Door collision (if open, pass through)
-            for (let door of gameState.doors) {
-                if (!door.open && checkCollision(entity, door)) {
-                    if (entity.vx > 0) {
-                        entity.x = door.x - entity.w;
-                    } else if (entity.vx < 0) {
-                        entity.x = door.x + door.w;
-                    }
-                }
-            }
-
-            // Out of bounds (fall)
-            if (entity.y > canvas.height) {
-                return false;
-            }
-            return true;
         }
 
-        function update() {
-            // Update player
-            const playerAlive = updateEntity(gameState.player, true);
-            if (!playerAlive) {
-                gameState.running = false;
-                document.getElementById('gameOverScreen').style.display = 'flex';
+        // 穴判定
+        for (let hole of gameState.holes) {
+            if (checkCollision(player, hole)) {
+                gameOver();
                 return;
             }
+        }
 
-            // Update boxes
-            gameState.boxes = gameState.boxes.filter(box => {
-                const alive = updateEntity(box, false);
-                if (!alive) return false;
+        // 箱の移動と衝突
+        for (let box of gameState.boxes) {
+            box.vy = (box.vy || 0) + config.gravity;
+            box.x += (box.vx || 0);
+            box.y += box.vy;
 
-                // Box-player collision
-                if (checkCollision(gameState.player, box)) {
-                    if (gameState.player.vx > 0) {
-                        gameState.player.x = box.x - gameState.player.w;
-                    } else if (gameState.player.vx < 0) {
-                        gameState.player.x = box.x + box.w;
-                    }
-                    if (gameState.player.vy > 0) {
-                        gameState.player.y = box.y - gameState.player.h;
-                        gameState.player.vy = 0;
-                        gameState.player.onGround = true;
-                    }
-                }
-
-                // Box-box collision
-                for (let other of gameState.boxes) {
-                    if (box !== other && checkCollision(box, other)) {
-                        if (box.vx > 0) {
-                            box.x = other.x - box.w;
-                        } else if (box.vx < 0) {
-                            box.x = other.x + other.w;
-                        }
+            // プラットフォーム衝突
+            for (let platform of gameState.platforms) {
+                if (checkCollision(box, platform)) {
+                    if (box.vy > 0) {
+                        box.y = platform.y - box.h;
+                        box.vy = 0;
+                    } else if (box.vy < 0) {
+                        box.y = platform.y + platform.h;
+                        box.vy = 0;
                     }
                 }
-
-                return true;
-            });
-
-            // Check switches
-            for (let switchObj of gameState.switches) {
-                let activated = false;
-                for (let box of gameState.boxes) {
-                    const boxCenterX = box.x + box.w / 2;
-                    const boxCenterY = box.y + box.h / 2;
-                    if (checkPointInCircle(boxCenterX, boxCenterY, switchObj.x, switchObj.y, switchObj.radius + 20)) {
-                        activated = true;
-                        break;
-                    }
-                }
-                switchObj.activated = activated;
             }
 
-            // Update doors
-            for (let door of gameState.doors) {
-                door.open = gameState.switches[door.switchId] && gameState.switches[door.switchId].activated;
+            // プレイヤーが箱を押す
+            if (checkCollision(player, box)) {
+                if (player.vx > 0) {
+                    box.vx = 5;
+                    player.x = box.x - player.w;
+                } else if (player.vx < 0) {
+                    box.vx = -5;
+                    player.x = box.x + box.w;
+                }
+            } else {
+                box.vx = 0;
             }
 
-            // Check goal
-            if (checkCollision(gameState.player, gameState.goal)) {
-                gameState.running = false;
-                if (gameState.currentStage === config.stage_count - 1) {
-                    document.getElementById('clearMessage').textContent = 'すべてのステージをクリアしました！おめでとう！';
-                    document.getElementById('nextButton').textContent = 'リスタート';
-                } else {
-                    document.getElementById('clearMessage').textContent = `ステージ ${gameState.currentStage + 1} をクリアしました！`;
-                    document.getElementById('nextButton').textContent = 'NEXT STAGE';
+            // 穴に落ちた箱
+            for (let hole of gameState.holes) {
+                if (checkCollision(box, hole)) {
+                    box.y = -100;
                 }
-                document.getElementById('clearScreen').style.display = 'flex';
             }
         }
 
-        function draw() {
-            ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw platforms
-            ctx.fillStyle = config.platform_color;
-            for (let platform of gameState.platforms) {
-                ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
-            }
-
-            // Draw boxes
-            ctx.fillStyle = config.box_color;
+        // スイッチ判定
+        for (let i = 0; i < gameState.switches.length; i++) {
+            const sw = gameState.switches[i];
+            sw.active = false;
             for (let box of gameState.boxes) {
-                ctx.fillRect(box.x, box.y, box.w, box.h);
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(box.x, box.y, box.w, box.h);
+                const dist = Math.sqrt(Math.pow(box.x + box.w/2 - sw.x, 2) + 
+                                      Math.pow(box.y + box.h/2 - sw.y, 2));
+                if (dist < sw.r + 15) {
+                    sw.active = true;
+                    break;
+                }
             }
+        }
 
-            // Draw switches
-            for (let switchObj of gameState.switches) {
-                ctx.fillStyle = switchObj.activated ? '#00ff00' : config.switch_color;
-                ctx.beginPath();
-                ctx.arc(switchObj.x, switchObj.y, switchObj.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
-                ctx.stroke();
+        // 扉の開閉
+        for (let i = 0; i < gameState.doors.length; i++) {
+            gameState.doors[i].open = gameState.switches[i] && gameState.switches[i].active;
+        }
+
+        // 扉と衝突（開いていない場合）
+        for (let door of gameState.doors) {
+            if (!door.open && checkCollision(player, door)) {
+                if (player.vx > 0) {
+                    player.x = door.x - player.w;
+                } else if (player.vx < 0) {
+                    player.x = door.x + door.w;
+                }
             }
+        }
 
-            // Draw doors
-            for (let door of gameState.doors) {
-                ctx.fillStyle = door.open ? '#4a4a4a' : config.door_color;
-                ctx.fillRect(door.x, door.y, door.w, door.h);
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(door.x, door.y, door.w, door.h);
-            }
+        // ゴール判定
+        if (checkCollision(player, gameState.goal)) {
+            stageComplete();
+        }
+    }
 
-            // Draw goal flag
-            const goalPoleX = gameState.goal.x + 15;
-            const goalPoleY = gameState.goal.y;
-            ctx.strokeStyle = '#8b4513';
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.moveTo(goalPoleX, goalPoleY + 50);
-            ctx.lineTo(goalPoleX, goalPoleY);
-            ctx.stroke();
-            ctx.fillStyle = config.goal_color;
-            ctx.beginPath();
-            ctx.moveTo(goalPoleX, goalPoleY);
-            ctx.lineTo(goalPoleX + 30, goalPoleY + 15);
-            ctx.lineTo(goalPoleX, goalPoleY + 30);
-            ctx.closePath();
-            ctx.fill();
+    function draw() {
+        ctx.fillStyle = config.bg_color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw player
-            ctx.fillStyle = '#ff0000';
-            ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.w, gameState.player.h);
+        // プラットフォーム
+        ctx.fillStyle = config.platform_color;
+        for (let platform of gameState.platforms) {
+            ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
+        }
+
+        // 箱
+        ctx.fillStyle = config.box_color;
+        for (let box of gameState.boxes) {
+            ctx.fillRect(box.x, box.y, box.w, box.h);
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 2;
-            ctx.strokeRect(gameState.player.x, gameState.player.y, gameState.player.w, gameState.player.h);
+            ctx.strokeRect(box.x, box.y, box.w, box.h);
         }
 
-        function gameLoop() {
-            if (!gameState.running) return;
-            handleInput();
-            update();
-            draw();
-            requestAnimationFrame(gameLoop);
+        // スイッチ
+        for (let sw of gameState.switches) {
+            ctx.fillStyle = sw.active ? '#00ff00' : config.switch_color;
+            ctx.beginPath();
+            ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
         }
+
+        // 扉
+        ctx.fillStyle = gameState.doors[0].open ? '#00aa00' : config.door_color;
+        for (let door of gameState.doors) {
+            if (door.open) {
+                ctx.fillStyle = '#00aa00';
+            } else {
+                ctx.fillStyle = config.door_color;
+            }
+            ctx.fillRect(door.x, door.y, door.w, door.h);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(door.x, door.y, door.w, door.h);
+        }
+
+        // ゴール旗
+        const goal = gameState.goal;
+        ctx.fillStyle = config.goal_color;
+        ctx.fillRect(goal.x + 10, goal.y + 25, 10, 25);
+        ctx.fillRect(goal.x, goal.y, 30, 8);
+        ctx.beginPath();
+        ctx.moveTo(goal.x + 20, goal.y + 8);
+        ctx.lineTo(goal.x + 30, goal.y + 8);
+        ctx.lineTo(goal.x + 20, goal.y + 20);
+        ctx.closePath();
+        ctx.fill();
+
+        // プレイヤー
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.w, gameState.player.h);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(gameState.player.x, gameState.player.y, gameState.player.w, gameState.player.h);
+    }
+
+    function gameLoop() {
+        if (!gameState.running) return;
+        handleInput();
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function gameOver() {
+        gameState.running = false;
+        document.getElementById('gameOverScreen').classList.add('active');
+    }
+
+    function stageComplete() {
+        gameState.running = false;
+        const isLastStage = gameState.currentStage === config.stage_count - 1;
+        document.getElementById('clearMessage').textContent = 
+            isLastStage ? 'すべてのステージをクリアしました！' : 'ステージ ' + (gameState.currentStage + 2) + ' へ進みます';
+        document.getElementById('nextButton').textContent = 
+            isLastStage ? 'RESTART' : 'NEXT STAGE';
+        document.getElementById('clearScreen').classList.add('active');
+    }
+
+    function nextStage() {
+        gameState.currentStage++;
+        if (gameState.currentStage >= config.stage_count) {
+            startGame();
+        } else {
+            loadStage();
+        }
+    }
+
+    function retryGame() {
+        document.getElementById('startScreen').classList.add('active');
+        document.getElementById('gameOverScreen').classList.remove('active');
+        document.getElementById('clearScreen').classList.remove('active');
+        gameState.running = false;
+    }
     </script>
 </body>
 </html>
