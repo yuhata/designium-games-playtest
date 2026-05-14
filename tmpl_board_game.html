@@ -1,320 +1,416 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <title>REVERSI</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
-    #gameContainer { position: relative; width: 480px; height: 480px; }
-    #board { display: grid; grid-template-columns: repeat(8, 1fr); width: 480px; height: 480px; }
-    .cell { cursor: pointer; position: relative; }
-    .piece { width: 100%; height: 100%; border-radius: 50%; }
-    #startScreen, #gameOverScreen, #clearScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; z-index: 10; background: rgba(0, 0, 0, 0.8); }
-    button { padding: 16px 32px; font-size: 20px; cursor: pointer; border: 2px solid #fff; background: transparent; color: #fff; margin-top: 20px; }
-    button:hover { background: rgba(255, 255, 255, 0.1); }
-    #passMessage { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: bold; display: none; z-index: 5; color: #f0f0f0; }
-    #hud { margin-bottom: 20px; font-size: 18px; }
-    h1 { margin-bottom: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REVERSI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            margin-bottom: 20px;
+            color: #fff;
+            font-size: 2em;
+        }
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        #hud {
+            color: #fff;
+            font-size: 1.2em;
+            text-align: center;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            grid-gap: 1px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px;
+            position: relative;
+        }
+        .piece {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            position: absolute;
+        }
+        .piece.black {
+            background-color: #1a1a1a;
+        }
+        .piece.white {
+            background-color: #f0f0f0;
+        }
+        .cell.valid {
+            cursor: pointer;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.9);
+        }
+        #gameOverScreen, #clearScreen {
+            display: none;
+        }
+        .screen-content {
+            text-align: center;
+            color: #fff;
+        }
+        .screen-content h2 {
+            font-size: 3em;
+            margin-bottom: 30px;
+        }
+        .screen-content button {
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background-color: #3d8b3d;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .screen-content button:hover {
+            background-color: #5aad5a;
+        }
+        .pass-message {
+            color: #fff;
+            font-size: 1.5em;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 999;
+            display: none;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px 50px;
+            border-radius: 8px;
+        }
+    </style>
 </head>
 <body>
-  <h1>REVERSI</h1>
-  <div id="hud">黒: <span id="blackCount">2</span> | 白: <span id="whiteCount">2</span> | ターン: <span id="turnText">プレイヤー</span></div>
-  <div id="gameContainer">
-    <div id="board"></div>
-    <div id="startScreen"><button onclick="startGame()">START</button></div>
-    <div id="gameOverScreen" style="display: none;"><div style="font-size: 36px; margin-bottom: 20px;">GAME OVER</div><button onclick="retryGame()">RETRY</button></div>
-    <div id="clearScreen" style="display: none;"><div style="font-size: 36px; margin-bottom: 20px;">CLEAR</div><button onclick="retryGame()">RETRY</button></div>
-    <div id="passMessage">PASS</div>
-  </div>
-  
-  <script>
-    const config = {
-        title: 'REVERSI',
-        bg_color: '#0d4f0d',
-        grid_color: '#1a6b1a',
-        player_color: '#1a1a1a',
-        ai_color: '#f0f0f0',
-        board_size: 8,
-        valid_color: '#3d8b3d'
-    };
-    
-    const gameState = {
-        running: false,
-        board: [],
-        isPlayerTurn: true,
-        lastMoveWasPass: false,
-        aiThinking: false
-    };
-    
-    function initBoard() {
-        gameState.board = Array(8).fill(null).map(() => Array(8).fill(0));
-        gameState.board[3][3] = 1;
-        gameState.board[3][4] = -1;
-        gameState.board[4][3] = -1;
-        gameState.board[4][4] = 1;
-        gameState.lastMoveWasPass = false;
-        gameState.aiThinking = false;
-    }
-    
-    function drawBoard() {
-        const boardDiv = document.getElementById('board');
-        boardDiv.innerHTML = '';
-        
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.style.background = config.grid_color;
-                cell.style.border = '1px solid #0a3a0a';
-                cell.style.position = 'relative';
-                
-                const piece = gameState.board[r][c];
-                if (piece !== 0) {
-                    const pieceDiv = document.createElement('div');
-                    pieceDiv.className = 'piece';
-                    pieceDiv.style.background = piece === -1 ? config.player_color : config.ai_color;
-                    cell.appendChild(pieceDiv);
-                }
-                
-                if (gameState.isPlayerTurn && gameState.running && !gameState.aiThinking && isValidMove(r, c, -1)) {
-                    const dot = document.createElement('div');
-                    dot.style.width = '8px';
-                    dot.style.height = '8px';
-                    dot.style.background = config.valid_color;
-                    dot.style.borderRadius = '50%';
-                    dot.style.position = 'absolute';
-                    dot.style.top = '50%';
-                    dot.style.left = '50%';
-                    dot.style.transform = 'translate(-50%, -50%)';
-                    cell.appendChild(dot);
-                }
-                
-                cell.onclick = () => playerMove(r, c);
-                boardDiv.appendChild(cell);
-            }
+    <div id="startScreen">
+        <div class="screen-content">
+            <h2>REVERSI</h2>
+            <button onclick="startGame()">START</button>
+        </div>
+    </div>
+    <div id="gameOverScreen">
+        <div class="screen-content">
+            <h2>GAME OVER</h2>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+    <div id="clearScreen">
+        <div class="screen-content">
+            <h2>CLEAR</h2>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+    <div class="pass-message" id="passMessage">PASS</div>
+    <h1>REVERSI</h1>
+    <div id="gameContainer">
+        <div id="hud">
+            <div>Player (Black): <span id="playerCount">2</span></div>
+            <div>AI (White): <span id="aiCount">2</span></div>
+            <div id="turnInfo">Your Turn</div>
+        </div>
+        <div id="board"></div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'REVERSI',
+            bg_color: '#0d4f0d',
+            grid_color: '#1a6b1a',
+            player_color: '#1a1a1a',
+            ai_color: '#f0f0f0',
+            board_size: 8,
+            valid_color: '#3d8b3d'
+        };
+
+        let gameState = {
+            board: [],
+            running: false
+        };
+        let isPlayerTurn = true;
+
+        function initBoard() {
+            gameState.board = Array(8).fill(null).map(() => Array(8).fill(0));
+            gameState.board[3][3] = 1;
+            gameState.board[3][4] = -1;
+            gameState.board[4][3] = -1;
+            gameState.board[4][4] = 1;
         }
-        
-        updateHUD();
-    }
-    
-    function isValidMove(r, c, player) {
-        if (gameState.board[r][c] !== 0) return false;
-        
-        const directions = [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]];
-        
-        for (const [dr, dc] of directions) {
-            let nr = r + dr;
-            let nc = c + dc;
-            let found = false;
-            
-            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                if (gameState.board[nr][nc] === player) break;
-                if (gameState.board[nr][nc] === 0) break;
-                found = true;
-                nr += dr;
-                nc += dc;
-            }
-            
-            if (found && nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && gameState.board[nr][nc] === player) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-    
-    function applyMove(r, c, player) {
-        gameState.board[r][c] = player;
-        
-        const directions = [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]];
-        
-        for (const [dr, dc] of directions) {
-            let nr = r + dr;
-            let nc = c + dc;
-            let toFlip = [];
-            
-            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                if (gameState.board[nr][nc] === player) {
-                    toFlip.forEach(([fr, fc]) => gameState.board[fr][fc] = player);
-                    break;
-                }
-                if (gameState.board[nr][nc] === 0) break;
-                toFlip.push([nr, nc]);
-                nr += dr;
-                nc += dc;
-            }
-        }
-    }
-    
-    function hasValidMoves(player) {
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                if (isValidMove(r, c, player)) return true;
-            }
-        }
-        return false;
-    }
-    
-    function playerMove(r, c) {
-        if (!gameState.running || !gameState.isPlayerTurn || gameState.aiThinking) return;
-        if (!isValidMove(r, c, -1)) return;
-        
-        applyMove(r, c, -1);
-        gameState.isPlayerTurn = false;
-        gameState.lastMoveWasPass = false;
-        gameState.aiThinking = true;
-        drawBoard();
-    }
-    
-    function aiMove() {
-        if (!gameState.running || gameState.isPlayerTurn) return;
-        
-        if (!hasValidMoves(1)) {
-            if (!hasValidMoves(-1)) {
-                endGame();
-                return;
-            }
-            showPass();
-            gameState.lastMoveWasPass = true;
-            gameState.isPlayerTurn = true;
-            gameState.aiThinking = false;
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.body.style.background = config.bg_color;
+            gameState.running = true;
+            isPlayerTurn = true;
+            initBoard();
             drawBoard();
-            return;
+            updateHUD();
+            gameLoop();
         }
-        
-        let bestMove = null;
-        let bestScore = -Infinity;
-        
-        const corners = [[0,0], [0,7], [7,0], [7,7]];
-        const edges = [];
-        for (let i = 0; i < 8; i++) {
-            if (i > 0 && i < 7) {
-                edges.push([0, i], [7, i], [i, 0], [i, 7]);
+
+        function retryGame() {
+            document.getElementById('startScreen').style.display = 'flex';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameState.running = false;
+        }
+
+        function drawBoard() {
+            const boardElement = document.getElementById('board');
+            boardElement.innerHTML = '';
+            boardElement.style.backgroundColor = config.grid_color;
+
+            const validMoves = getValidMoves(-1);
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.style.backgroundColor = config.grid_color;
+
+                    const isValid = validMoves.some(m => m[0] === r && m[1] === c);
+                    if (isValid) {
+                        cell.classList.add('valid');
+                        cell.style.backgroundColor = config.valid_color;
+                        if (isPlayerTurn) {
+                            cell.onclick = () => playerMove(r, c);
+                        }
+                    }
+
+                    if (gameState.board[r][c] !== 0) {
+                        const piece = document.createElement('div');
+                        piece.className = 'piece';
+                        piece.classList.add(gameState.board[r][c] === -1 ? 'black' : 'white');
+                        cell.appendChild(piece);
+                    }
+
+                    boardElement.appendChild(cell);
+                }
             }
         }
-        
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                if (isValidMove(r, c, 1)) {
-                    let score = 0;
-                    if (corners.some(([cr, cc]) => cr === r && cc === c)) score = 1000;
-                    else if (edges.some(([er, ec]) => er === r && ec === c)) score = 100;
-                    else score = 10;
-                    
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestMove = [r, c];
+
+        function updateHUD() {
+            let blackCount = 0, whiteCount = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (gameState.board[r][c] === -1) blackCount++;
+                    if (gameState.board[r][c] === 1) whiteCount++;
+                }
+            }
+            document.getElementById('playerCount').textContent = blackCount;
+            document.getElementById('aiCount').textContent = whiteCount;
+            document.getElementById('turnInfo').textContent = isPlayerTurn ? 'Your Turn' : 'AI Thinking...';
+        }
+
+        function getValidMoves(player) {
+            const moves = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (gameState.board[r][c] === 0 && canPlace(r, c, player)) {
+                        moves.push([r, c]);
                     }
                 }
             }
+            return moves;
         }
-        
-        if (bestMove) {
-            applyMove(bestMove[0], bestMove[1], 1);
-            gameState.lastMoveWasPass = false;
-            
-            if (!hasValidMoves(-1)) {
-                if (!hasValidMoves(1)) {
+
+        function canPlace(r, c, player) {
+            const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+            for (let [dr, dc] of directions) {
+                if (hasFlips(r, c, dr, dc, player)) return true;
+            }
+            return false;
+        }
+
+        function hasFlips(r, c, dr, dc, player) {
+            let nr = r + dr, nc = c + dc;
+            let hasOpponent = false;
+            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                if (gameState.board[nr][nc] === 0) return false;
+                if (gameState.board[nr][nc] === player) return hasOpponent;
+                hasOpponent = true;
+                nr += dr;
+                nc += dc;
+            }
+            return false;
+        }
+
+        function flipPieces(r, c, player) {
+            const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+            for (let [dr, dc] of directions) {
+                const toFlip = [];
+                let nr = r + dr, nc = c + dc;
+                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                    if (gameState.board[nr][nc] === 0) break;
+                    if (gameState.board[nr][nc] === player) {
+                        for (let [fr, fc] of toFlip) {
+                            gameState.board[fr][fc] = player;
+                        }
+                        break;
+                    }
+                    toFlip.push([nr, nc]);
+                    nr += dr;
+                    nc += dc;
+                }
+            }
+        }
+
+        function playerMove(r, c) {
+            if (!isPlayerTurn || !gameState.running) return;
+            if (gameState.board[r][c] !== 0) return;
+            if (!canPlace(r, c, -1)) return;
+
+            gameState.board[r][c] = -1;
+            flipPieces(r, c, -1);
+            isPlayerTurn = false;
+            drawBoard();
+            updateHUD();
+            setTimeout(aiMove, 400);
+        }
+
+        function aiMove() {
+            if (!gameState.running) return;
+
+            const validMoves = getValidMoves(1);
+            if (validMoves.length === 0) {
+                const playerMoves = getValidMoves(-1);
+                if (playerMoves.length === 0) {
                     endGame();
                     return;
                 }
-                showPass();
-                gameState.lastMoveWasPass = true;
-                gameState.aiThinking = false;
-                drawBoard();
+                showPassMessage();
+                setTimeout(() => {
+                    isPlayerTurn = true;
+                    drawBoard();
+                    updateHUD();
+                }, 1000);
                 return;
             }
-            
-            gameState.isPlayerTurn = true;
-            gameState.aiThinking = false;
-        }
-        
-        drawBoard();
-    }
-    
-    function showPass() {
-        const passMsg = document.getElementById('passMessage');
-        passMsg.style.display = 'block';
-        setTimeout(() => {
-            passMsg.style.display = 'none';
-        }, 2000);
-    }
-    
-    function endGame() {
-        gameState.running = false;
-        
-        let blackCount = 0, whiteCount = 0;
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                if (gameState.board[r][c] === -1) blackCount++;
-                else if (gameState.board[r][c] === 1) whiteCount++;
-            }
-        }
-        
-        if (blackCount > whiteCount) {
-            document.getElementById('clearScreen').style.display = 'flex';
-        } else {
-            document.getElementById('gameOverScreen').style.display = 'flex';
-        }
-    }
-    
-    function updateHUD() {
-        let blackCount = 0, whiteCount = 0;
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                if (gameState.board[r][c] === -1) blackCount++;
-                else if (gameState.board[r][c] === 1) whiteCount++;
-            }
-        }
-        document.getElementById('blackCount').textContent = blackCount;
-        document.getElementById('whiteCount').textContent = whiteCount;
-        document.getElementById('turnText').textContent = gameState.isPlayerTurn ? 'プレイヤー' : 'AI';
-    }
-    
-    function startGame() {
-        document.getElementById('startScreen').style.display = 'none';
-        document.getElementById('gameOverScreen').style.display = 'none';
-        document.getElementById('clearScreen').style.display = 'none';
-        gameState.running = true;
-        gameState.isPlayerTurn = true;
-        initBoard();
-        drawBoard();
-    }
-    
-    function retryGame() {
-        startGame();
-    }
-    
-    function gameLoop() {
-        if (!gameState.running) return;
-        
-        if (gameState.isPlayerTurn && !gameState.aiThinking) {
-            if (!hasValidMoves(-1)) {
-                if (!hasValidMoves(1)) {
+
+            const move = selectAIMove(validMoves);
+            gameState.board[move[0]][move[1]] = 1;
+            flipPieces(move[0], move[1], 1);
+            drawBoard();
+            updateHUD();
+
+            const playerMoves = getValidMoves(-1);
+            if (playerMoves.length === 0) {
+                const aiMoves = getValidMoves(1);
+                if (aiMoves.length === 0) {
                     endGame();
                     return;
                 }
-                showPass();
-                gameState.lastMoveWasPass = true;
-                gameState.isPlayerTurn = false;
-                gameState.aiThinking = true;
+                showPassMessage();
+                setTimeout(aiMove, 1000);
+                return;
+            }
+
+            isPlayerTurn = true;
+        }
+
+        function selectAIMove(moves) {
+            let bestMove = moves[0];
+            let bestScore = -1;
+
+            for (let [r, c] of moves) {
+                let score = 0;
+                const corners = [[0, 0], [0, 7], [7, 0], [7, 7]];
+                if (corners.some(cor => cor[0] === r && cor[1] === c)) {
+                    score += 100;
+                } else if (r === 0 || r === 7 || c === 0 || c === 7) {
+                    score += 50;
+                }
+
+                let flipCount = 0;
+                const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+                for (let [dr, dc] of directions) {
+                    let nr = r + dr, nc = c + dc;
+                    while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                        if (gameState.board[nr][nc] === 0) break;
+                        if (gameState.board[nr][nc] === 1) break;
+                        flipCount++;
+                        nr += dr;
+                        nc += dc;
+                    }
+                }
+                score += flipCount;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = [r, c];
+                }
+            }
+
+            return bestMove;
+        }
+
+        function showPassMessage() {
+            const msg = document.getElementById('passMessage');
+            msg.style.display = 'block';
+            setTimeout(() => {
+                msg.style.display = 'none';
+            }, 1000);
+        }
+
+        function endGame() {
+            gameState.running = false;
+            let blackCount = 0, whiteCount = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (gameState.board[r][c] === -1) blackCount++;
+                    if (gameState.board[r][c] === 1) whiteCount++;
+                }
+            }
+
+            if (blackCount > whiteCount) {
+                document.getElementById('clearScreen').style.display = 'flex';
+            } else {
+                document.getElementById('gameOverScreen').style.display = 'flex';
             }
         }
-        
-        if (!gameState.isPlayerTurn && gameState.aiThinking) {
-            aiMove();
+
+        function gameLoop() {
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
         }
-        
-        requestAnimationFrame(gameLoop);
-    }
-    
-    document.body.style.background = config.bg_color;
-    document.body.style.color = '#fff';
-    
-    initBoard();
-    drawBoard();
-    gameLoop();
-  </script>
+    </script>
 </body>
 </html>

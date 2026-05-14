@@ -10,29 +10,48 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: Arial, sans-serif;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background-color: #1a2a1a;
             overflow: hidden;
         }
-        
-        #container {
+
+        #gameContainer {
             position: relative;
             width: 800px;
             height: 600px;
-            border: 2px solid #666;
+            background-color: #1a2a1a;
+            border: 2px solid #4a7c4e;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
         }
-        
-        #gameCanvas {
+
+        canvas {
             display: block;
             width: 100%;
             height: 100%;
         }
-        
+
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #f6e05e;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 10;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+        }
+
+        #hud div {
+            margin-bottom: 5px;
+        }
+
         #startScreen {
             position: absolute;
             top: 0;
@@ -40,13 +59,37 @@
             width: 100%;
             height: 100%;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.8);
+            background-color: rgba(26, 42, 26, 0.95);
+            z-index: 100;
         }
-        
+
+        #startScreen h1 {
+            font-size: 48px;
+            color: #f6e05e;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        #startButton {
+            padding: 15px 40px;
+            font-size: 20px;
+            background-color: #f6e05e;
+            color: #1a2a1a;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        #startButton:hover {
+            background-color: #ffd700;
+            transform: scale(1.05);
+        }
+
         #gameOverScreen {
             position: absolute;
             top: 0;
@@ -54,13 +97,20 @@
             width: 100%;
             height: 100%;
             display: none;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.9);
+            background-color: rgba(26, 42, 26, 0.95);
+            z-index: 100;
         }
-        
+
+        #gameOverScreen h1 {
+            font-size: 48px;
+            color: #e53e3e;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
         #clearScreen {
             position: absolute;
             top: 0;
@@ -68,73 +118,57 @@
             width: 100%;
             height: 100%;
             display: none;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.9);
+            background-color: rgba(26, 42, 26, 0.95);
+            z-index: 100;
         }
-        
-        .screen-text {
-            color: white;
+
+        #clearScreen h1 {
             font-size: 48px;
-            font-weight: bold;
-            margin-bottom: 20px;
+            color: #4ade80;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
         }
-        
-        .screen-button {
+
+        .endGameButton {
             padding: 15px 40px;
-            font-size: 18px;
-            background: #f6e05e;
+            font-size: 20px;
+            background-color: #f6e05e;
+            color: #1a2a1a;
             border: none;
-            cursor: pointer;
             border-radius: 5px;
+            cursor: pointer;
             font-weight: bold;
-            color: #000;
+            transition: all 0.3s;
         }
-        
-        .screen-button:hover {
-            background: #e0c146;
-        }
-        
-        #hud {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            font-size: 14px;
-            font-family: monospace;
-            z-index: 5;
-        }
-        
-        .hud-item {
-            margin: 5px 0;
+
+        .endGameButton:hover {
+            background-color: #ffd700;
+            transform: scale(1.05);
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <canvas id="gameCanvas"></canvas>
-        
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="hud">
-            <div class="hud-item">HP: <span id="hudHp">100</span></div>
-            <div class="hud-item">ALIVE: <span id="hudAlive">10</span></div>
-            <div class="hud-item">ZONE: <span id="hudZone">30</span>s</div>
+            <div id="hpDisplay">HP: 100</div>
+            <div id="survivorsDisplay">Survivors: 10</div>
+            <div id="zoneDisplay">Zone in: 30s</div>
         </div>
-        
         <div id="startScreen">
-            <div class="screen-text">BATTLE ROYALE</div>
-            <button class="screen-button" onclick="startGame()">START</button>
+            <h1>BATTLE ROYALE</h1>
+            <button id="startButton">START</button>
         </div>
-        
         <div id="gameOverScreen">
-            <div class="screen-text">GAME OVER</div>
-            <button class="screen-button" onclick="retryGame()">RETRY</button>
+            <h1>GAME OVER</h1>
+            <button class="endGameButton" onclick="retryGame()">RETRY</button>
         </div>
-        
         <div id="clearScreen">
-            <div class="screen-text">YOU WIN!</div>
-            <button class="screen-button" onclick="retryGame()">RETRY</button>
+            <h1>VICTORY!</h1>
+            <button class="endGameButton" onclick="retryGame()">RETRY</button>
         </div>
     </div>
 
@@ -151,325 +185,349 @@
             zone_shrink_interval: 30,
             zone_damage: 2
         };
-        
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
-        canvas.width = 800;
-        canvas.height = 600;
-        
-        document.body.style.background = config.bg_color;
-        
-        const gameState = {
+
+        let gameState = {
             running: false,
-            zoneTimer: config.zone_shrink_interval,
-            zonePhase: 0,
-            worldWidth: 800,
-            worldHeight: 600
+            time: 0,
+            zoneRadius: 250,
+            zoneCenterX: 400,
+            zoneCenterY: 300,
+            minZoneRadius: 50,
+            zoneNextShrink: config.zone_shrink_interval,
+            zonePhase: 0
         };
-        
-        const initialZoneRadius = 250;
-        let zoneRadius = initialZoneRadius;
-        const zoneCenterX = 400;
-        const zoneCenterY = 300;
-        
-        class Entity {
-            constructor(x, y, radius, color) {
+
+        let player;
+        let enemies = [];
+        let items = [];
+        let keys = {};
+
+        class Player {
+            constructor(x, y) {
                 this.x = x;
                 this.y = y;
-                this.radius = radius;
-                this.color = color;
-                this.vx = 0;
-                this.vy = 0;
-                this.speed = 2;
-                this.hp = 100;
-                this.maxHp = 100;
-                this.attackPower = 10;
-                this.attackRange = 30;
+                this.radius = 8;
+                this.hp = config.player_hp;
+                this.maxHp = config.player_hp;
+                this.speed = 3;
+                this.attackRange = 25;
+                this.attackPower = 15;
                 this.attackCooldown = 0;
-                this.inZone = true;
+                this.weaponLevel = 1;
+                this.healingLevel = 1;
             }
-            
+
             update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                
-                this.x = Math.max(this.radius, Math.min(gameState.worldWidth - this.radius, this.x));
-                this.y = Math.max(this.radius, Math.min(gameState.worldHeight - this.radius, this.y));
-                
-                const dx = this.x - zoneCenterX;
-                const dy = this.y - zoneCenterY;
-                const distToZone = Math.sqrt(dx * dx + dy * dy);
-                
-                this.inZone = distToZone <= zoneRadius;
-                
-                if (!this.inZone) {
-                    this.hp -= config.zone_damage;
+                let vx = 0, vy = 0;
+                if (keys['w']) vy -= this.speed;
+                if (keys['s']) vy += this.speed;
+                if (keys['a']) vx -= this.speed;
+                if (keys['d']) vx += this.speed;
+
+                this.x += vx;
+                this.y += vy;
+
+                this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+
+                let dist = Math.hypot(this.x - gameState.zoneCenterX, this.y - gameState.zoneCenterY);
+                if (dist > gameState.zoneRadius) {
+                    this.hp -= config.zone_damage * 0.016;
                 }
-                
-                if (this.attackCooldown > 0) {
-                    this.attackCooldown -= 1;
+
+                if (this.attackCooldown > 0) this.attackCooldown -= 0.016;
+
+                for (let i = items.length - 1; i >= 0; i--) {
+                    if (Math.hypot(this.x - items[i].x, this.y - items[i].y) < this.radius + items[i].radius) {
+                        if (items[i].type === 'weapon') {
+                            this.weaponLevel += 1;
+                            this.attackPower += 10;
+                        } else if (items[i].type === 'heal') {
+                            this.hp = Math.min(this.maxHp, this.hp + 30 * this.healingLevel);
+                            this.healingLevel += 0.1;
+                        }
+                        items.splice(i, 1);
+                    }
+                }
+
+                if (this.hp <= 0) {
+                    gameState.running = false;
+                    document.getElementById('gameOverScreen').style.display = 'flex';
+                    return;
                 }
             }
-            
-            draw() {
-                ctx.fillStyle = this.color;
+
+            attack() {
+                if (this.attackCooldown <= 0) {
+                    for (let enemy of enemies) {
+                        let dist = Math.hypot(this.x - enemy.x, this.y - enemy.y);
+                        if (dist < this.attackRange + enemy.radius) {
+                            enemy.hp -= this.attackPower * this.weaponLevel;
+                        }
+                    }
+                    this.attackCooldown = 0.5;
+                }
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = config.player_color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
-                
-                ctx.fillStyle = 'white';
-                ctx.font = '10px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(Math.round(this.hp), this.x, this.y);
-            }
-            
-            canAttack() {
-                return this.attackCooldown <= 0;
-            }
-            
-            attack() {
-                this.attackCooldown = 30;
+
+                ctx.strokeStyle = '#ffd700';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+                ctx.stroke();
             }
         }
-        
+
+        class Enemy {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 7;
+                this.hp = 30;
+                this.maxHp = 30;
+                this.speed = 1.5;
+                this.attackRange = 20;
+                this.attackPower = 8;
+                this.attackCooldown = 0;
+                this.moveTimer = Math.random() * 120 + 60;
+                this.targetX = x;
+                this.targetY = y;
+                this.chasePlayer = false;
+                this.chaseTimer = 0;
+            }
+
+            update() {
+                this.moveTimer--;
+                if (this.moveTimer <= 0) {
+                    this.targetX = Math.random() * canvas.width;
+                    this.targetY = Math.random() * canvas.height;
+                    this.moveTimer = Math.random() * 120 + 60;
+                }
+
+                let playerDist = Math.hypot(this.x - player.x, this.y - player.y);
+                if (playerDist < 150) {
+                    this.chasePlayer = true;
+                    this.chaseTimer = 120;
+                } else if (this.chaseTimer > 0) {
+                    this.chaseTimer--;
+                    this.chasePlayer = true;
+                } else {
+                    this.chasePlayer = false;
+                }
+
+                if (this.chasePlayer) {
+                    this.targetX = player.x;
+                    this.targetY = player.y;
+                }
+
+                let angle = Math.atan2(this.targetY - this.y, this.targetX - this.x);
+                this.x += Math.cos(angle) * this.speed;
+                this.y += Math.sin(angle) * this.speed;
+
+                this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+
+                let dist = Math.hypot(this.x - gameState.zoneCenterX, this.y - gameState.zoneCenterY);
+                if (dist > gameState.zoneRadius) {
+                    this.hp -= config.zone_damage * 0.016;
+                }
+
+                if (this.attackCooldown > 0) this.attackCooldown -= 0.016;
+
+                if (playerDist < this.attackRange + player.radius) {
+                    if (this.attackCooldown <= 0) {
+                        player.hp -= this.attackPower;
+                        this.attackCooldown = 1;
+                    }
+                }
+
+                for (let other of enemies) {
+                    if (other === this) continue;
+                    let otherDist = Math.hypot(this.x - other.x, this.y - other.y);
+                    if (otherDist < this.attackRange + other.radius && Math.random() < 0.01) {
+                        if (this.attackCooldown <= 0) {
+                            other.hp -= this.attackPower;
+                            this.attackCooldown = 0.5;
+                        }
+                    }
+                }
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = config.enemy_color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = '#ff6666';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
         class Item {
             constructor(x, y, type) {
                 this.x = x;
                 this.y = y;
-                this.type = type;
                 this.radius = 5;
-                this.collected = false;
+                this.type = type;
             }
-            
-            draw() {
+
+            draw(ctx) {
                 if (this.type === 'weapon') {
-                    ctx.fillStyle = '#ffd700';
+                    ctx.fillStyle = '#ff9800';
                 } else {
-                    ctx.fillStyle = '#00ff00';
+                    ctx.fillStyle = '#4ade80';
                 }
                 ctx.beginPath();
                 ctx.rect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
                 ctx.fill();
             }
         }
-        
-        let player = null;
-        let enemies = [];
-        let items = [];
-        const keys = {};
-        
+
         function initGame() {
-            gameState.zoneTimer = config.zone_shrink_interval;
+            gameState.running = false;
+            gameState.time = 0;
+            gameState.zoneRadius = 250;
+            gameState.zoneCenterX = 400;
+            gameState.zoneCenterY = 300;
+            gameState.zoneNextShrink = config.zone_shrink_interval;
             gameState.zonePhase = 0;
-            zoneRadius = initialZoneRadius;
-            
-            player = new Entity(400, 300, 8, config.player_color);
-            player.hp = config.player_hp;
-            player.maxHp = config.player_hp;
-            
+
+            player = new Player(400, 300);
             enemies = [];
-            for (let i = 0; i < config.total_players - 1; i++) {
-                let x, y, distance;
-                do {
-                    x = Math.random() * gameState.worldWidth;
-                    y = Math.random() * gameState.worldHeight;
-                    const dx = x - zoneCenterX;
-                    const dy = y - zoneCenterY;
-                    distance = Math.sqrt(dx * dx + dy * dy);
-                } while (distance > zoneRadius);
-                
-                const enemy = new Entity(x, y, 6, config.enemy_color);
-                enemy.hp = 60;
-                enemy.maxHp = 60;
-                enemies.push(enemy);
-            }
-            
             items = [];
-            for (let i = 0; i < 15; i++) {
-                let x, y, distance;
-                do {
-                    x = Math.random() * gameState.worldWidth;
-                    y = Math.random() * gameState.worldHeight;
-                    const dx = x - zoneCenterX;
-                    const dy = y - zoneCenterY;
-                    distance = Math.sqrt(dx * dx + dy * dy);
-                } while (distance > zoneRadius);
-                
-                const type = Math.random() < 0.5 ? 'weapon' : 'heal';
-                items.push(new Item(x, y, type));
+
+            for (let i = 0; i < config.total_players - 1; i++) {
+                let angle = (i / (config.total_players - 1)) * Math.PI * 2;
+                let x = 400 + Math.cos(angle) * 150;
+                let y = 300 + Math.sin(angle) * 150;
+                enemies.push(new Enemy(x, y));
             }
-        }
-        
-        function updatePlayerInput() {
-            player.vx = 0;
-            player.vy = 0;
-            
-            if (keys['w'] || keys['W']) player.vy = -player.speed;
-            if (keys['s'] || keys['S']) player.vy = player.speed;
-            if (keys['a'] || keys['A']) player.vx = -player.speed;
-            if (keys['d'] || keys['D']) player.vx = player.speed;
-        }
-        
-        function updateEnemyAI() {
-            enemies.forEach((enemy, idx) => {
-                if (Math.random() < 0.05) {
-                    enemy.vx = (Math.random() - 0.5) * 3;
-                    enemy.vy = (Math.random() - 0.5) * 3;
-                }
-                
-                if (Math.random() < 0.02 && enemy.canAttack()) {
-                    const targets = [player, ...enemies.filter((e, i) => i !== idx && e.hp > 0)];
-                    if (targets.length > 0) {
-                        const target = targets[Math.floor(Math.random() * targets.length)];
-                        const dx = target.x - enemy.x;
-                        const dy = target.y - enemy.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (dist < enemy.attackRange) {
-                            target.hp -= enemy.attackPower;
-                            enemy.attack();
-                        }
-                    }
-                }
-            });
-        }
-        
-        function checkCollisions() {
-            items = items.filter(item => !item.collected);
-            
-            items.forEach(item => {
-                const dx = player.x - item.x;
-                const dy = player.y - item.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                if (dist < player.radius + item.radius) {
-                    if (item.type === 'weapon') {
-                        player.attackPower = 20;
-                    } else if (item.type === 'heal') {
-                        player.hp = Math.min(player.maxHp, player.hp + 30);
-                    }
-                    item.collected = true;
-                }
-            });
-            
-            enemies.forEach(enemy => {
-                const dx = player.x - enemy.x;
-                const dy = player.y - enemy.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                if (dist < player.radius + enemy.radius + 5 && keys[' '] && player.canAttack()) {
-                    enemy.hp -= player.attackPower;
-                    player.attack();
-                    keys[' '] = false;
-                }
-            });
-        }
-        
-        function updateHUD() {
-            document.getElementById('hudHp').textContent = Math.max(0, Math.round(player.hp));
-            
-            const alive = enemies.filter(e => e.hp > 0).length + 1;
-            document.getElementById('hudAlive').textContent = alive;
-            
-            const remainingTime = Math.ceil(gameState.zoneTimer);
-            document.getElementById('hudZone').textContent = remainingTime;
-        }
-        
-        function gameLoop() {
-            if (!gameState.running) return;
-            
-            updatePlayerInput();
-            updateEnemyAI();
-            
-            player.update();
-            enemies.forEach(e => e.update());
-            
-            checkCollisions();
-            
-            gameState.zoneTimer -= 1 / 60;
-            if (gameState.zoneTimer <= 0) {
-                gameState.zonePhase += 1;
-                gameState.zoneTimer = config.zone_shrink_interval;
-                const shrinkFactor = 0.7;
-                zoneRadius *= shrinkFactor;
+
+            for (let i = 0; i < 5; i++) {
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                items.push(new Item(x, y, Math.random() < 0.5 ? 'weapon' : 'heal'));
             }
-            
-            ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, gameState.worldWidth, gameState.worldHeight);
-            
-            const dx = zoneCenterX;
-            const dy = zoneCenterY;
-            ctx.fillStyle = config.safe_color;
-            ctx.beginPath();
-            ctx.arc(dx, dy, zoneRadius, 0, Math.PI * 2);
-            ctx.fill();
-            
-            ctx.fillStyle = config.danger_color;
-            ctx.beginPath();
-            ctx.arc(dx, dy, zoneRadius * 1.2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(dx, dy, zoneRadius, 0, Math.PI * 2);
-            ctx.fill();
-            
-            items.forEach(item => item.draw());
-            player.draw();
-            enemies.forEach(enemy => {
-                if (enemy.hp > 0) {
-                    enemy.draw();
-                }
-            });
-            
-            updateHUD();
-            
-            const activeEnemies = enemies.filter(e => e.hp > 0).length;
-            if (player.hp <= 0) {
-                gameState.running = false;
-                showGameOver();
-                return;
-            }
-            
-            if (activeEnemies === 0) {
-                gameState.running = false;
-                showClear();
-                return;
-            }
-            
-            requestAnimationFrame(gameLoop);
-        }
-        
-        function startGame() {
-            document.getElementById('startScreen').style.display = 'none';
-            initGame();
+
             gameState.running = true;
             gameLoop();
         }
-        
-        function showGameOver() {
-            document.getElementById('gameOverScreen').style.display = 'flex';
+
+        function gameLoop() {
+            if (!gameState.running) {
+                if (gameState.running === null) return;
+            }
+
+            gameState.time += 0.016;
+            gameState.zoneNextShrink -= 0.016;
+
+            if (gameState.zoneNextShrink <= 0) {
+                gameState.zoneNextShrink = config.zone_shrink_interval;
+                gameState.zonePhase++;
+                let shrinkAmount = (250 - gameState.minZoneRadius) / 10;
+                gameState.zoneRadius = Math.max(gameState.minZoneRadius, gameState.zoneRadius - shrinkAmount);
+
+                if (gameState.zoneRadius === gameState.minZoneRadius && Math.random() < 0.5) {
+                    gameState.zoneCenterX += (Math.random() - 0.5) * 100;
+                    gameState.zoneCenterY += (Math.random() - 0.5) * 100;
+                }
+            }
+
+            if (keys[' ']) {
+                player.attack();
+                keys[' '] = false;
+            }
+
+            player.update();
+
+            for (let enemy of enemies) {
+                enemy.update();
+            }
+
+            let activeEnemies = enemies.filter(e => e.hp > 0).length;
+
+            if (activeEnemies === 0) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+
+            if (player.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = config.safe_color;
+            ctx.beginPath();
+            ctx.arc(gameState.zoneCenterX, gameState.zoneCenterY, gameState.zoneRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = config.danger_color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(gameState.zoneCenterX, gameState.zoneCenterY, gameState.zoneRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            for (let item of items) {
+                item.draw(ctx);
+            }
+
+            player.draw(ctx);
+
+            for (let enemy of enemies) {
+                if (enemy.hp > 0) {
+                    enemy.draw(ctx);
+                }
+            }
+
+            document.getElementById('hpDisplay').textContent = `HP: ${Math.ceil(player.hp)}`;
+            document.getElementById('survivorsDisplay').textContent = `Survivors: ${activeEnemies + 1}`;
+            document.getElementById('zoneDisplay').textContent = `Zone in: ${Math.ceil(gameState.zoneNextShrink)}s`;
+
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
         }
-        
-        function showClear() {
-            document.getElementById('clearScreen').style.display = 'flex';
+
+        function startGame() {
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'none';
+            initGame();
         }
-        
+
         function retryGame() {
+            document.getElementById('startScreen').style.display = 'flex';
             document.getElementById('gameOverScreen').style.display = 'none';
             document.getElementById('clearScreen').style.display = 'none';
-            document.getElementById('startScreen').style.display = 'flex';
             gameState.running = false;
         }
-        
-        window.addEventListener('keydown', (e) => {
-            keys[e.key] = true;
-            if (e.key === ' ') e.preventDefault();
+
+        document.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
         });
-        
-        window.addEventListener('keyup', (e) => {
-            keys[e.key] = false;
+
+        document.addEventListener('keyup', e => {
+            keys[e.key.toLowerCase()] = false;
         });
+
+        document.getElementById('startButton').addEventListener('click', startGame);
     </script>
 </body>
 </html>
