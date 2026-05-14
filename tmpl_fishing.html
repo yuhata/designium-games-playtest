@@ -1,465 +1,425 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FISHING</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background: #333;
-      font-family: Arial, sans-serif;
-    }
-    .wrapper {
-      position: relative;
-      width: 400px;
-      height: 600px;
-      background: #fff;
-      border: 2px solid #000;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-    }
-    #startScreen {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.9);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 100;
-      color: #fff;
-    }
-    #startScreen h1 {
-      font-size: 48px;
-      margin-bottom: 20px;
-    }
-    #startScreen p {
-      font-size: 16px;
-      margin-bottom: 30px;
-      text-align: center;
-    }
-    #startBtn {
-      padding: 12px 30px;
-      font-size: 18px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    #startBtn:hover {
-      background: #45a049;
-    }
-    #gameContainer {
-      position: relative;
-      display: block;
-    }
-    #canvas {
-      display: block;
-      background: #87ceeb;
-    }
-    .hud {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      font-size: 14px;
-      font-weight: bold;
-      color: #333;
-      z-index: 10;
-    }
-    .hud-caught {
-      font-size: 18px;
-      color: #f6ad55;
-      margin-bottom: 5px;
-    }
-    .hud-status {
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 5px;
-    }
-    .hud-hint {
-      font-size: 12px;
-      color: #0066cc;
-      font-style: italic;
-    }
-    #clearScreen {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.95);
-      display: none;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 101;
-      color: #fff;
-    }
-    #clearScreen h1 {
-      font-size: 52px;
-      margin-bottom: 20px;
-      color: #FFD700;
-    }
-    #clearScreen p {
-      font-size: 18px;
-      margin-bottom: 30px;
-    }
-    #retryBtn {
-      padding: 12px 30px;
-      font-size: 18px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    #retryBtn:hover {
-      background: #45a049;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FISHING</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameContainer {
+            position: relative;
+            background-color: #87ceeb;
+            border: 2px solid #333;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            color: white;
+            text-align: center;
+        }
+        
+        #startScreen h1 {
+            font-size: 2.5em;
+            margin: 20px 0;
+        }
+        
+        #startScreen p {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+        
+        #startScreen .rules {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            max-width: 350px;
+        }
+        
+        #startScreen button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #startScreen button:hover {
+            background-color: #45a049;
+        }
+        
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            color: white;
+            text-align: center;
+        }
+        
+        #clearScreen h1 {
+            font-size: 3em;
+            margin: 20px 0;
+            color: #FFD700;
+        }
+        
+        #clearScreen p {
+            font-size: 1.5em;
+            margin: 10px 0;
+        }
+        
+        #clearScreen button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #clearScreen button:hover {
+            background-color: #0b7dda;
+        }
+    </style>
 </head>
 <body>
-  <div class="wrapper">
-    <div id="startScreen">
-      <h1>FISHING</h1>
-      <p>5匹の魚を釣ってクリアだ！<br>スペースキーまたはクリックで投げて、<br>アタリが来たらすぐに連打だ！</p>
-      <button id="startBtn">START</button>
-    </div>
     <div id="gameContainer">
-      <canvas id="canvas"></canvas>
-      <div class="hud">
-        <div class="hud-caught" id="hudCaught">0/5</div>
-        <div class="hud-status" id="hudStatus">READY</div>
-        <div class="hud-hint" id="hudHint">スペースキーで投げる</div>
-      </div>
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="startScreen">
+            <h1>FISHING</h1>
+            <p>釣りゲーム</p>
+            <div class="rules">
+                <p><strong>目標</strong>: 5匹釣ろう！</p>
+                <p><strong>操作</strong>: スペースキーまたはクリック</p>
+                <p style="font-size: 0.9em; margin-top: 15px;">
+                    スペース/クリックでルアーを投げて<br>
+                    アタリ時に素早く引き上げよう！
+                </p>
+            </div>
+            <button onclick="startGame()">ゲーム開始</button>
+        </div>
+        
+        <div id="clearScreen">
+            <h1>クリア！</h1>
+            <p id="finalScore">5匹釣った！</p>
+            <button onclick="retryGame()">もう一度遊ぶ</button>
+        </div>
     </div>
-    <div id="clearScreen">
-      <h1>CLEAR!</h1>
-      <p>5匹の魚を釣ることに成功した！</p>
-      <button id="retryBtn">RETRY</button>
-    </div>
-  </div>
 
-  <script>
-    const config = {
-      title: 'FISHING',
-      bg_color: '#87ceeb',
-      water_color: '#1a6a8a',
-      fish_color: '#f6ad55',
-      line_color: '#a0aec0',
-      win_fish: 5,
-      bite_min_wait: 2000,
-      bite_max_wait: 5000,
-      reel_power: 3
-    };
+    <script>
+        const config = {
+            title: 'FISHING',
+            bg_color: '#87ceeb',
+            water_color: '#1a6a8a',
+            fish_color: '#f6ad55',
+            line_color: '#a0aec0',
+            win_fish: 5,
+            bite_min_wait: 2000,
+            bite_max_wait: 5000,
+            reel_power: 3
+        };
 
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 400;
-    canvas.height = 600;
+        const gameState = {
+            running: false,
+            state: 'READY',
+            caught: 0,
+            reelGauge: 0,
+            lureY: 150,
+            castStartTime: 0,
+            biteStartTime: 0,
+            biteWaitTime: 0,
+            bobOffset: 0,
+            catchStartTime: 0,
+            missStartTime: 0
+        };
 
-    const gameState = {
-      running: false,
-      state: 'READY',
-      caught: 0,
-      castStartTime: 0,
-      waitStartTime: 0,
-      biteStartTime: 0,
-      biteTime: 0,
-      reelGauge: 30,
-      lureY: 0,
-      ukiY: 300,
-      ukiBite: false,
-      ukiShakeTimer: 0
-    };
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-    let lastTime = Date.now();
+        canvas.width = 400;
+        canvas.height = 600;
 
-    const hudCaught = document.getElementById('hudCaught');
-    const hudStatus = document.getElementById('hudStatus');
-    const hudHint = document.getElementById('hudHint');
-
-    function updateHUD() {
-      hudCaught.textContent = gameState.caught + '/' + config.win_fish;
-      
-      if (gameState.state === 'READY') {
-        hudStatus.textContent = 'READY';
-        hudHint.textContent = 'スペースキーで投げる';
-      } else if (gameState.state === 'CAST') {
-        hudStatus.textContent = 'CAST';
-        hudHint.textContent = 'ルアーを投入中...';
-      } else if (gameState.state === 'WAITING') {
-        hudStatus.textContent = 'WAITING';
-        hudHint.textContent = '魚が来るのを待つ...';
-      } else if (gameState.state === 'BITE') {
-        hudStatus.textContent = 'BITE!';
-        hudHint.textContent = 'スペースキーで巻き取れ！';
-      } else if (gameState.state === 'REEL') {
-        hudStatus.textContent = 'REEL: ' + Math.round(gameState.reelGauge) + '%';
-        hudHint.textContent = 'スペースキーを連打！';
-      } else if (gameState.state === 'MISS') {
-        hudStatus.textContent = 'MISS...';
-        hudHint.textContent = 'もう一度チャレンジ';
-      }
-    }
-
-    function gameLoop() {
-      const now = Date.now();
-      const deltaTime = now - lastTime;
-      lastTime = now;
-
-      ctx.fillStyle = config.bg_color;
-      ctx.fillRect(0, 0, canvas.width, 300);
-      ctx.fillStyle = config.water_color;
-      ctx.fillRect(0, 300, canvas.width, 300);
-
-      if (gameState.state === 'READY') {
-        ctx.fillStyle = '#333';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('READY', canvas.width / 2, 100);
-
-        ctx.font = '14px Arial';
-        ctx.fillText('スペースキーで投げる', canvas.width / 2, 130);
-
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(190, 500, 20, 80);
-        ctx.fillStyle = config.line_color;
-        ctx.beginPath();
-        ctx.moveTo(200, 500);
-        ctx.lineTo(200, 300);
-        ctx.stroke();
-        ctx.fillStyle = '#FFD700';
-        ctx.fillRect(190, 290, 20, 20);
-      } else if (gameState.state === 'CAST') {
-        const elapsed = now - gameState.castStartTime;
-        const progress = Math.min(elapsed / 500, 1);
-        gameState.lureY = 300 + progress * 150;
-
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(190, 500, 20, 80);
-        ctx.fillStyle = config.line_color;
-        ctx.beginPath();
-        ctx.moveTo(200, 500);
-        ctx.lineTo(200, gameState.lureY);
-        ctx.stroke();
-        ctx.fillStyle = config.fish_color;
-        ctx.fillRect(190, gameState.lureY - 10, 20, 20);
-
-        if (elapsed >= 500) {
-          gameState.state = 'WAITING';
-          gameState.waitStartTime = now;
-          gameState.biteTime = Math.random() * (config.bite_max_wait - config.bite_min_wait) + config.bite_min_wait;
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.state = 'READY';
+            gameState.caught = 0;
+            gameState.reelGauge = 0;
+            gameState.lureY = 150;
+            gameState.castStartTime = 0;
+            gameState.biteStartTime = 0;
+            gameState.catchStartTime = 0;
+            gameState.missStartTime = 0;
+            lastTime = Date.now();
+            requestAnimationFrame(gameLoop);
         }
-      } else if (gameState.state === 'WAITING') {
-        const elapsed = now - gameState.waitStartTime;
-        gameState.lureY = 450;
 
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(190, 500, 20, 80);
-        ctx.fillStyle = config.line_color;
-        ctx.beginPath();
-        ctx.moveTo(200, 500);
-        ctx.lineTo(200, gameState.lureY);
-        ctx.stroke();
-        ctx.fillStyle = config.fish_color;
-        ctx.fillRect(190, gameState.lureY - 10, 20, 20);
-
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(200, 320, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        if (elapsed >= gameState.biteTime) {
-          gameState.state = 'BITE';
-          gameState.biteStartTime = now;
-          gameState.ukiBite = true;
-          gameState.ukiShakeTimer = 0;
-        }
-      } else if (gameState.state === 'BITE') {
-        const elapsed = now - gameState.biteStartTime;
-
-        gameState.lureY = 450;
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(190, 500, 20, 80);
-        ctx.fillStyle = config.line_color;
-        ctx.beginPath();
-        ctx.moveTo(200, 500);
-        ctx.lineTo(200, gameState.lureY);
-        ctx.stroke();
-        ctx.fillStyle = config.fish_color;
-        ctx.fillRect(190, gameState.lureY - 10, 20, 20);
-
-        gameState.ukiShakeTimer += deltaTime;
-        const shake = Math.sin(gameState.ukiShakeTimer / 100) * 8;
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(200 + shake, 320, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#FF3333';
-        ctx.font = 'bold 28px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('アタリ！', canvas.width / 2, 150);
-
-        if (elapsed >= 2000) {
-          gameState.state = 'MISS';
-          gameState.ukiBite = false;
-        }
-      } else if (gameState.state === 'REEL') {
-        gameState.reelGauge -= config.reel_power * 0.5 * (deltaTime / 1000);
-        gameState.reelGauge = Math.max(0, gameState.reelGauge);
-
-        gameState.lureY = 450 - (gameState.reelGauge / 100) * 150;
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(190, 500, 20, 80);
-        ctx.fillStyle = config.line_color;
-        ctx.beginPath();
-        ctx.moveTo(200, 500);
-        ctx.lineTo(200, gameState.lureY);
-        ctx.stroke();
-        ctx.fillStyle = config.fish_color;
-        ctx.fillRect(190, gameState.lureY - 10, 20, 20);
-
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(200, 320, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#333';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('REEL: ' + Math.round(gameState.reelGauge) + '%', canvas.width / 2, 100);
-
-        if (gameState.reelGauge >= 100) {
-          gameState.state = 'CATCH';
-          gameState.caught++;
-          if (gameState.caught >= config.win_fish) {
-            gameState.state = 'CLEAR';
+        function retryGame() {
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
             gameState.running = false;
-          }
-        } else if (gameState.reelGauge <= 0) {
-          gameState.state = 'MISS';
         }
-      } else if (gameState.state === 'MISS') {
-        gameState.lureY = 450;
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(190, 500, 20, 80);
-        ctx.fillStyle = config.line_color;
-        ctx.beginPath();
-        ctx.moveTo(200, 500);
-        ctx.lineTo(200, gameState.lureY);
-        ctx.stroke();
-        ctx.fillStyle = config.fish_color;
-        ctx.fillRect(190, gameState.lureY - 10, 20, 20);
 
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(200, 320, 12, 0, Math.PI * 2);
-        ctx.fill();
+        function handleInput() {
+            if (!gameState.running) return;
 
-        ctx.fillStyle = '#FF6666';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('逃げられた...', canvas.width / 2, 150);
+            if (gameState.state === 'READY') {
+                gameState.state = 'CAST';
+                gameState.castStartTime = Date.now();
+                gameState.lureY = 150;
+            } else if (gameState.state === 'BITE') {
+                gameState.state = 'REEL';
+                gameState.reelGauge = 30;
+                gameState.biteStartTime = 0;
+            } else if (gameState.state === 'REEL') {
+                gameState.reelGauge = Math.min(100, gameState.reelGauge + config.reel_power);
+                if (gameState.reelGauge >= 100) {
+                    gameState.state = 'CATCH';
+                    gameState.caught++;
+                    if (gameState.caught >= config.win_fish) {
+                        gameState.state = 'CLEAR';
+                        gameState.running = false;
+                        document.getElementById('finalScore').textContent = gameState.caught + '匹釣った！';
+                        document.getElementById('clearScreen').style.display = 'flex';
+                        return;
+                    }
+                }
+            }
+        }
 
-        setTimeout(() => {
-          gameState.state = 'READY';
-        }, 1500);
-      } else if (gameState.state === 'CATCH') {
-        gameState.lureY = 300 + (gameState.caught * 20);
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(190, 500, 20, 80);
-        ctx.fillStyle = config.line_color;
-        ctx.beginPath();
-        ctx.moveTo(200, 500);
-        ctx.lineTo(200, gameState.lureY);
-        ctx.stroke();
-        ctx.fillStyle = config.fish_color;
-        ctx.beginPath();
-        ctx.arc(200, gameState.lureY, 15, 0, Math.PI * 2);
-        ctx.fill();
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                handleInput();
+            }
+        });
 
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(200, 320, 12, 0, Math.PI * 2);
-        ctx.fill();
+        canvas.addEventListener('click', handleInput);
 
-        ctx.fillStyle = '#33CC33';
-        ctx.font = 'bold 28px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('CATCH!', canvas.width / 2, 150);
+        let lastTime = Date.now();
 
-        setTimeout(() => {
-          gameState.state = 'READY';
-          gameState.reelGauge = 30;
-        }, 1500);
-      } else if (gameState.state === 'CLEAR') {
-        document.getElementById('clearScreen').style.display = 'flex';
-        return;
-      }
+        function gameLoop(now) {
+            if (!gameState.running) return;
 
-      updateHUD();
+            const deltaTime = now - lastTime;
+            lastTime = now;
 
-      if (gameState.running) {
-        requestAnimationFrame(gameLoop);
-      }
-    }
+            switch (gameState.state) {
+                case 'READY':
+                    break;
 
-    function startGame() {
-      document.getElementById('startScreen').style.display = 'none';
-      gameState.running = true;
-      gameState.state = 'READY';
-      gameState.caught = 0;
-      gameState.reelGauge = 30;
-      lastTime = Date.now();
-      requestAnimationFrame(gameLoop);
-    }
+                case 'CAST':
+                    const castElapsed = Date.now() - gameState.castStartTime;
+                    if (castElapsed < 500) {
+                        gameState.lureY = 150 + (castElapsed / 500) * 150;
+                    } else {
+                        gameState.lureY = 300;
+                        gameState.state = 'WAITING';
+                        gameState.biteWaitTime = Math.random() * (config.bite_max_wait - config.bite_min_wait) + config.bite_min_wait;
+                        gameState.biteStartTime = Date.now();
+                    }
+                    break;
 
-    function retryGame() {
-      document.getElementById('clearScreen').style.display = 'none';
-      document.getElementById('startScreen').style.display = 'flex';
-      gameState.running = false;
-    }
+                case 'WAITING':
+                    const waitElapsed = Date.now() - gameState.biteStartTime;
+                    if (waitElapsed >= gameState.biteWaitTime) {
+                        gameState.state = 'BITE';
+                        gameState.biteStartTime = Date.now();
+                    }
+                    break;
 
-    function handleAction() {
-      if (!gameState.running) return;
+                case 'BITE':
+                    gameState.bobOffset = Math.sin((Date.now() - gameState.biteStartTime) * 0.01) * 20;
+                    const biteWindowElapsed = Date.now() - gameState.biteStartTime;
+                    if (biteWindowElapsed >= 2000) {
+                        gameState.state = 'MISS';
+                    }
+                    break;
 
-      if (gameState.state === 'READY') {
-        gameState.state = 'CAST';
-        gameState.castStartTime = Date.now();
-      } else if (gameState.state === 'BITE') {
-        gameState.state = 'REEL';
-      } else if (gameState.state === 'REEL') {
-        gameState.reelGauge = Math.min(100, gameState.reelGauge + config.reel_power);
-      }
-    }
+                case 'REEL':
+                    if (gameState.reelGauge >= 100) {
+                        gameState.state = 'CATCH';
+                        gameState.caught++;
+                        if (gameState.caught >= config.win_fish) {
+                            gameState.state = 'CLEAR';
+                            gameState.running = false;
+                            document.getElementById('finalScore').textContent = gameState.caught + '匹釣った！';
+                            document.getElementById('clearScreen').style.display = 'flex';
+                            break;
+                        }
+                    }
+                    if (gameState.reelGauge <= 0) {
+                        gameState.state = 'MISS';
+                    }
+                    gameState.reelGauge -= config.reel_power * 0.5 * (deltaTime / 1000);
+                    gameState.reelGauge = Math.max(0, Math.min(100, gameState.reelGauge));
+                    break;
 
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('retryBtn').addEventListener('click', retryGame);
+                case 'CATCH':
+                    if (!gameState.catchStartTime) {
+                        gameState.catchStartTime = Date.now();
+                    }
+                    if (Date.now() - gameState.catchStartTime > 500) {
+                        gameState.state = 'READY';
+                        gameState.reelGauge = 0;
+                        gameState.lureY = 150;
+                        gameState.catchStartTime = 0;
+                    }
+                    break;
 
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' && gameState.running) {
-        e.preventDefault();
-        handleAction();
-      }
-    });
+                case 'MISS':
+                    if (!gameState.missStartTime) {
+                        gameState.missStartTime = Date.now();
+                    }
+                    if (Date.now() - gameState.missStartTime > 500) {
+                        gameState.state = 'READY';
+                        gameState.reelGauge = 0;
+                        gameState.lureY = 150;
+                        gameState.missStartTime = 0;
+                    }
+                    break;
+            }
 
-    canvas.addEventListener('click', handleAction);
-  </script>
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function draw() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, 300);
+
+            ctx.fillStyle = config.water_color;
+            ctx.fillRect(0, 300, canvas.width, 300);
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 300);
+            ctx.lineTo(canvas.width, 300);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width - 50, 20);
+            ctx.lineTo(canvas.width - 50, 120);
+            ctx.lineTo(canvas.width - 80, 150);
+            ctx.stroke();
+
+            ctx.strokeStyle = config.line_color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width - 80, 150);
+            ctx.lineTo(200, gameState.lureY);
+            ctx.stroke();
+
+            if (gameState.state === 'BITE') {
+                ctx.fillStyle = '#FF6B6B';
+            } else {
+                ctx.fillStyle = '#FF0000';
+            }
+            ctx.beginPath();
+            ctx.arc(200, 300 + gameState.bobOffset, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = config.fish_color;
+            ctx.beginPath();
+            ctx.arc(200, gameState.lureY, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#333333';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText('釣果: ' + gameState.caught + ' / ' + config.win_fish, 10, 30);
+            ctx.font = '14px Arial';
+            ctx.fillText('状態: ' + gameState.state, 10, 55);
+            
+            if (gameState.state === 'READY') {
+                ctx.fillStyle = '#333333';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('スペース or クリックで投げる', canvas.width / 2, canvas.height - 20);
+                ctx.textAlign = 'left';
+            } else if (gameState.state === 'BITE') {
+                ctx.fillStyle = '#FF0000';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('アタリ！', canvas.width / 2, canvas.height - 40);
+                ctx.font = '14px Arial';
+                ctx.fillText('スペース or クリックで引き上げろ！', canvas.width / 2, canvas.height - 20);
+                ctx.textAlign = 'left';
+            } else if (gameState.state === 'REEL') {
+                ctx.fillStyle = '#333333';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('引き上げ中...', canvas.width / 2, canvas.height - 60);
+                
+                ctx.fillStyle = '#cccccc';
+                ctx.fillRect(50, canvas.height - 40, 300, 20);
+                
+                ctx.fillStyle = gameState.reelGauge > 50 ? '#4CAF50' : gameState.reelGauge > 25 ? '#FFC107' : '#F44336';
+                ctx.fillRect(50, canvas.height - 40, (gameState.reelGauge / 100) * 300, 20);
+                
+                ctx.strokeStyle = '#333333';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(50, canvas.height - 40, 300, 20);
+                
+                ctx.fillStyle = '#333333';
+                ctx.font = 'bold 14px Arial';
+                ctx.fillText(Math.round(gameState.reelGauge) + '%', canvas.width / 2, canvas.height - 15);
+                ctx.textAlign = 'left';
+            } else if (gameState.state === 'CATCH') {
+                ctx.fillStyle = '#00AA00';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('釣れた！', canvas.width / 2, canvas.height / 2);
+                ctx.textAlign = 'left';
+            } else if (gameState.state === 'MISS') {
+                ctx.fillStyle = '#AA0000';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('逃げられた...', canvas.width / 2, canvas.height / 2);
+                ctx.textAlign = 'left';
+            }
+        }
+    </script>
 </body>
 </html>
