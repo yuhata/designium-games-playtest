@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HIDDEN OBJECTS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            display: flex;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            background-color: #f0e6d2;
+        }
+
+        .right-panel {
+            width: 200px;
+            padding: 20px;
+            background-color: #fff8dc;
+            border-left: 2px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .timer.warning {
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% {
+                opacity: 1;
+            }
+            51%, 100% {
+                opacity: 0.3;
+            }
+        }
+
+        .items-list {
+            flex: 1;
+        }
+
+        .item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background-color: #fff;
+            border: 2px solid #999;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .item:hover {
+            background-color: #ffd700;
+            border-color: #ff9800;
+        }
+
+        .item.found {
+            background-color: #4caf50;
+            color: #fff;
+            border-color: #388e3c;
+            text-decoration: line-through;
+        }
+
+        .item::before {
+            content: '☐ ';
+            margin-right: 5px;
+        }
+
+        .item.found::before {
+            content: '☑ ';
+        }
+
+        .screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        .screen.hidden {
+            display: none;
+        }
+
+        .screen-content {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            max-width: 400px;
+        }
+
+        .screen-content h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .screen-content p {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #666;
+        }
+
+        .screen-content button {
+            padding: 12px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            background-color: #ffd700;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+
+        .screen-content button:hover {
+            background-color: #ffed4e;
+            transform: scale(1.05);
+        }
+
+        .feedback {
+            position: fixed;
+            font-size: 24px;
+            font-weight: bold;
+            pointer-events: none;
+            animation: fadeOut 1s ease-out forwards;
+            z-index: 999;
+        }
+
+        .feedback.correct {
+            color: #4caf50;
+        }
+
+        .feedback.wrong {
+            color: #d32f2f;
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- {{GAME_CONFIG}} -->
+<script>
+const config = {
+    title: 'HIDDEN OBJECTS',
+    bg_color: '#f0e6d2',
+    highlight_color: '#ffd700',
+    time_limit: 60,
+    target_count: 6,
+    miss_penalty: 5
+};
+</script>
+
+<div id="startScreen" class="screen">
+    <div class="screen-content">
+        <h1>🔍 HIDDEN OBJECTS</h1>
+        <p>隠されたアイテムを見つけよう！</p>
+        <p>制限時間: 60秒</p>
+        <p>全6つのアイテムを探してください</p>
+        <button onclick="startGame()">START</button>
+    </div>
+</div>
+
+<div id="gameOverScreen" class="screen hidden">
+    <div class="screen-content">
+        <h1>⏰ GAME OVER</h1>
+        <p>時間切れです！</p>
+        <p id="gameOverStats"></p>
+        <button onclick="retryGame()">RETRY</button>
+    </div>
+</div>
+
+<div id="clearScreen" class="screen hidden">
+    <div class="screen-content">
+        <h1>🎉 CLEAR!</h1>
+        <p>全てのアイテムを見つけました！</p>
+        <p id="clearStats"></p>
+        <button onclick="retryGame()">PLAY AGAIN</button>
+    </div>
+</div>
+
+<div class="game-container" id="gameContainer" style="display: none;">
+    <div class="canvas-wrapper">
+        <canvas id="gameCanvas" width="500" height="400"></canvas>
+    </div>
+    <div class="right-panel">
+        <div class="panel-title">探すもの</div>
+        <div class="timer" id="timer">60</div>
+        <div class="items-list" id="itemsList"></div>
+    </div>
+</div>
+
+<script>
+const gameState = {
+    running: false,
+    timeRemaining: config.time_limit,
+    foundCount: 0,
+    missCount: 0,
+    startTime: 0
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const items = [
+    { name: '🐱 猫', found: false, x: 80, y: 120, radius: 25 },
+    { name: '🌳 木', found: false, x: 200, y: 80, radius: 30 },
+    { name: '🏠 家', found: false, x: 400, y: 200, radius: 35 },
+    { name: '🚗 車', found: false, x: 350, y: 320, radius: 28 },
+    { name: '☀️ 太陽', found: false, x: 460, y: 60, radius: 22 },
+    { name: '🌸 花', found: false, x: 120, y: 280, radius: 20 }
+];
+
+function startGame() {
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameContainer').style.display = 'flex';
+    
+    gameState.running = true;
+    gameState.timeRemaining = config.time_limit;
+    gameState.foundCount = 0;
+    gameState.missCount = 0;
+    gameState.startTime = Date.now();
+    
+    items.forEach(item => item.found = false);
+    
+    renderItemsList();
+    gameLoop();
+}
+
+function gameLoop() {
+    if (!gameState.running) return;
+    
+    // タイマー更新
+    const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+    gameState.timeRemaining = Math.max(0, config.time_limit - elapsed);
+    
+    // 表示更新
+    document.getElementById('timer').textContent = gameState.timeRemaining;
+    if (gameState.timeRemaining <= 10) {
+        document.getElementById('timer').classList.add('warning');
+    }
+    
+    // 時間切れチェック
+    if (gameState.timeRemaining <= 0) {
+        endGame(false);
+        return;
+    }
+    
+    // クリア判定
+    if (gameState.foundCount === config.target_count) {
+        endGame(true);
+        return;
+    }
+    
+    drawScene();
+    requestAnimationFrame(gameLoop);
+}
+
+function drawScene() {
+    // 背景
+    ctx.fillStyle = config.bg_color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 空
+    ctx.fillStyle = '#87ceeb';
+    ctx.fillRect(0, 0, canvas.width, 150);
+    
+    // 地面
+    ctx.fillStyle = '#90ee90';
+    ctx.fillRect(0, 150, canvas.width, 250);
+    
+    // アイテム描画
+    items.forEach(item => {
+        const x = item.x;
+        const y = item.y;
+        
+        // ハイライト（発見済み）
+        if (item.found) {
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+            ctx.beginPath();
+            ctx.arc(x, y, item.radius + 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // アイテム本体
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = item.found ? config.highlight_color : '#666';
+        ctx.lineWidth = item.found ? 3 : 2;
+        ctx.beginPath();
+        ctx.arc(x, y, item.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // 絵文字
+        ctx.font = `${item.radius * 1.5}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const emoji = item.name.split(' ')[0];
+        ctx.fillText(emoji, x, y);
+    });
+}
+
+function renderItemsList() {
+    const listContainer = document.getElementById('itemsList');
+    listContainer.innerHTML = '';
+    
+    items.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'item' + (item.found ? ' found' : '');
+        div.textContent = item.name;
+        listContainer.appendChild(div);
+    });
+}
+
+canvas.addEventListener('click', (e) => {
+    if (!gameState.running) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    let found = false;
+    
+    for (let item of items) {
+        if (item.found) continue;
+        
+        const dist = Math.sqrt((x - item.x) ** 2 + (y - item.y) ** 2);
+        
+        if (dist <= item.radius) {
+            item.found = true;
+            gameState.foundCount++;
+            showFeedback(x, y, true);
+            found = true;
+            renderItemsList();
+            break;
+        }
+    }
+    
+    if (!found && gameState.running) {
+        gameState.timeRemaining = Math.max(0, gameState.timeRemaining - config.miss_penalty);
+        gameState.missCount++;
+        showFeedback(x, y, false);
+    }
+});
+
+function showFeedback(x, y, isCorrect) {
+    const feedback = document.createElement('div');
+    feedback.className = 'feedback ' + (isCorrect ? 'correct' : 'wrong');
+    feedback.textContent = isCorrect ? '✓ GOOD!' : '✗ MISS!';
+    feedback.style.left = x + 'px';
+    feedback.style.top = y + 'px';
+    canvas.parentElement.appendChild(feedback);
+    
+    setTimeout(() => feedback.remove(), 1000);
+}
+
+function endGame(isWin) {
+    gameState.running = false;
+    document.getElementById('gameContainer').style.display = 'none';
+    
+    if (isWin) {
+        document.getElementById('clearStats').textContent = 
+            `時間: ${config.time_limit - gameState.timeRemaining}秒 / ミス: ${gameState.missCount}回`;
+        document.getElementById('clearScreen').classList.remove('hidden');
+    } else {
+        document.getElementById('gameOverStats').textContent = 
+            `発見: ${gameState.foundCount}/${config.target_count} / ミス: ${gameState.missCount}回`;
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+    }
+}
+
+function retryGame() {
+    document.getElementById('startScreen').classList.remove('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('clearScreen').classList.add('hidden');
+    document.getElementById('timer').classList.remove('warning');
+    gameState.running = false;
+}
+</script>
+
+</body>
+</html>

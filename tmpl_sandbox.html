@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SANDBOX</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #333;
+        }
+
+        .game-container {
+            display: flex;
+            gap: 10px;
+            background: #222;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .left-panel {
+            width: 120px;
+            background: #444;
+            padding: 15px;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .block-selector {
+            background: #555;
+            padding: 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 12px;
+            color: #fff;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .block-selector:hover {
+            background: #666;
+        }
+
+        .block-selector.selected {
+            border-color: #ffff00;
+            background: #666;
+        }
+
+        .block-preview {
+            width: 100%;
+            height: 30px;
+            border-radius: 3px;
+            margin-bottom: 5px;
+        }
+
+        #gameCanvas {
+            border: 3px solid #666;
+            background: #87ceeb;
+            cursor: crosshair;
+            display: block;
+        }
+
+        .right-panel {
+            width: 180px;
+            background: #444;
+            padding: 15px;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .progress-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .progress-label {
+            color: #fff;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border: 1px solid #666;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            width: 0%;
+            transition: width 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .target-preview {
+            background: #333;
+            padding: 10px;
+            border-radius: 3px;
+            border: 1px solid #666;
+        }
+
+        .target-title {
+            color: #fff;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        #targetCanvas {
+            width: 100%;
+            height: 120px;
+            border: 1px solid #666;
+            border-radius: 2px;
+            background: #222;
+            display: block;
+        }
+
+        #startScreen, #clearScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .screen-content {
+            text-align: center;
+            background: #333;
+            padding: 40px;
+            border-radius: 10px;
+            color: #fff;
+        }
+
+        .screen-content h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #4caf50;
+        }
+
+        .screen-content p {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #ccc;
+        }
+
+        .btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            background: #45a049;
+        }
+
+        .instructions {
+            font-size: 13px;
+            color: #aaa;
+            line-height: 1.6;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .info-text {
+            color: #fff;
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 3px;
+            border-left: 3px solid #4caf50;
+        }
+    </style>
+</head>
+<body>
+
+<div id="startScreen">
+    <div class="screen-content">
+        <h1>SANDBOX</h1>
+        <p>ブロックを配置して目標の形を作ろう</p>
+        <div class="instructions">
+            <p>📋 左パネルでブロックを選択</p>
+            <p>🖱️ キャンバスをクリックして配置</p>
+            <p>🗑️ 右クリックで削除</p>
+            <p>✨ 一致率が90%以上でクリア</p>
+        </div>
+        <button class="btn" id="startBtn">START GAME</button>
+    </div>
+</div>
+
+<div id="clearScreen" style="display: none;">
+    <div class="screen-content">
+        <h1>CLEAR! 🎉</h1>
+        <p>目標を完成させました</p>
+        <button class="btn" id="nextBtn">NEXT CHALLENGE</button>
+    </div>
+</div>
+
+<div class="game-container" id="gameContainer" style="display: none;">
+    <div class="left-panel">
+        <div id="blockSelectors"></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="right-panel">
+        <div class="progress-section">
+            <div class="progress-label">進捗</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+        </div>
+
+        <div class="target-preview">
+            <div class="target-title">目標図形</div>
+            <canvas id="targetCanvas"></canvas>
+        </div>
+
+        <div class="info-text">
+            💡 クリック: 配置<br>
+            右クリック/D: 削除
+        </div>
+    </div>
+</div>
+
+<script>
+// {{GAME_CONFIG}}
+const config = {
+    title: 'SANDBOX',
+    bg_color: '#87ceeb',
+    grid_cols: 20,
+    grid_rows: 15,
+    cell_size: 28,
+    block_colors: {
+        dirt: '#8b4513',
+        stone: '#808080',
+        wood: '#d2691e',
+        water: '#4169e1',
+        lava: '#ff4500'
+    },
+    clear_threshold: 0.9
+};
+
+const gameState = {
+    running: false,
+    selectedBlock: 'dirt',
+    grid: [],
+    targetPattern: [],
+    currentLevel: 0
+};
+
+const targetPatterns = [
+    {
+        name: 'ハウス',
+        grid: [
+            [0,0,0,0,0,0,0,0,0,0],
+            [0,1,1,1,1,1,1,1,1,0],
+            [0,1,0,0,0,0,0,0,1,0],
+            [0,1,0,0,0,0,0,0,1,0],
+            [0,1,1,0,0,0,0,1,1,0],
+            [0,0,1,1,1,1,1,1,0,0]
+        ],
+        types: ['stone','stone','stone','stone','stone','stone','stone','stone','stone','stone']
+    },
+    {
+        name: '木',
+        grid: [
+            [0,0,0,1,0,0,0],
+            [0,0,1,1,1,0,0],
+            [0,1,1,1,1,1,0],
+            [0,0,0,1,0,0,0],
+            [0,0,0,1,0,0,0],
+            [0,0,1,1,1,0,0]
+        ],
+        types: ['wood','wood','wood','wood','wood','wood']
+    },
+    {
+        name: '山',
+        grid: [
+            [0,0,0,1,0,0,0],
+            [0,0,1,1,1,0,0],
+            [0,1,1,1,1,1,0],
+            [1,1,1,1,1,1,1]
+        ],
+        types: ['stone','stone','stone','stone']
+    }
+];
+
+function initializeGrid() {
+    gameState.grid = Array(config.grid_rows).fill(null).map(() =>
+        Array(config.grid_cols).fill(null)
+    );
+}
+
+function setTargetPattern() {
+    const pattern = targetPatterns[gameState.currentLevel % targetPatterns.length];
+    gameState.targetPattern = pattern;
+}
+
+function drawGrid(canvas, grid, isTarget = false) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = config.bg_color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (isTarget) {
+        drawTargetPattern(ctx);
+    } else {
+        for (let r = 0; r < config.grid_rows; r++) {
+            for (let c = 0; c < config.grid_cols; c++) {
+                const blockType = grid[r][c];
+                const x = c * config.cell_size;
+                const y = r * config.cell_size;
+
+                ctx.strokeStyle = '#ddd';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, config.cell_size, config.cell_size);
+
+                if (blockType) {
+                    ctx.fillStyle = config.block_colors[blockType];
+                    ctx.fillRect(x + 2, y + 2, config.cell_size - 4, config.cell_size - 4);
+                }
+            }
+        }
+    }
+}
+
+function drawTargetPattern(ctx) {
+    const pattern = gameState.targetPattern;
+    const patternGrid = pattern.grid;
+    const patternTypes = pattern.types;
+
+    const offsetX = 40;
+    const offsetY = 20;
+    const cellSize = 12;
+
+    for (let r = 0; r < patternGrid.length; r++) {
+        for (let c = 0; c < patternGrid[r].length; c++) {
+            if (patternGrid[r][c]) {
+                const x = offsetX + c * cellSize;
+                const y = offsetY + r * cellSize;
+                ctx.fillStyle = config.block_colors[patternTypes[0]];
+                ctx.fillRect(x, y, cellSize - 1, cellSize - 1);
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(x, y, cellSize - 1, cellSize - 1);
+            }
+        }
+    }
+}
+
+function calculateProgress() {
+    const pattern = gameState.targetPattern;
+    const patternGrid = pattern.grid;
+    let totalCells = 0;
+    let matchedCells = 0;
+
+    for (let r = 0; r < patternGrid.length; r++) {
+        for (let c = 0; c < patternGrid[r].length; c++) {
+            if (patternGrid[r][c]) {
+                totalCells++;
+                if (gameState.grid[r] && gameState.grid[r][c]) {
+                    matchedCells++;
+                }
+            }
+        }
+    }
+
+    return totalCells > 0 ? matchedCells / totalCells : 0;
+}
+
+function updateProgress() {
+    const progress = Math.round(calculateProgress() * 100);
+    const progressFill = document.getElementById('progressFill');
+    progressFill.style.width = progress + '%';
+    progressFill.textContent = progress + '%';
+
+    if (progress >= config.clear_threshold * 100) {
+        clearLevel();
+    }
+}
+
+function clearLevel() {
+    gameState.running = false;
+    document.getElementById('clearScreen').style.display = 'flex';
+}
+
+function retryGame() {
+    gameState.currentLevel = 0;
+    startGame();
+}
+
+function nextChallenge() {
+    gameState.currentLevel++;
+    startGame();
+}
+
+function startGame() {
+    gameState.running = true;
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameContainer').style.display = 'flex';
+
+    initializeGrid();
+    setTargetPattern();
+    
+    const canvas = document.getElementById('gameCanvas');
+    canvas.width = config.grid_cols * config.cell_size;
+    canvas.height = config.grid_rows * config.cell_size;
+    
+    const targetCanvas = document.getElementById('targetCanvas');
+    targetCanvas.width = 160;
+    targetCanvas.height = 120;
+
+    drawGrid(canvas, gameState.grid, false);
+    drawGrid(targetCanvas, gameState.grid, true);
+    updateProgress();
+}
+
+function createBlockSelectors() {
+    const container = document.getElementById('blockSelectors');
+    const blockTypes = ['dirt', 'stone', 'wood', 'water', 'lava'];
+    const blockNames = ['土', '石', '木', '水', '溶岩'];
+
+    blockTypes.forEach((type, index) => {
+        const selector = document.createElement('div');
+        selector.className = 'block-selector';
+        if (index === 0) selector.classList.add('selected');
+
+        const preview = document.createElement('div');
+        preview.className = 'block-preview';
+        preview.style.background = config.block_colors[type];
+
+        selector.appendChild(preview);
+
+        const label = document.createElement('div');
+        label.textContent = blockNames[index];
+        label.style.fontSize = '11px';
+        selector.appendChild(label);
+
+        selector.addEventListener('click', () => {
+            document.querySelectorAll('.block-selector').forEach(s => s.classList.remove('selected'));
+            selector.classList.add('selected');
+            gameState.selectedBlock = type;
+        });
+
+        container.appendChild(selector);
+    });
+}
+
+function handleCanvasClick(event) {
+    if (!gameState.running) return;
+
+    const canvas = document.getElementById('gameCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    const col = Math.floor(x / config.cell_size);
+    const row = Math.floor(y / config.cell_size);
+
+    if (row >= 0 && row < config.grid_rows && col >= 0 && col < config.grid_cols) {
+        if (event.button === 0) {
+            gameState.grid[row][col] = gameState.selectedBlock;
+        } else if (event.button === 2) {
+            gameState.grid[row][col] = null;
+        }
+
+        const gameCanvas = document.getElementById('gameCanvas');
+        drawGrid(gameCanvas, gameState.grid, false);
+        updateProgress();
+    }
+}
+
+function handleCanvasContextMenu(event) {
+    event.preventDefault();
+}
+
+function handleKeyDown(event) {
+    if (event.key === 'd' || event.key === 'D') {
+        gameState.selectedBlock = null;
+    }
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('nextBtn').addEventListener('click', nextChallenge);
+
+document.addEventListener('DOMContentLoaded', () => {
+    createBlockSelectors();
+    document.getElementById('gameCanvas').addEventListener('mousedown', handleCanvasClick);
+    document.getElementById('gameCanvas').addEventListener('contextmenu', handleCanvasContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+});
+</script>
+
+</body>
+</html>

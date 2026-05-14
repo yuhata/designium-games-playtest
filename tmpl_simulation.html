@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRAFFIC SIM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a202c;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            color: #f6e05e;
+        }
+        canvas {
+            border: 3px solid #f6e05e;
+            background: #4a5568;
+            display: block;
+            margin: 0 auto 20px;
+        }
+        .hud {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            color: #e2e8f0;
+        }
+        .hud-item {
+            display: inline-block;
+            margin: 0 20px;
+        }
+        .hud-label {
+            color: #cbd5e0;
+            font-size: 0.9em;
+        }
+        .hud-value {
+            color: #f6e05e;
+            font-weight: bold;
+            font-size: 1.3em;
+        }
+        .screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .screen-content {
+            text-align: center;
+            background: #2d3748;
+            padding: 50px;
+            border-radius: 10px;
+            border: 3px solid #f6e05e;
+        }
+        .screen h2 {
+            font-size: 3em;
+            margin-bottom: 30px;
+            color: #f6e05e;
+        }
+        .screen p {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            color: #e2e8f0;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background: #f6e05e;
+            color: #1a202c;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #ecc94b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TRAFFIC SIM</h1>
+        <canvas id="gameCanvas" width="600" height="480"></canvas>
+        <div class="hud">
+            <div class="hud-item">
+                <div class="hud-label">Passed Cars</div>
+                <div class="hud-value" id="carCounter">0/50</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-label">Time</div>
+                <div class="hud-value" id="timerDisplay">60s</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="startScreen" class="screen">
+        <div class="screen-content">
+            <h2>TRAFFIC SIM</h2>
+            <p>Control traffic lights to guide cars through intersections.</p>
+            <p>Click signals to toggle Green/Red.</p>
+            <p>Get 50 cars through in 60 seconds without collisions!</p>
+            <button onclick="startGame()">START</button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen" class="screen" style="display: none;">
+        <div class="screen-content">
+            <h2>GAME OVER</h2>
+            <p id="gameOverMessage">Collision detected!</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <div id="clearScreen" class="screen" style="display: none;">
+        <div class="screen-content">
+            <h2>CLEAR!</h2>
+            <p id="clearMessage">You successfully managed the traffic!</p>
+            <button onclick="retryGame()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        // {{GAME_CONFIG}}
+        const config = {
+            title: 'TRAFFIC SIM',
+            bg_color: '#4a5568',
+            road_color: '#2d3748',
+            car_color: '#f6e05e',
+            signal_green: '#48bb78',
+            signal_red: '#fc8181',
+            win_cars: 50,
+            time_limit: 60,
+            spawn_interval: 3
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GRID_SIZE = 40;
+        const COLS = canvas.width / GRID_SIZE;
+        const ROWS = canvas.height / GRID_SIZE;
+
+        let gameState = {
+            running: false,
+            passedCars: 0,
+            timeLeft: config.time_limit,
+            lastSpawnTime: 0,
+            signals: {
+                top: false,
+                right: false,
+                bottom: false,
+                left: false
+            }
+        };
+
+        let cars = [];
+        let gameStartTime = 0;
+
+        const intersections = [
+            { row: 6, col: 6, direction: 'top' },
+            { row: 6, col: 9, direction: 'right' },
+            { row: 9, col: 9, direction: 'bottom' },
+            { row: 9, col: 6, direction: 'left' }
+        ];
+
+        class Car {
+            constructor(startDir) {
+                this.direction = startDir;
+                this.gridX = 0;
+                this.gridY = 0;
+                this.speed = 1;
+                this.passed = false;
+
+                if (startDir === 'top') {
+                    this.gridX = 6;
+                    this.gridY = -2;
+                } else if (startDir === 'right') {
+                    this.gridX = COLS;
+                    this.gridY = 6;
+                } else if (startDir === 'bottom') {
+                    this.gridX = 9;
+                    this.gridY = ROWS;
+                } else if (startDir === 'left') {
+                    this.gridX = -2;
+                    this.gridY = 9;
+                }
+            }
+
+            update() {
+                if (this.direction === 'top') {
+                    if (this.gridY < 6 || gameState.signals.top) {
+                        this.gridY += this.speed;
+                    }
+                    if (this.gridY > ROWS && !this.passed) {
+                        this.passed = true;
+                        gameState.passedCars++;
+                    }
+                } else if (this.direction === 'right') {
+                    if (this.gridX > 9 || gameState.signals.right) {
+                        this.gridX -= this.speed;
+                    }
+                    if (this.gridX < -2 && !this.passed) {
+                        this.passed = true;
+                        gameState.passedCars++;
+                    }
+                } else if (this.direction === 'bottom') {
+                    if (this.gridY > 9 || gameState.signals.bottom) {
+                        this.gridY -= this.speed;
+                    }
+                    if (this.gridY < -2 && !this.passed) {
+                        this.passed = true;
+                        gameState.passedCars++;
+                    }
+                } else if (this.direction === 'left') {
+                    if (this.gridX < 6 || gameState.signals.left) {
+                        this.gridX += this.speed;
+                    }
+                    if (this.gridX > COLS && !this.passed) {
+                        this.passed = true;
+                        gameState.passedCars++;
+                    }
+                }
+            }
+
+            draw() {
+                const x = this.gridX * GRID_SIZE + GRID_SIZE / 2;
+                const y = this.gridY * GRID_SIZE + GRID_SIZE / 2;
+
+                ctx.fillStyle = config.car_color;
+                ctx.fillRect(x - 12, y - 8, 24, 16);
+                ctx.strokeStyle = '#1a202c';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x - 12, y - 8, 24, 16);
+            }
+
+            isInGrid() {
+                return this.gridX >= -2 && this.gridX < COLS + 2 &&
+                       this.gridY >= -2 && this.gridY < ROWS + 2;
+            }
+
+            getGridCell() {
+                return { row: Math.round(this.gridY), col: Math.round(this.gridX) };
+            }
+        }
+
+        function drawRoads() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = config.road_color;
+
+            // Horizontal roads
+            ctx.fillRect(0, 6 * GRID_SIZE, canvas.width, 4 * GRID_SIZE);
+            ctx.fillRect(0, 9 * GRID_SIZE, canvas.width, 4 * GRID_SIZE);
+
+            // Vertical roads
+            ctx.fillRect(6 * GRID_SIZE, 0, 4 * GRID_SIZE, canvas.height);
+            ctx.fillRect(9 * GRID_SIZE, 0, 4 * GRID_SIZE, canvas.height);
+
+            // Road markings
+            ctx.strokeStyle = '#718096';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([10, 10]);
+
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 6 * GRID_SIZE);
+            ctx.lineTo(canvas.width / 2, 10 * GRID_SIZE);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(6 * GRID_SIZE, canvas.height / 2);
+            ctx.lineTo(10 * GRID_SIZE, canvas.height / 2);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+        }
+
+        function drawSignals() {
+            const signalPositions = [
+                { x: 5.5, y: 5.5, dir: 'top' },
+                { x: 10.5, y: 5.5, dir: 'right' },
+                { x: 10.5, y: 10.5, dir: 'bottom' },
+                { x: 5.5, y: 10.5, dir: 'left' }
+            ];
+
+            signalPositions.forEach(pos => {
+                const x = pos.x * GRID_SIZE;
+                const y = pos.y * GRID_SIZE;
+                const isGreen = gameState.signals[pos.dir];
+
+                ctx.fillStyle = '#1a202c';
+                ctx.fillRect(x - 15, y - 15, 30, 30);
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x - 15, y - 15, 30, 30);
+
+                ctx.fillStyle = isGreen ? config.signal_green : config.signal_red;
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function checkCollisions() {
+            const cellMap = new Map();
+
+            for (let car of cars) {
+                const cell = car.getGridCell();
+                const key = `${cell.row},${cell.col}`;
+
+                if (cellMap.has(key)) {
+                    return true;
+                }
+                cellMap.set(key, car);
+            }
+            return false;
+        }
+
+        function spawnCar() {
+            const directions = ['top', 'right', 'bottom', 'left'];
+            const randomDir = directions[Math.floor(Math.random() * directions.length)];
+            cars.push(new Car(randomDir));
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            const currentTime = Date.now();
+            gameState.timeLeft = config.time_limit - Math.floor((currentTime - gameStartTime) / 1000);
+
+            if (gameState.timeLeft <= 0) {
+                gameState.timeLeft = 0;
+                if (gameState.passedCars >= config.win_cars) {
+                    gameState.running = false;
+                    showClearScreen();
+                } else {
+                    gameState.running = false;
+                    showGameOverScreen(`Time's up! You passed ${gameState.passedCars}/${config.win_cars} cars.`);
+                }
+                return;
+            }
+
+            // Spawn cars
+            if (currentTime - gameState.lastSpawnTime > config.spawn_interval * 1000) {
+                spawnCar();
+                gameState.lastSpawnTime = currentTime;
+            }
+
+            // Update cars
+            for (let car of cars) {
+                car.update();
+            }
+
+            // Remove off-screen cars
+            cars = cars.filter(car => car.isInGrid());
+
+            // Check collisions
+            if (checkCollisions()) {
+                gameState.running = false;
+                showGameOverScreen('Collision detected!');
+                return;
+            }
+
+            // Check win condition
+            if (gameState.passedCars >= config.win_cars) {
+                gameState.running = false;
+                showClearScreen();
+                return;
+            }
+
+            // Draw
+            drawRoads();
+            drawSignals();
+            for (let car of cars) {
+                car.draw();
+            }
+
+            updateHUD();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateHUD() {
+            document.getElementById('carCounter').textContent = `${gameState.passedCars}/${config.win_cars}`;
+            document.getElementById('timerDisplay').textContent = `${gameState.timeLeft}s`;
+        }
+
+        function startGame() {
+            gameState.running = true;
+            gameState.passedCars = 0;
+            gameState.timeLeft = config.time_limit;
+            gameState.lastSpawnTime = Date.now();
+            gameState.signals = { top: false, right: false, bottom: false, left: false };
+            cars = [];
+
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+
+            gameStartTime = Date.now();
+            gameLoop();
+        }
+
+        function showGameOverScreen(message) {
+            document.getElementById('gameOverMessage').textContent = message;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+
+        function showClearScreen() {
+            document.getElementById('clearMessage').textContent = `You successfully guided ${gameState.passedCars} cars through!`;
+            document.getElementById('clearScreen').style.display = 'flex';
+        }
+
+        function retryGame() {
+            document.getElementById('startScreen').style.display = 'flex';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+        }
+
+        // Signal toggle on click
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const signalPositions = [
+                { x: 5.5 * GRID_SIZE, y: 5.5 * GRID_SIZE, dir: 'top' },
+                { x: 10.5 * GRID_SIZE, y: 5.5 * GRID_SIZE, dir: 'right' },
+                { x: 10.5 * GRID_SIZE, y: 10.5 * GRID_SIZE, dir: 'bottom' },
+                { x: 5.5 * GRID_SIZE, y: 10.5 * GRID_SIZE, dir: 'left' }
+            ];
+
+            for (let signal of signalPositions) {
+                const dist = Math.sqrt((x - signal.x) ** 2 + (y - signal.y) ** 2);
+                if (dist < 20) {
+                    gameState.signals[signal.dir] = !gameState.signals[signal.dir];
+                }
+            }
+        });
+
+        // Initial draw
+        drawRoads();
+        drawSignals();
+    </script>
+</body>
+</html>
