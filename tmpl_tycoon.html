@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHOP TYCOON</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #555;
+        }
+        canvas {
+            display: block;
+            background: #2d3748;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            z-index: 100;
+        }
+        #startScreen {
+            background: rgba(0, 0, 0, 0.9);
+        }
+        #gameOverScreen {
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+        }
+        #clearScreen {
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+        }
+        .screen h1 {
+            font-size: 48px;
+            color: #fff;
+        }
+        .screen p {
+            font-size: 18px;
+            color: #ccc;
+            text-align: center;
+            max-width: 90%;
+            line-height: 1.6;
+        }
+        .screen button {
+            padding: 12px 40px;
+            font-size: 20px;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .screen button:hover {
+            background: #3182ce;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="startScreen" class="screen">
+            <h1>SHOP TYCOON</h1>
+            <p>店舗を運営して目標売上を達成しよう！<br>
+               設備を配置して客を呼び込み、収益を増やそう</p>
+            <button onclick="startGame()">START</button>
+        </div>
+        
+        <div id="gameOverScreen" class="screen">
+            <h1>GAME OVER</h1>
+            <p id="gameOverText">ゲームオーバー</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        
+        <div id="clearScreen" class="screen">
+            <h1>CLEAR!</h1>
+            <p id="clearText">目標売上を達成しました！</p>
+            <button onclick="retryGame()">AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'SHOP TYCOON',
+            bg_color: '#1a1a2e',
+            floor_color: '#2d3748',
+            register_color: '#68d391',
+            shelf_color: '#4299e1',
+            vip_color: '#d69e2e',
+            customer_color: '#f6ad55',
+            target_revenue: 5000,
+            register_cost: 100,
+            shelf_cost: 200,
+            vip_cost: 500
+        };
+
+        const GRID_COLS = 7;
+        const GRID_ROWS = 4;
+        const CELL_SIZE = 60;
+        const HUD_HEIGHT = 100;
+        const CANVAS_WIDTH = GRID_COLS * CELL_SIZE;
+        const CANVAS_HEIGHT = GRID_ROWS * CELL_SIZE + HUD_HEIGHT;
+
+        const BUILDING_TYPES = {
+            REGISTER: 'register',
+            SHELF: 'shelf',
+            VIP: 'vip'
+        };
+
+        const BUILDING_CONFIG = {
+            register: {
+                cost: config.register_cost,
+                customerInterval: 5000,
+                revenue: 10,
+                color: config.register_color
+            },
+            shelf: {
+                cost: config.shelf_cost,
+                customerInterval: 3000,
+                revenue: 15,
+                color: config.shelf_color
+            },
+            vip: {
+                cost: config.vip_cost,
+                customerInterval: 8000,
+                revenue: 50,
+                color: config.vip_color
+            }
+        };
+
+        let gameState = {
+            running: false,
+            money: 300,
+            totalRevenue: 0,
+            selectedBuilding: null,
+            buildings: [],
+            customers: [],
+            lastCustomerTime: 0,
+            buildingTimers: {}
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function initializeGame() {
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
+            document.getElementById('gameContainer').style.width = canvas.width + 'px';
+            document.getElementById('gameContainer').style.height = canvas.height + 'px';
+            document.body.style.background = config.bg_color;
+            gameState = {
+                running: true,
+                money: 300,
+                totalRevenue: 0,
+                selectedBuilding: null,
+                buildings: [],
+                customers: [],
+                lastCustomerTime: 0,
+                buildingTimers: {}
+            };
+            canvas.addEventListener('click', handleCanvasClick);
+            gameLoop();
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            initializeGame();
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+            canvas.removeEventListener('click', handleCanvasClick);
+        }
+
+        function handleCanvasClick(e) {
+            if (!gameState.running) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (y >= GRID_ROWS * CELL_SIZE) return;
+
+            const gridX = Math.floor(x / CELL_SIZE);
+            const gridY = Math.floor(y / CELL_SIZE);
+
+            if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) return;
+
+            const existingBuilding = gameState.buildings.find(b => b.x === gridX && b.y === gridY);
+
+            if (existingBuilding) {
+                upgradeBuilding(existingBuilding);
+            } else if (gameState.selectedBuilding) {
+                placeBuilding(gridX, gridY);
+            }
+        }
+
+        function placeBuilding(gridX, gridY) {
+            const type = gameState.selectedBuilding;
+            const cost = BUILDING_CONFIG[type].cost;
+
+            if (gameState.money >= cost) {
+                gameState.money -= cost;
+                gameState.buildings.push({
+                    x: gridX,
+                    y: gridY,
+                    type: type,
+                    level: 1,
+                    customers: 0
+                });
+                gameState.buildingTimers[gridX + '_' + gridY] = 0;
+            }
+        }
+
+        function upgradeBuilding(building) {
+            const type = building.type;
+            const upgradeCost = BUILDING_CONFIG[type].cost / 2;
+
+            if (gameState.money >= upgradeCost) {
+                gameState.money -= upgradeCost;
+                building.level += 1;
+            }
+        }
+
+        function selectBuilding(type) {
+            const cost = BUILDING_CONFIG[type].cost;
+            if (gameState.money >= cost) {
+                gameState.selectedBuilding = gameState.selectedBuilding === type ? null : type;
+            }
+        }
+
+        function spawnCustomer(timestamp) {
+            if (gameState.buildings.length === 0) return;
+            if (timestamp - gameState.lastCustomerTime < 1000) return;
+
+            gameState.lastCustomerTime = timestamp;
+
+            const building = gameState.buildings[Math.floor(Math.random() * gameState.buildings.length)];
+            gameState.customers.push({
+                x: Math.random() * (GRID_COLS * CELL_SIZE),
+                y: Math.random() * (GRID_ROWS * CELL_SIZE),
+                destX: building.x * CELL_SIZE + CELL_SIZE / 2,
+                destY: building.y * CELL_SIZE + CELL_SIZE / 2,
+                building: building,
+                arrived: false
+            });
+        }
+
+        function updateCustomers() {
+            gameState.customers = gameState.customers.filter(customer => {
+                const dx = customer.destX - customer.x;
+                const dy = customer.destY - customer.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 5) {
+                    if (!customer.arrived) {
+                        customer.arrived = true;
+                        const building = customer.building;
+                        const config = BUILDING_CONFIG[building.type];
+                        const revenue = config.revenue * building.level;
+                        gameState.money += revenue;
+                        gameState.totalRevenue += revenue;
+                    }
+                    return Math.random() > 0.05;
+                } else {
+                    const speed = 2;
+                    customer.x += (dx / dist) * speed;
+                    customer.y += (dy / dist) * speed;
+                    return true;
+                }
+            });
+        }
+
+        function drawGame() {
+            ctx.fillStyle = config.floor_color;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, GRID_ROWS * CELL_SIZE);
+
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= GRID_COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, GRID_ROWS * CELL_SIZE);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= GRID_ROWS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(CANVAS_WIDTH, i * CELL_SIZE);
+                ctx.stroke();
+            }
+
+            gameState.buildings.forEach(building => {
+                const x = building.x * CELL_SIZE;
+                const y = building.y * CELL_SIZE;
+                ctx.fillStyle = BUILDING_CONFIG[building.type].color;
+                ctx.fillRect(x + 4, y + 4, CELL_SIZE - 8, CELL_SIZE - 8);
+
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const levelText = 'Lv' + building.level;
+                ctx.fillText(levelText, x + CELL_SIZE / 2, y + CELL_SIZE / 2);
+            });
+
+            gameState.customers.forEach(customer => {
+                ctx.fillStyle = config.customer_color;
+                ctx.beginPath();
+                ctx.arc(customer.x, customer.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, GRID_ROWS * CELL_SIZE, CANVAS_WIDTH, HUD_HEIGHT);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            const hudY = GRID_ROWS * CELL_SIZE + 15;
+            ctx.fillText('Gold: ' + gameState.money, 10, hudY);
+            ctx.fillText('Revenue: ' + gameState.totalRevenue + ' / ' + config.target_revenue, 10, hudY + 25);
+
+            const buttonY = GRID_ROWS * CELL_SIZE + 60;
+            const buttonWidth = 50;
+            const buttonHeight = 30;
+            const spacing = 5;
+
+            const buttons = [
+                { type: 'register', label: 'REG', x: 10 },
+                { type: 'shelf', label: 'SHL', x: 70 },
+                { type: 'vip', label: 'VIP', x: 130 }
+            ];
+
+            buttons.forEach(btn => {
+                ctx.fillStyle = gameState.selectedBuilding === btn.type ? '#ffff00' : BUILDING_CONFIG[btn.type].color;
+                ctx.fillRect(btn.x, buttonY, buttonWidth, buttonHeight);
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(btn.label, btn.x + buttonWidth / 2, buttonY + buttonHeight / 2 - 5);
+                ctx.font = '9px Arial';
+                ctx.fillText(BUILDING_CONFIG[btn.type].cost + 'G', btn.x + buttonWidth / 2, buttonY + buttonHeight / 2 + 8);
+            });
+
+            ctx.fillStyle = '#aaa';
+            ctx.font = '11px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText('Click building to upgrade', CANVAS_WIDTH - 10, buttonY + 12);
+        }
+
+        function gameLoop(timestamp = 0) {
+            if (!gameState.running) return;
+
+            spawnCustomer(timestamp);
+            updateCustomers();
+            drawGame();
+
+            if (gameState.totalRevenue >= config.target_revenue) {
+                gameState.running = false;
+                document.getElementById('clearText').textContent = 'Goal reached! Total: ' + gameState.totalRevenue + 'G';
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+
+            canvas.addEventListener('click', (e) => {
+                if (!gameState.running) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                if (y >= GRID_ROWS * CELL_SIZE) {
+                    const buttonY = GRID_ROWS * CELL_SIZE + 60;
+                    const buttonHeight = 30;
+                    if (y >= buttonY && y <= buttonY + buttonHeight) {
+                        if (x >= 10 && x <= 60) selectBuilding('register');
+                        else if (x >= 70 && x <= 120) selectBuilding('shelf');
+                        else if (x >= 130 && x <= 180) selectBuilding('vip');
+                    }
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>

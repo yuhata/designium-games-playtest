@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTO BATTLER</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #0d1117;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #444;
+        }
+        canvas {
+            display: block;
+            background: #1a2744;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+        }
+        .screen-content {
+            text-align: center;
+            padding: 30px;
+        }
+        .screen-content h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #4299e1;
+        }
+        .screen-content p {
+            font-size: 16px;
+            margin: 10px 0;
+            color: #aaa;
+        }
+        button {
+            margin-top: 30px;
+            padding: 12px 40px;
+            font-size: 18px;
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #3182ce;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="startScreen">
+            <div class="screen-content">
+                <h1>AUTO BATTLER</h1>
+                <p>ユニットを配置してバトルを勝ち抜こう</p>
+                <p>クリア条件: 5ラウンド勝利</p>
+                <p>初期ゴールド: 10G</p>
+                <button onclick="startGame()">START</button>
+            </div>
+        </div>
+        <div id="gameOverScreen" style="display: none;">
+            <div class="screen-content">
+                <h1>GAME OVER</h1>
+                <p>3回敗北してしまいました</p>
+                <button onclick="retryGame()">RETRY</button>
+            </div>
+        </div>
+        <div id="clearScreen" style="display: none;">
+            <div class="screen-content">
+                <h1>CLEAR!</h1>
+                <p>5ラウンド勝利しました!</p>
+                <button onclick="retryGame()">もう一度</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'AUTO BATTLER',
+            bg_color: '#0d1117',
+            board_color: '#1a2744',
+            ally_color: '#4299e1',
+            enemy_color: '#e53e3e',
+            warrior_cost: 3,
+            mage_cost: 4,
+            archer_cost: 3,
+            win_rounds: 5,
+            miss_limit: 3
+        };
+
+        const gameState = {
+            running: false,
+            round: 0,
+            gold: 10,
+            misses: 0,
+            phase: 'setup',
+            setupTimer: 10,
+            allies: [],
+            enemies: [],
+            selectedUnit: null,
+            lastAttackTime: {}
+        };
+
+        const UNIT_STATS = {
+            warrior: { hp: 20, atk: 3, speed: 1, range: 30 },
+            mage: { hp: 10, atk: 6, speed: 0.5, range: 150 },
+            archer: { hp: 12, atk: 4, speed: 2, range: 30 }
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 420;
+        canvas.height = 540;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+        class Unit {
+            constructor(type, x, y, isAlly) {
+                this.type = type;
+                this.x = x;
+                this.y = y;
+                this.isAlly = isAlly;
+                this.id = Math.random();
+                const stats = UNIT_STATS[type];
+                this.hp = stats.hp;
+                this.maxHp = stats.hp;
+                this.atk = stats.atk;
+                this.speed = stats.speed;
+                this.range = stats.range;
+                this.width = 30;
+                this.height = 30;
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = this.isAlly ? config.ally_color : config.enemy_color;
+                ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.hp, this.x, this.y);
+            }
+
+            update() {
+                if (!gameState.running) return;
+                const enemies = this.isAlly ? gameState.enemies : gameState.allies;
+                if (enemies.length === 0) return;
+
+                const nearest = enemies.reduce((a, b) => {
+                    const distA = Math.hypot(this.x - a.x, this.y - a.y);
+                    const distB = Math.hypot(this.x - b.x, this.y - b.y);
+                    return distA < distB ? a : b;
+                });
+
+                const dx = nearest.x - this.x;
+                const dy = nearest.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                const minDist = this.range + nearest.width / 2 + this.width / 2;
+
+                if (dist > minDist) {
+                    const moveSpeed = this.speed * 2;
+                    this.x += (dx / dist) * moveSpeed;
+                    this.y += (dy / dist) * moveSpeed;
+                    this.x = Math.max(0, Math.min(canvas.width, this.x));
+                    this.y = Math.max(0, Math.min(canvas.height, this.y));
+                } else {
+                    this.attack(nearest);
+                }
+            }
+
+            attack(target) {
+                const now = Date.now();
+                if (!gameState.lastAttackTime[this.id]) gameState.lastAttackTime[this.id] = 0;
+                if (now - gameState.lastAttackTime[this.id] > 1000) {
+                    target.hp -= this.atk;
+                    gameState.lastAttackTime[this.id] = now;
+                }
+            }
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(0, 0, canvas.width, 60);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Round: ' + gameState.round + '/' + config.win_rounds, 10, 20);
+            ctx.fillText('Misses: ' + gameState.misses + '/' + config.miss_limit, 10, 40);
+            ctx.fillText('Gold: ' + gameState.gold + 'G', 200, 20);
+            ctx.fillText('Phase: ' + gameState.phase, 200, 40);
+            if (gameState.phase === 'setup') {
+                ctx.fillText('Timer: ' + gameState.setupTimer + 's', 330, 20);
+            }
+            ctx.font = '12px Arial';
+            ctx.fillText('Click unit to select | Click cell to place', 10, 480);
+        }
+
+        function drawShop() {
+            const shopY = 500;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, shopY - 40, canvas.width, 40);
+
+            const shops = [
+                { name: 'Warrior', cost: config.warrior_cost, type: 'warrior', x: 70 },
+                { name: 'Mage', cost: config.mage_cost, type: 'mage', x: 210 },
+                { name: 'Archer', cost: config.archer_cost, type: 'archer', x: 350 }
+            ];
+
+            shops.forEach(shop => {
+                ctx.fillStyle = gameState.selectedUnit === shop.type ? config.ally_color : '#666';
+                ctx.fillRect(shop.x - 40, shopY - 35, 80, 30);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(shop.name, shop.x, shopY - 20);
+                ctx.fillText(shop.cost + 'G', shop.x, shopY - 10);
+            });
+        }
+
+        function drawBoard() {
+            ctx.fillStyle = config.enemy_color;
+            ctx.fillRect(0, 60, canvas.width, 180);
+            ctx.fillStyle = config.ally_color;
+            ctx.fillRect(0, 240, canvas.width, 260);
+            gameState.allies.forEach(u => u.draw(ctx));
+            gameState.enemies.forEach(u => u.draw(ctx));
+        }
+
+        function gameLoop() {
+            ctx.fillStyle = config.board_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawBoard();
+            drawHUD();
+
+            if (gameState.phase === 'setup') {
+                drawShop();
+            } else if (gameState.phase === 'battle') {
+                gameState.allies.forEach(u => u.update());
+                gameState.enemies.forEach(u => u.update());
+
+                gameState.allies = gameState.allies.filter(u => u.hp > 0);
+                gameState.enemies = gameState.enemies.filter(u => u.hp > 0);
+
+                if (gameState.allies.length === 0) {
+                    gameState.misses++;
+                    if (gameState.misses >= config.miss_limit) {
+                        gameState.running = false;
+                        document.getElementById('gameOverScreen').style.display = 'flex';
+                        return;
+                    }
+                    nextRound();
+                } else if (gameState.enemies.length === 0) {
+                    gameState.round++;
+                    if (gameState.round >= config.win_rounds) {
+                        gameState.running = false;
+                        document.getElementById('clearScreen').style.display = 'flex';
+                        return;
+                    }
+                    nextRound();
+                }
+            }
+
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function spawnEnemies() {
+            const types = ['warrior', 'mage', 'archer'];
+            const count = (gameState.round + 1) * 2;
+            for (let i = 0; i < count; i++) {
+                const type = types[Math.floor(Math.random() * types.length)];
+                const x = 50 + Math.random() * 320;
+                const y = 80 + Math.random() * 150;
+                gameState.enemies.push(new Unit(type, x, y, false));
+            }
+        }
+
+        function nextRound() {
+            gameState.phase = 'setup';
+            gameState.setupTimer = 10;
+            gameState.gold += 5;
+            gameState.selectedUnit = null;
+            gameState.lastAttackTime = {};
+            spawnEnemies();
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.round = 0;
+            gameState.gold = 10;
+            gameState.misses = 0;
+            gameState.allies = [];
+            gameState.enemies = [];
+            gameState.phase = 'setup';
+            gameState.setupTimer = 10;
+            gameState.selectedUnit = null;
+            nextRound();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState.phase !== 'setup') return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (y >= 460 && y <= 530) {
+                const shops = [
+                    { type: 'warrior', x: 70 },
+                    { type: 'mage', x: 210 },
+                    { type: 'archer', x: 350 }
+                ];
+                shops.forEach(shop => {
+                    if (Math.abs(x - shop.x) < 40) {
+                        gameState.selectedUnit = gameState.selectedUnit === shop.type ? null : shop.type;
+                    }
+                });
+            } else if (gameState.selectedUnit && y >= 240 && y <= 500) {
+                const cost = gameState.selectedUnit === 'warrior' ? config.warrior_cost :
+                             gameState.selectedUnit === 'mage' ? config.mage_cost :
+                             config.archer_cost;
+                if (gameState.gold >= cost) {
+                    gameState.allies.push(new Unit(gameState.selectedUnit, x, y, true));
+                    gameState.gold -= cost;
+                }
+            }
+        });
+
+        setInterval(() => {
+            if (gameState.phase === 'setup' && gameState.running) {
+                gameState.setupTimer--;
+                if (gameState.setupTimer <= 0) {
+                    gameState.phase = 'battle';
+                    gameState.selectedUnit = null;
+                }
+            }
+        }, 1000);
+
+        document.body.style.background = config.bg_color;
+    </script>
+</body>
+</html>

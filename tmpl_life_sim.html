@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFE SIM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+        }
+        
+        #startScreen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 400px;
+            height: 560px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            text-align: center;
+            color: white;
+            z-index: 100;
+        }
+        
+        #startScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #f6e05e;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        #startScreen .rules {
+            font-size: 14px;
+            line-height: 1.8;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: left;
+        }
+        
+        #startScreen .rules h2 {
+            color: #4299e1;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        
+        #startScreen .rules p {
+            margin: 4px 0;
+            color: #ccc;
+        }
+        
+        #startButton {
+            padding: 12px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        #startButton:hover {
+            background: #3182ce;
+        }
+        
+        #gameContainer {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            display: none;
+            position: relative;
+            color: white;
+        }
+        
+        .hud {
+            margin-bottom: 20px;
+        }
+        
+        .day-info {
+            font-size: 18px;
+            font-weight: bold;
+            color: #f6e05e;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .status-bar {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-label {
+            width: 80px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #ccc;
+        }
+        
+        .bar-container {
+            flex: 1;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .bar-fill {
+            height: 100%;
+            transition: width 0.2s;
+        }
+        
+        .status-value {
+            width: 50px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .target-info {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 15px;
+            border-left: 3px solid #4299e1;
+        }
+        
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .action-btn {
+            padding: 12px;
+            font-size: 13px;
+            font-weight: bold;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: center;
+            line-height: 1.4;
+        }
+        
+        .action-btn:hover {
+            background: #3182ce;
+        }
+        
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .controls-info {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #aaa;
+            text-align: center;
+            border-left: 3px solid #68d391;
+        }
+        
+        #gameOverScreen, #clearScreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .modal-content h2 {
+            font-size: 36px;
+            margin-bottom: 15px;
+        }
+        
+        .modal-content p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            color: #ccc;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .modal-btn {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .modal-btn:hover {
+            background: #3182ce;
+        }
+        
+        #gameOverScreen .modal-content {
+            background: linear-gradient(135deg, #2d1b2e 0%, #1a1a2e 100%);
+        }
+        
+        #gameOverScreen h2 {
+            color: #f56565;
+        }
+        
+        #clearScreen .modal-content {
+            background: linear-gradient(135deg, #1a2e1a 0%, #1a1a2e 100%);
+        }
+        
+        #clearScreen h2 {
+            color: #68d391;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <h1>LIFE SIM</h1>
+        <div class="rules">
+            <h2>🎯 ゲームゴール</h2>
+            <p>10日間で以下を達成：</p>
+            <p>💰 Money ≥ 200</p>
+            <p>😊 Happiness ≥ 60</p>
+            <h2 style="margin-top: 12px;">📋 行動できること</h2>
+            <p>🏢 仕事 → Money+20 (疲れる)</p>
+            <p>😴 休憩 → HP/Energy回復</p>
+            <p>🎮 遊び → 幸福+25 (お金かかる)</p>
+            <p>📚 勉強 → Money増加率+5%</p>
+        </div>
+        <button id="startButton">START GAME</button>
+    </div>
+    
+    <div id="gameContainer">
+        <div class="hud">
+            <div class="day-info">DAY <span id="dayDisplay">1</span> / 10</div>
+            
+            <div class="status-bar">
+                <div class="status-label">HP</div>
+                <div class="bar-container">
+                    <div id="hpBar" class="bar-fill" style="background: #68d391; width: 100%;"></div>
+                </div>
+                <div class="status-value"><span id="hpValue">100</span>/100</div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-label">Energy</div>
+                <div class="bar-container">
+                    <div id="energyBar" class="bar-fill" style="background: #4299e1; width: 100%;"></div>
+                </div>
+                <div class="status-value"><span id="energyValue">100</span>/100</div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-label">Money</div>
+                <div class="bar-container">
+                    <div id="moneyBar" class="bar-fill" style="background: #f6e05e; width: 0%;"></div>
+                </div>
+                <div class="status-value"><span id="moneyValue">0</span>/200</div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-label">Happy</div>
+                <div class="bar-container">
+                    <div id="happyBar" class="bar-fill" style="background: #ed64a6; width: 25%;"></div>
+                </div>
+                <div class="status-value"><span id="happyValue">50</span>/60</div>
+            </div>
+            
+            <div class="target-info">
+                ✅ 目標: Money ≥ 200 かつ Happiness ≥ 60<br>
+                ⚠️ Energy 0 → HP が毎秒 -1<br>
+                💀 HP 0 → GAME OVER
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button class="action-btn" onclick="performAction('work')">
+                🏢 仕事<br>
+                <small>Money+20<br>Energy-20 Happy-5</small>
+            </button>
+            <button class="action-btn" onclick="performAction('rest')">
+                😴 休憩<br>
+                <small>HP+10 Energy+30<br>(上限100)</small>
+            </button>
+            <button class="action-btn" onclick="performAction('play')">
+                🎮 遊び<br>
+                <small>Happy+25<br>Money-10 Energy-10</small>
+            </button>
+            <button class="action-btn" onclick="performAction('study')">
+                📚 勉強<br>
+                <small>Money効率 +5%<br>(最大+50%)</small>
+            </button>
+        </div>
+        
+        <div class="controls-info">
+            ボタンをクリックして行動します。1日=10秒のリアルタイムで進行します。
+        </div>
+    </div>
+    
+    <div id="gameOverScreen">
+        <div class="modal-content">
+            <h2>GAME OVER</h2>
+            <p id="gameOverReason">ゲームオーバー</p>
+            <div class="modal-buttons">
+                <button class="modal-btn" onclick="retryGame()">もう一度</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="clearScreen">
+        <div class="modal-content">
+            <h2>CLEAR!</h2>
+            <p>おめでとう！目標を達成しました。<br>
+                <span id="finalStats"></span>
+            </p>
+            <div class="modal-buttons">
+                <button class="modal-btn" onclick="retryGame()">もう一度</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const config = {
+            title: 'LIFE SIM',
+            bg_color: '#1a1a2e',
+            bar_hp: '#68d391',
+            bar_energy: '#4299e1',
+            bar_happy: '#f6e05e',
+            win_money: 200,
+            win_happiness: 60,
+            total_days: 10
+        };
+        
+        const gameState = {
+            running: false,
+            hp: 100,
+            energy: 100,
+            money: 0,
+            happiness: 50,
+            day: 1,
+            dayTimer: 0,
+            moneyBonus: 0
+        };
+        
+        let gameLoopInterval;
+        let dayLoopInterval;
+        
+        document.body.style.background = config.bg_color;
+        document.getElementById('gameContainer').style.width = '400px';
+        document.getElementById('gameContainer').style.height = '560px';
+        
+        document.getElementById('startButton').addEventListener('click', startGame);
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            
+            gameState.running = true;
+            gameState.hp = 100;
+            gameState.energy = 100;
+            gameState.money = 0;
+            gameState.happiness = 50;
+            gameState.day = 1;
+            gameState.dayTimer = 0;
+            gameState.moneyBonus = 0;
+            
+            updateUI();
+            
+            clearInterval(gameLoopInterval);
+            clearInterval(dayLoopInterval);
+            
+            gameLoopInterval = setInterval(gameLoop, 100);
+            dayLoopInterval = setInterval(dayTick, 10000);
+        }
+        
+        function gameLoop() {
+            if (!gameState.running) return;
+            
+            if (gameState.energy <= 0) {
+                gameState.hp = Math.max(0, gameState.hp - 1);
+            }
+            
+            if (gameState.hp <= 0) {
+                endGameOver('HP が 0 になりました。');
+            }
+            
+            updateUI();
+        }
+        
+        function dayTick() {
+            if (!gameState.running) return;
+            
+            gameState.day++;
+            
+            if (gameState.day > config.total_days) {
+                checkWinCondition();
+            }
+            
+            updateUI();
+        }
+        
+        function performAction(action) {
+            if (!gameState.running) return;
+            
+            const baseMoneyGain = 20;
+            const moneyMultiplier = 1 + (gameState.moneyBonus * 0.05);
+            
+            switch (action) {
+                case 'work':
+                    gameState.money += Math.floor(baseMoneyGain * moneyMultiplier);
+                    gameState.energy = Math.max(0, gameState.energy - 20);
+                    gameState.happiness = Math.max(0, gameState.happiness - 5);
+                    break;
+                    
+                case 'rest':
+                    gameState.energy = Math.min(100, gameState.energy + 30);
+                    gameState.hp = Math.min(100, gameState.hp + 10);
+                    break;
+                    
+                case 'play':
+                    gameState.happiness = Math.min(100, gameState.happiness + 25);
+                    gameState.money = Math.max(0, gameState.money - 10);
+                    gameState.energy = Math.max(0, gameState.energy - 10);
+                    break;
+                    
+                case 'study':
+                    if (gameState.moneyBonus < 10) {
+                        gameState.moneyBonus++;
+                    }
+                    break;
+            }
+            
+            updateUI();
+        }
+        
+        function checkWinCondition() {
+            gameState.running = false;
+            clearInterval(gameLoopInterval);
+            clearInterval(dayLoopInterval);
+            
+            if (gameState.money >= config.win_money && gameState.happiness >= config.win_happiness) {
+                document.getElementById('finalStats').textContent = 
+                    `💰 Money: ${gameState.money} | 😊 Happiness: ${gameState.happiness}`;
+                document.getElementById('clearScreen').style.display = 'flex';
+            } else {
+                let reason = [];
+                if (gameState.money < config.win_money) {
+                    reason.push(`💰 Money不足: ${gameState.money}/${config.win_money}`);
+                }
+                if (gameState.happiness < config.win_happiness) {
+                    reason.push(`😊 Happiness不足: ${gameState.happiness}/${config.win_happiness}`);
+                }
+                endGameOver(reason.join(' | '));
+            }
+        }
+        
+        function endGameOver(reason) {
+            gameState.running = false;
+            clearInterval(gameLoopInterval);
+            clearInterval(dayLoopInterval);
+            
+            document.getElementById('gameOverReason').textContent = reason;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+        
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+            clearInterval(gameLoopInterval);
+            clearInterval(dayLoopInterval);
+        }
+        
+        function updateUI() {
+            document.getElementById('dayDisplay').textContent = gameState.day;
+            document.getElementById('hpValue').textContent = gameState.hp;
+            document.getElementById('hpBar').style.width = (gameState.hp) + '%';
+            
+            document.getElementById('energyValue').textContent = gameState.energy;
+            document.getElementById('energyBar').style.width = (gameState.energy) + '%';
+            
+            document.getElementById('moneyValue').textContent = gameState.money;
+            document.getElementById('moneyBar').style.width = Math.min(100, (gameState.money / config.win_money) * 100) + '%';
+            
+            document.getElementById('happyValue').textContent = gameState.happiness;
+            document.getElementById('happyBar').style.width = Math.min(100, (gameState.happiness / config.win_happiness) * 100) + '%';
+        }
+    </script>
+</body>
+</html>

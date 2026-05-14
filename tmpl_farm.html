@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farm Life</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        #startScreen, #clearScreen, #gameOverScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startScreen {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        #clearScreen {
+            background: rgba(0, 200, 0, 0.8);
+            display: none;
+        }
+        #gameOverScreen {
+            background: rgba(200, 0, 0, 0.8);
+            display: none;
+        }
+        .screen-content {
+            text-align: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 40px;
+        }
+        .screen-button {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .screen-button:hover {
+            background: #45a049;
+        }
+        #gameContainer {
+            border: 3px solid #333;
+            background: #2d4a1e;
+            position: relative;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div id="startScreen">
+    <div class="screen-content">FARM LIFE</div>
+    <div style="color: white; font-size: 18px; margin-bottom: 30px; text-align: center; max-width: 400px;">
+        <p>初期金: 50G</p>
+        <p>目標: 500G に達するとクリア！</p>
+    </div>
+    <button class="screen-button" onclick="startGame()">START</button>
+</div>
+
+<div id="clearScreen">
+    <div class="screen-content">CLEAR!</div>
+    <div style="color: white; font-size: 20px; margin-bottom: 30px;">🎉 農場経営成功！ 🎉</div>
+    <button class="screen-button" onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="gameOverScreen">
+    <div class="screen-content">GAME OVER</div>
+    <div style="color: white; font-size: 20px; margin-bottom: 30px;">金が尽きてしまった...</div>
+    <button class="screen-button" onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<script>
+const config = {
+    title: 'FARM LIFE',
+    bg_color: '#2d4a1e',
+    soil_color: '#6b4226',
+    crop1_color: '#ff8c00',
+    crop2_color: '#ffa500',
+    crop3_color: '#ff4500',
+    grow_time: 8,
+    target_gold: 500,
+    grid_size: 3
+};
+
+const CROPS = {
+    carrot: { id: 1, name: 'にんじん', cost: 10, price: 30, color: config.crop1_color, growTime: config.grow_time },
+    pumpkin: { id: 2, name: 'かぼちゃ', cost: 20, price: 60, color: config.crop2_color, growTime: config.grow_time * 1.5 },
+    tomato: { id: 3, name: 'トマト', cost: 15, price: 45, color: config.crop3_color, growTime: config.grow_time * 1.25 }
+};
+
+const GROWTH_STAGES = ['', '種', '芽', '成長', '収穫可'];
+
+let gameState = {
+    running: false,
+    gold: 50,
+    selectedCrop: null,
+    cells: [],
+    lastTime: 0
+};
+
+function initializeCells() {
+    gameState.cells = [];
+    for (let i = 0; i < config.grid_size; i++) {
+        for (let j = 0; j < config.grid_size; j++) {
+            gameState.cells.push({
+                crop: null,
+                stage: 0,
+                plantTime: 0,
+                watered: false,
+                x: j * 80,
+                y: i * 80
+            });
+        }
+    }
+}
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    gameState.running = true;
+    gameState.gold = 50;
+    gameState.selectedCrop = null;
+    gameState.lastTime = Date.now();
+    initializeCells();
+    gameLoop();
+}
+
+function retryGame() {
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+    gameState.running = false;
+}
+
+function selectCrop(cropKey) {
+    gameState.selectedCrop = gameState.selectedCrop === cropKey ? null : cropKey;
+}
+
+function plantCrop(cellIndex) {
+    const cell = gameState.cells[cellIndex];
+    if (cell.crop !== null) return;
+    if (gameState.selectedCrop === null) return;
+    
+    const crop = CROPS[gameState.selectedCrop];
+    if (gameState.gold < crop.cost) return;
+    
+    gameState.gold -= crop.cost;
+    cell.crop = gameState.selectedCrop;
+    cell.stage = 1;
+    cell.plantTime = Date.now();
+    cell.watered = false;
+}
+
+function waterCell(cellIndex) {
+    const cell = gameState.cells[cellIndex];
+    if (cell.crop === null || cell.watered || cell.stage === 0 || cell.stage === 4) return;
+    cell.watered = true;
+}
+
+function harvestCell(cellIndex) {
+    const cell = gameState.cells[cellIndex];
+    if (cell.crop === null || cell.stage !== 4) return;
+    
+    const crop = CROPS[cell.crop];
+    gameState.gold += crop.price;
+    cell.crop = null;
+    cell.stage = 0;
+    cell.plantTime = 0;
+    cell.watered = false;
+}
+
+function updateCells() {
+    const now = Date.now();
+    for (let cell of gameState.cells) {
+        if (cell.crop === null || cell.stage === 4) continue;
+        
+        const crop = CROPS[cell.crop];
+        let growTime = crop.growTime * 1000;
+        if (cell.watered) growTime /= 2;
+        
+        const elapsed = now - cell.plantTime;
+        cell.stage = Math.min(4, Math.floor((elapsed / growTime) * 4) + 1);
+    }
+}
+
+function checkGameEnd() {
+    if (gameState.gold >= config.target_gold) {
+        gameState.running = false;
+        document.getElementById('clearScreen').style.display = 'flex';
+        return;
+    }
+    
+    if (gameState.gold === 0 && gameState.cells.every(c => c.crop === null)) {
+        gameState.running = false;
+        document.getElementById('gameOverScreen').style.display = 'flex';
+        return;
+    }
+}
+
+function draw() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = config.bg_color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // グリッド描画
+    ctx.fillStyle = config.soil_color;
+    for (let i = 0; i < config.grid_size; i++) {
+        for (let j = 0; j < config.grid_size; j++) {
+            ctx.fillRect(j * 80, i * 80, 80, 80);
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(j * 80, i * 80, 80, 80);
+        }
+    }
+    
+    // セル描画
+    for (let i = 0; i < gameState.cells.length; i++) {
+        const cell = gameState.cells[i];
+        const cellX = cell.x + 10;
+        const cellY = cell.y + 10;
+        
+        if (cell.crop !== null) {
+            const crop = CROPS[cell.crop];
+            ctx.fillStyle = crop.color;
+            ctx.beginPath();
+            ctx.arc(cellX + 30, cellY + 30, 25, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(GROWTH_STAGES[cell.stage], cellX + 30, cellY + 30);
+        }
+    }
+    
+    // パネル背景
+    const panelY = config.grid_size * 80;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(0, panelY, 400, 520 - panelY);
+    
+    // HUD表示
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`所持金: ${gameState.gold}G / 目標: ${config.target_gold}G`, 10, panelY + 20);
+    
+    ctx.font = '12px Arial';
+    ctx.fillText('作物選択:', 10, panelY + 45);
+    ctx.fillText('水やり・収穫: クリック選択後の操作', 10, panelY + 65);
+}
+
+function gameLoop() {
+    if (!gameState.running) return;
+    
+    updateCells();
+    checkGameEnd();
+    draw();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('gameCanvas');
+    canvas.width = 400;
+    canvas.height = 520;
+    
+    const gameContainer = document.getElementById('gameContainer');
+    gameContainer.style.width = canvas.width + 'px';
+    gameContainer.style.height = canvas.height + 'px';
+    
+    document.body.style.backgroundColor = config.bg_color;
+    
+    canvas.addEventListener('click', (e) => {
+        if (!gameState.running) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const panelY = config.grid_size * 80;
+        if (y < panelY) {
+            const col = Math.floor(x / 80);
+            const row = Math.floor(y / 80);
+            if (col >= 0 && col < config.grid_size && row >= 0 && row < config.grid_size) {
+                const cellIndex = row * config.grid_size + col;
+                if (gameState.selectedCrop) {
+                    plantCrop(cellIndex);
+                } else {
+                    harvestCell(cellIndex);
+                }
+            }
+        }
+    });
+    
+    // ボタンUI（簡易版）
+    const buttonInfo = [
+        { text: 'にんじん', crop: 'carrot', x: 10 },
+        { text: 'かぼちゃ', crop: 'pumpkin', x: 130 },
+        { text: 'トマト', crop: 'tomato', x: 250 }
+    ];
+    
+    const panelY = config.grid_size * 80;
+    canvas.addEventListener('click', (e) => {
+        if (!gameState.running) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        if (y >= panelY + 85 && y <= panelY + 115) {
+            for (let btn of buttonInfo) {
+                if (x >= btn.x && x <= btn.x + 100) {
+                    selectCrop(btn.crop);
+                }
+            }
+        }
+    });
+});
+</script>
+
+</body>
+</html>

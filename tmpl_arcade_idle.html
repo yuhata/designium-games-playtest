@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARCADE IDLE GAME</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0d0d0d;
+        }
+        #gameWrapper {
+            position: relative;
+        }
+        #gameContainer {
+            border: 3px solid #333;
+            background: #0d0d0d;
+            position: relative;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 100;
+            font-family: Arial, sans-serif;
+        }
+        #startScreen {
+            display: flex;
+        }
+        #gameOverScreen {
+            display: none;
+        }
+        #clearScreen {
+            display: none;
+        }
+        .screen-content {
+            text-align: center;
+            color: #fff;
+        }
+        .screen-content h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #f6e05e;
+        }
+        .screen-content p {
+            font-size: 18px;
+            margin: 10px 0;
+            color: #ccc;
+        }
+        .screen-button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #e53e3e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .screen-button:hover {
+            background: #c92a2a;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameWrapper">
+        <div id="startScreen">
+            <div class="screen-content">
+                <h1>ARCADE IDLE</h1>
+                <p>スコアを稼ぐ放置ゲーム</p>
+                <p style="margin-top: 30px; font-size: 16px; color: #aaa;">BURSTボタンで短時間スコア獲得速度UP</p>
+                <p style="font-size: 16px; color: #aaa;">UPGRADEボタンで自動増加速度を強化</p>
+                <p style="margin-top: 20px; font-size: 16px; color: #f6e05e;">10000点を目指そう！</p>
+                <button class="screen-button" onclick="startGame()">START</button>
+            </div>
+        </div>
+        <div id="gameContainer">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+        <div id="gameOverScreen">
+            <div class="screen-content">
+                <h1>GAME OVER</h1>
+                <p id="finalScore" style="font-size: 32px; margin-top: 20px;"></p>
+                <button class="screen-button" onclick="retryGame()">RETRY</button>
+            </div>
+        </div>
+        <div id="clearScreen">
+            <div class="screen-content">
+                <h1>CLEAR!</h1>
+                <p id="clearScore" style="font-size: 32px; margin-top: 20px;"></p>
+                <button class="screen-button" onclick="retryGame()">AGAIN</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // theme:            string
+        // title:            string
+        // bg_color:         string
+        // score_color:      string
+        // burst_color:      string
+        // auto_rate:        int
+        // burst_multiplier: int
+        // burst_duration:   int
+        // burst_cooldown:   int
+        // target_score:     int
+        // upgrade_interval: int
+
+        const config = {
+            title: 'ARCADE IDLE',
+            bg_color: '#0d0d0d',
+            score_color: '#f6e05e',
+            burst_color: '#e53e3e',
+            auto_rate: 1,
+            burst_multiplier: 10,
+            burst_duration: 10,
+            burst_cooldown: 30,
+            target_score: 10000,
+            upgrade_interval: 1000
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400;
+        canvas.height = 500;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+        document.body.style.background = config.bg_color;
+
+        let gameState = {
+            score: 0,
+            auto_rate: config.auto_rate,
+            burst_active: false,
+            burst_time_remaining: 0,
+            burst_cooldown_remaining: 0,
+            running: false
+        };
+
+        let lastUpgradeCheck = 0;
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.score = 0;
+            gameState.auto_rate = config.auto_rate;
+            gameState.burst_active = false;
+            gameState.burst_time_remaining = 0;
+            gameState.burst_cooldown_remaining = 0;
+            gameState.running = true;
+            lastUpgradeCheck = 0;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        function activateBurst() {
+            if (!gameState.burst_active && gameState.burst_cooldown_remaining <= 0) {
+                gameState.burst_active = true;
+                gameState.burst_time_remaining = config.burst_duration;
+                gameState.burst_cooldown_remaining = 0;
+            }
+        }
+
+        function upgradeAutoRate() {
+            let cost = config.upgrade_interval;
+            if (gameState.score >= cost) {
+                gameState.score -= cost;
+                gameState.auto_rate += 1;
+            }
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            let increment = gameState.auto_rate;
+            if (gameState.burst_active) {
+                increment *= config.burst_multiplier;
+                gameState.burst_time_remaining -= 1/60;
+                if (gameState.burst_time_remaining <= 0) {
+                    gameState.burst_active = false;
+                    gameState.burst_cooldown_remaining = config.burst_cooldown;
+                }
+            }
+
+            gameState.score += increment / 60;
+
+            if (gameState.burst_cooldown_remaining > 0) {
+                gameState.burst_cooldown_remaining -= 1/60;
+            }
+
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = config.score_color;
+            ctx.font = 'bold 72px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(Math.floor(gameState.score), canvas.width / 2, 100);
+
+            ctx.fillStyle = '#aaa';
+            ctx.font = '16px Arial';
+            ctx.fillText('Score', canvas.width / 2, 140);
+
+            ctx.fillStyle = '#ccc';
+            ctx.font = '18px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Rate: +' + gameState.auto_rate + '/frame', 20, 180);
+            ctx.fillText('Target: ' + config.target_score, 20, 210);
+
+            let remainingScore = config.target_score - Math.floor(gameState.score);
+            ctx.fillStyle = remainingScore <= 0 ? config.burst_color : '#f6e05e';
+            ctx.fillText('Remaining: ' + Math.max(0, remainingScore), 20, 240);
+
+            ctx.fillStyle = config.score_color;
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'center';
+
+            let burstButtonColor = gameState.burst_cooldown_remaining > 0 ? '#666' : config.burst_color;
+            if (gameState.burst_active) {
+                burstButtonColor = '#ffaa00';
+            }
+            ctx.fillStyle = burstButtonColor;
+            ctx.fillRect(50, 300, 120, 50);
+            ctx.fillStyle = '#fff';
+            ctx.fillText('BURST', 110, 330);
+            if (gameState.burst_cooldown_remaining > 0) {
+                ctx.fillStyle = '#aaa';
+                ctx.font = '12px Arial';
+                ctx.fillText(Math.ceil(gameState.burst_cooldown_remaining) + 's', 110, 345);
+            }
+
+            let upgradeCost = config.upgrade_interval;
+            let canUpgrade = gameState.score >= upgradeCost;
+            let upgradeButtonColor = canUpgrade ? '#4299e1' : '#666';
+            ctx.fillStyle = upgradeButtonColor;
+            ctx.fillRect(230, 300, 120, 50);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText('UPGRADE', 290, 325);
+            ctx.font = '12px Arial';
+            ctx.fillText(gameState.auto_rate, 290, 345);
+
+            ctx.fillStyle = '#666';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Click BURST for 10x boost (10s)', canvas.width / 2, 380);
+            ctx.fillText('Click UPGRADE to increase rate (+1)', canvas.width / 2, 400);
+
+            if (gameState.burst_active) {
+                ctx.fillStyle = 'rgba(255, 170, 0, 0.3)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ffaa00';
+                ctx.font = 'bold 36px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('BURST!', canvas.width / 2, 450);
+            }
+
+            if (Math.floor(gameState.score) >= config.target_score) {
+                gameState.running = false;
+                document.getElementById('clearScore').textContent = 'Score: ' + Math.floor(gameState.score);
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (x >= 50 && x <= 170 && y >= 300 && y <= 350) {
+                activateBurst();
+            }
+            if (x >= 230 && x <= 350 && y >= 300 && y <= 350) {
+                upgradeAutoRate();
+            }
+        });
+    </script>
+</body>
+</html>
