@@ -10,389 +10,401 @@
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            background: #0a0a0a;
             font-family: Arial, sans-serif;
         }
-
+        
+        #gameContainer {
+            position: relative;
+            border: 2px solid #ccc;
+            background: #1a0a2e;
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
         #startScreen {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            background: rgba(26, 10, 46, 0.95);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 100;
+            z-index: 1000;
             gap: 20px;
         }
-
-        #gameOverScreen, #clearScreen {
-            position: fixed;
+        
+        #startScreen h1 {
+            color: #f6e05e;
+            font-size: 48px;
+            text-shadow: 0 0 10px rgba(246, 224, 94, 0.5);
+        }
+        
+        #startScreen p {
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+            max-width: 300px;
+            line-height: 1.5;
+        }
+        
+        #startButton {
+            background: #9f7aea;
+            color: #fff;
+            border: none;
+            padding: 12px 40px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        #startButton:hover {
+            background: #b39ddb;
+        }
+        
+        #gameOverScreen {
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            background: rgba(26, 10, 46, 0.95);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 100;
+            z-index: 1000;
             gap: 20px;
-            background: rgba(0, 0, 0, 0.8);
         }
-
+        
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 10, 46, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            gap: 20px;
+        }
+        
         .screen-title {
-            font-size: 48px;
-            font-weight: bold;
-            color: #fff;
-        }
-
-        .screen-text {
-            font-size: 24px;
-            color: #aaa;
-            text-align: center;
-            max-width: 500px;
-        }
-
-        .screen-score {
-            font-size: 32px;
             color: #f6e05e;
+            font-size: 48px;
+            text-shadow: 0 0 10px rgba(246, 224, 94, 0.5);
+        }
+        
+        .screen-subtitle {
+            color: #fff;
+            font-size: 24px;
+        }
+        
+        .screen-score {
+            color: #9f7aea;
+            font-size: 32px;
             font-weight: bold;
         }
-
-        .btn {
-            padding: 12px 30px;
-            font-size: 18px;
+        
+        #retryButton {
             background: #9f7aea;
             color: #fff;
             border: none;
+            padding: 12px 40px;
+            font-size: 18px;
             border-radius: 5px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.3s;
+            margin-top: 20px;
         }
-
-        .btn:hover {
-            background: #a78bca;
-        }
-
-        #gameContainer {
-            position: relative;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-        }
-
-        canvas {
-            display: block;
-        }
-
-        #gameInfo {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 14px;
-            color: #fff;
-            font-weight: bold;
-            z-index: 10;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-        }
-
-        #controls {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            font-size: 12px;
-            color: #aaa;
-            z-index: 10;
-            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.8);
+        
+        #retryButton:hover {
+            background: #b39ddb;
         }
     </style>
 </head>
 <body>
-
-<div id="startScreen">
-    <div class="screen-title">PLINKO</div>
-    <div class="screen-text">
-        <p>ペグを避けながらボールを落とし、スロットに到達させよう！</p>
-        <p style="margin-top: 20px; font-size: 18px;">
-            <strong>ゲーム開始時:</strong> 10個のボールでプレイ<br>
-            <strong>クリア条件:</strong> 合計スコア 30点以上<br>
-            <strong>ゲームオーバー:</strong> ボール終了時にスコア30点未満
-        </p>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1>PLINKO</h1>
+            <p>ボールをドロップゾーンにクリックして落とそう！<br>
+            目標スコア: 30点以上でクリア！<br>
+            10球を使って高スコアを目指せ</p>
+            <button id="startButton">START</button>
+        </div>
+        
+        <div id="gameOverScreen">
+            <h1 class="screen-title">GAME OVER</h1>
+            <p class="screen-subtitle">目標に届きませんでした...</p>
+            <p class="screen-score" id="finalScoreOver">スコア: 0 / 30</p>
+            <button id="retryButton">もう一度プレイ</button>
+        </div>
+        
+        <div id="clearScreen">
+            <h1 class="screen-title">CLEAR!</h1>
+            <p class="screen-subtitle">目標スコアを達成しました！</p>
+            <p class="screen-score" id="finalScoreClear">スコア: 0 / 30</p>
+            <button id="retryButton">もう一度プレイ</button>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
     </div>
-    <button class="btn" onclick="startGame()">START</button>
-</div>
 
-<div id="gameOverScreen">
-    <div class="screen-title">GAME OVER</div>
-    <div class="screen-text">スコア不足です</div>
-    <div class="screen-score" id="gameOverScore">0点</div>
-    <button class="btn" onclick="retryGame()">RETRY</button>
-</div>
+    <script>
+        const config = {
+            title: 'PLINKO',
+            bg_color: '#1a0a2e',
+            peg_color: '#9f7aea',
+            ball_color: '#f6e05e',
+            slot_colors: ['#e53e3e','#dd6b20','#d69e2e','#38a169','#d69e2e','#dd6b20','#e53e3e'],
+            win_balls: 10,
+            win_score: 30,
+            gravity: 0.4,
+            bounce: 0.5
+        };
 
-<div id="clearScreen">
-    <div class="screen-title">CLEAR!</div>
-    <div class="screen-text">目標スコアに到達しました！</div>
-    <div class="screen-score" id="clearScore">0点</div>
-    <button class="btn" onclick="retryGame()">RETRY</button>
-</div>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-<div id="gameContainer">
-    <div id="gameInfo">
-        <div>ボール: <span id="ballsLeft">10</span></div>
-        <div>スコア: <span id="score">0</span> / 30点</div>
-    </div>
-    <canvas id="gameCanvas"></canvas>
-    <div id="controls">
-        ▼ クリック/タップでボールを落とします
-    </div>
-</div>
+        canvas.width = 400;
+        canvas.height = 600;
 
-<script>
-// theme:        string    // param生成への入力
-// title:        string    // config.title = 'PLINKO'
-// bg_color:     string    // config.bg_color = '#1a0a2e'
-// peg_color:    string    // config.peg_color = '#9f7aea'
-// ball_color:   string    // config.ball_color = '#f6e05e'
-// slot_colors:  string[]  // config.slot_colors = ['#e53e3e','#dd6b20','#d69e2e','#38a169','#d69e2e','#dd6b20','#e53e3e']
-// win_balls:    int       // default: 10
-// win_score:    int       // default: 30
-// gravity:      float     // default: 0.3
-// bounce:       float     // default: 0.6
+        const gameContainer = document.getElementById('gameContainer');
+        gameContainer.style.width = canvas.width + 'px';
+        gameContainer.style.height = canvas.height + 'px';
 
-const config = {
-    title: 'PLINKO',
-    bg_color: '#1a0a2e',
-    peg_color: '#9f7aea',
-    ball_color: '#f6e05e',
-    slot_colors: ['#e53e3e','#dd6b20','#d69e2e','#38a169','#d69e2e','#dd6b20','#e53e3e'],
-    win_balls: 10,
-    win_score: 30,
-    gravity: 0.3,
-    bounce: 0.6
-};
+        const gameState = {
+            running: false,
+            dropping: false,
+            balls: [],
+            totalScore: 0,
+            ballsDropped: 0,
+            slots: [
+                { x: 20, y: 520, width: 50, height: 60, count: 1 },
+                { x: 77, y: 520, width: 50, height: 60, count: 2 },
+                { x: 134, y: 520, width: 50, height: 60, count: 5 },
+                { x: 191, y: 520, width: 50, height: 60, count: 10 },
+                { x: 248, y: 520, width: 50, height: 60, count: 5 },
+                { x: 305, y: 520, width: 50, height: 60, count: 2 },
+                { x: 362, y: 520, width: 50, height: 60, count: 1 }
+            ],
+            pegs: []
+        };
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-canvas.width = 400;
-canvas.height = 600;
-document.getElementById('gameContainer').style.width = canvas.width + 'px';
-document.getElementById('gameContainer').style.height = canvas.height + 'px';
-
-document.body.style.background = config.bg_color;
-
-const gameState = {
-    running: false,
-    balls: [],
-    droppedCount: 0,
-    totalScore: 0,
-    dropping: false,
-    pegs: [],
-    slots: []
-};
-
-const pegRadius = 8;
-const ballRadius = 6;
-const dropZoneHeight = 80;
-const pegZoneStart = 80;
-const pegZoneEnd = 480;
-const slotZoneStart = 480;
-
-function initializePegs() {
-    gameState.pegs = [];
-    const pegSpacingX = 35;
-    const pegSpacingY = 45;
-    const startX = 50;
-    const startY = 110;
-    
-    for (let row = 0; row < 8; row++) {
-        const rowY = startY + row * pegSpacingY;
-        const rowOffset = (row % 2) * (pegSpacingX / 2);
-        
-        for (let col = 0; col < 8 - row; col++) {
-            const x = startX + rowOffset + col * pegSpacingX;
-            if (x > 20 && x < canvas.width - 20) {
-                gameState.pegs.push({
-                    x: x,
-                    y: rowY,
-                    radius: pegRadius
-                });
-            }
-        }
-    }
-}
-
-function initializeSlots() {
-    gameState.slots = [];
-    const slotWidth = canvas.width / 7;
-    const slotCounts = [1, 2, 5, 10, 5, 2, 1];
-    
-    for (let i = 0; i < 7; i++) {
-        gameState.slots.push({
-            x: i * slotWidth,
-            width: slotWidth,
-            count: slotCounts[i]
-        });
-    }
-}
-
-function dropBall(x) {
-    if (gameState.dropping || !gameState.running) return;
-    if (gameState.droppedCount >= config.win_balls) return;
-    
-    gameState.dropping = true;
-    gameState.balls.push({
-        x: Math.max(ballRadius, Math.min(canvas.width - ballRadius, x)),
-        y: ballRadius + 5,
-        vx: 0,
-        vy: 0,
-        active: true
-    });
-    gameState.droppedCount++;
-}
-
-function updateBalls() {
-    gameState.balls.forEach(ball => {
-        if (!ball.active) return;
-        
-        ball.vy += config.gravity;
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-        
-        if (ball.x - ballRadius < 0) {
-            ball.x = ballRadius;
-            ball.vx = -ball.vx * 0.8;
-        }
-        if (ball.x + ballRadius > canvas.width) {
-            ball.x = canvas.width - ballRadius;
-            ball.vx = -ball.vx * 0.8;
-        }
-        
-        gameState.pegs.forEach(peg => {
-            const dx = ball.x - peg.x;
-            const dy = ball.y - peg.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+        function generatePegs() {
+            gameState.pegs = [];
+            const pegRadius = 6;
+            const spacing = 40;
+            const startY = 120;
+            const startX = 200;
             
-            if (dist < ballRadius + peg.radius) {
-                const angle = Math.atan2(dy, dx);
-                const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-                const newSpeed = Math.max(2, speed * config.bounce);
-                
-                ball.vx = Math.cos(angle) * newSpeed + (Math.random() - 0.5) * 2;
-                ball.vy = -Math.abs(Math.sin(angle) * newSpeed * config.bounce);
-                
-                ball.x = peg.x + Math.cos(angle) * (ballRadius + peg.radius + 1);
-                ball.y = peg.y + Math.sin(angle) * (ballRadius + peg.radius + 1);
+            for (let row = 0; row < 8; row++) {
+                const pegCount = row + 3;
+                const rowWidth = (pegCount - 1) * spacing;
+                const rowStartX = startX - rowWidth / 2;
+                for (let col = 0; col < pegCount; col++) {
+                    gameState.pegs.push({
+                        x: rowStartX + col * spacing,
+                        y: startY + row * spacing,
+                        radius: pegRadius
+                    });
+                }
             }
-        });
-        
-        if (ball.y > slotZoneStart + 100) {
-            ball.active = false;
-            const slotIndex = Math.floor((ball.x / canvas.width) * 7);
-            const safeIndex = Math.max(0, Math.min(6, slotIndex));
-            gameState.totalScore += gameState.slots[safeIndex].count;
+        }
+
+        generatePegs();
+
+        function dropBall(x) {
+            if (gameState.dropping || gameState.ballsDropped >= config.win_balls) return;
+            
+            gameState.dropping = true;
+            gameState.ballsDropped++;
+            gameState.balls.push({
+                x: x,
+                y: 40,
+                vx: 0,
+                vy: 0,
+                radius: 8,
+                active: true,
+                startTime: Date.now()
+            });
+        }
+
+        function updateBalls() {
+            for (let i = gameState.balls.length - 1; i >= 0; i--) {
+                const ball = gameState.balls[i];
+                
+                if (!ball.active) {
+                    gameState.balls.splice(i, 1);
+                    gameState.dropping = false;
+                    continue;
+                }
+
+                if (Date.now() - ball.startTime > 8000) {
+                    ball.active = false;
+                    const slotIndex = Math.max(0, Math.min(6, Math.floor((ball.x / canvas.width) * 7)));
+                    gameState.totalScore += gameState.slots[slotIndex].count;
+                    continue;
+                }
+
+                ball.vy += config.gravity;
+
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                if (ball.x < ball.radius) {
+                    ball.x = ball.radius;
+                    ball.vx *= -0.5;
+                }
+                if (ball.x > canvas.width - ball.radius) {
+                    ball.x = canvas.width - ball.radius;
+                    ball.vx *= -0.5;
+                }
+
+                if (ball.y > 580) {
+                    ball.active = false;
+                    const slotIndex = Math.max(0, Math.min(6, Math.floor((ball.x / canvas.width) * 7)));
+                    gameState.totalScore += gameState.slots[slotIndex].count;
+                    continue;
+                }
+
+                for (const peg of gameState.pegs) {
+                    const dx = ball.x - peg.x;
+                    const dy = ball.y - peg.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < ball.radius + peg.radius) {
+                        const angle = Math.atan2(dy, dx);
+                        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+                        
+                        ball.x = peg.x + Math.cos(angle) * (ball.radius + peg.radius);
+                        ball.y = peg.y + Math.sin(angle) * (ball.radius + peg.radius);
+                        
+                        const newSpeed = speed * config.bounce || 2;
+                        ball.vx = Math.cos(angle) * newSpeed;
+                        ball.vy = Math.min(-1, -Math.abs(Math.sin(angle) * newSpeed * config.bounce));
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, 80);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('クリックしてボールをドロップ', canvas.width / 2, 40);
+
+            ctx.fillStyle = config.peg_color;
+            for (const peg of gameState.pegs) {
+                ctx.beginPath();
+                ctx.arc(peg.x, peg.y, peg.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (let i = 0; i < gameState.slots.length; i++) {
+                const slot = gameState.slots[i];
+                ctx.fillStyle = config.slot_colors[i];
+                ctx.fillRect(slot.x, slot.y, slot.width, slot.height);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(slot.count, slot.x + slot.width / 2, slot.y + slot.height / 2 + 6);
+            }
+
+            ctx.fillStyle = config.ball_color;
+            for (const ball of gameState.balls) {
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('残りボール: ' + (config.win_balls - gameState.ballsDropped), 10, 30);
+            ctx.fillText('スコア: ' + gameState.totalScore + ' / ' + config.win_score, 10, 50);
+        }
+
+        function gameLoop() {
+            if (gameState.running) {
+                updateBalls();
+                draw();
+
+                if (gameState.ballsDropped >= config.win_balls && gameState.balls.length === 0) {
+                    gameState.running = false;
+                    if (gameState.totalScore >= config.win_score) {
+                        document.getElementById('clearScreen').style.display = 'flex';
+                        document.getElementById('finalScoreClear').textContent = 'スコア: ' + gameState.totalScore + ' / ' + config.win_score;
+                    } else {
+                        document.getElementById('gameOverScreen').style.display = 'flex';
+                        document.getElementById('finalScoreOver').textContent = 'スコア: ' + gameState.totalScore + ' / ' + config.win_score;
+                    }
+                }
+
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function startGame() {
+            gameState.running = true;
             gameState.dropping = false;
+            gameState.balls = [];
+            gameState.totalScore = 0;
+            gameState.ballsDropped = 0;
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameLoop();
         }
-    });
-}
 
-function draw() {
-    ctx.fillStyle = config.bg_color;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = config.peg_color;
-    gameState.pegs.forEach(peg => {
-        ctx.beginPath();
-        ctx.arc(peg.x, peg.y, peg.radius, 0, Math.PI * 2);
-        ctx.fill();
-    });
-    
-    gameState.slots.forEach((slot, i) => {
-        ctx.fillStyle = config.slot_colors[i];
-        ctx.fillRect(slot.x, slotZoneStart, slot.width, 100);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(slot.count, slot.x + slot.width / 2, slotZoneStart + 50);
-    });
-    
-    ctx.fillStyle = config.ball_color;
-    gameState.balls.forEach(ball => {
-        if (ball.active) {
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    });
-}
-
-function updateHUD() {
-    document.getElementById('ballsLeft').textContent = config.win_balls - gameState.droppedCount;
-    document.getElementById('score').textContent = gameState.totalScore;
-}
-
-function gameLoop() {
-    if (gameState.running) {
-        updateBalls();
-        draw();
-        updateHUD();
-        
-        if (gameState.droppedCount >= config.win_balls && gameState.balls.every(b => !b.active)) {
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
             gameState.running = false;
-            
-            if (gameState.totalScore >= config.win_score) {
-                document.getElementById('clearScore').textContent = gameState.totalScore + '点';
-                document.getElementById('clearScreen').style.display = 'flex';
-            } else {
-                document.getElementById('gameOverScore').textContent = gameState.totalScore + '点 (目標: ' + config.win_score + '点)';
-                document.getElementById('gameOverScreen').style.display = 'flex';
-            }
-            return;
         }
+
+        document.getElementById('startButton').addEventListener('click', startGame);
         
-        requestAnimationFrame(gameLoop);
-    }
-}
+        const retryButtons = document.querySelectorAll('#retryButton');
+        retryButtons.forEach(function(btn) {
+            btn.addEventListener('click', retryGame);
+        });
 
-function startGame() {
-    document.getElementById('startScreen').style.display = 'none';
-    gameState.running = true;
-    gameState.balls = [];
-    gameState.droppedCount = 0;
-    gameState.totalScore = 0;
-    gameState.dropping = false;
-    updateHUD();
-    gameLoop();
-}
+        canvas.addEventListener('click', function(e) {
+            if (!gameState.running) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            dropBall(x);
+        });
 
-function retryGame() {
-    document.getElementById('gameOverScreen').style.display = 'none';
-    document.getElementById('clearScreen').style.display = 'none';
-    document.getElementById('startScreen').style.display = 'flex';
-    gameState.running = false;
-}
-
-canvas.addEventListener('click', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    dropBall(x);
-});
-
-canvas.addEventListener('touchstart', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.touches[0].clientX - rect.left;
-    dropBall(x);
-});
-
-initializePegs();
-initializeSlots();
-draw();
-</script>
-
+        draw();
+    </script>
 </body>
 </html>

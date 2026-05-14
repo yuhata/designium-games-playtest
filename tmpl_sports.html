@@ -12,185 +12,151 @@
         }
         
         body {
-            font-family: Arial, sans-serif;
+            background-color: #0a0a0a;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            font-family: Arial, sans-serif;
         }
         
-        #startScreen {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            width: 100%;
-            height: 100vh;
-            text-align: center;
-            color: white;
-        }
-        
-        #startScreen h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-        
-        #startScreen p {
-            font-size: 18px;
-            margin-bottom: 10px;
-        }
-        
-        #startScreen .instructions {
-            margin: 30px 0;
-            font-size: 16px;
-            max-width: 500px;
-        }
-        
-        #startScreen .instructions p {
-            margin-bottom: 15px;
-        }
-        
-        #startScreen button {
-            padding: 15px 40px;
-            font-size: 20px;
-            background: #ff6b6b;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 30px;
-            transition: background 0.3s;
-        }
-        
-        #startScreen button:hover {
-            background: #ff5252;
-        }
-        
-        #gameWrapper {
-            display: none;
+        #gameContainer {
             position: relative;
-            border: 2px solid #ffffff;
+            background-color: #1a1a1a;
+            border: 2px solid #444;
         }
         
         canvas {
             display: block;
+            border: 1px solid #333;
+            background-color: #0a0a0a;
         }
         
-        .hud {
+        #startScreen, #clearScreen, #gameOverScreen {
             position: absolute;
-            top: 15px;
-            left: 15px;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             z-index: 10;
-            line-height: 1.6;
         }
         
-        .instructions-overlay {
-            position: absolute;
-            bottom: 15px;
-            left: 15px;
-            color: white;
-            font-size: 13px;
-            background: rgba(0,0,0,0.6);
-            padding: 10px 15px;
-            border-radius: 3px;
-            z-index: 10;
+        #startScreen {
+            display: flex;
         }
         
         #clearScreen, #gameOverScreen {
             display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.85);
-            z-index: 100;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
+        }
+        
+        .screen-title {
+            font-size: 48px;
+            color: #fff;
+            margin-bottom: 30px;
             text-align: center;
         }
         
-        #clearScreen h2, #gameOverScreen h2 {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-        
-        #clearScreen p, #gameOverScreen p {
+        .screen-subtitle {
             font-size: 18px;
-            margin-bottom: 15px;
+            color: #aaa;
+            margin-bottom: 40px;
+            text-align: center;
+            max-width: 350px;
+            line-height: 1.5;
         }
         
-        #clearScreen button, #gameOverScreen button {
-            padding: 12px 30px;
-            font-size: 16px;
-            background: #ff6b6b;
+        .screen-content {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 40px;
+            font-size: 20px;
+        }
+        
+        button {
+            padding: 15px 40px;
+            font-size: 18px;
+            background-color: #ff6b6b;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            margin-top: 10px;
-            transition: background 0.3s;
+            transition: background-color 0.3s;
         }
         
-        #clearScreen button:hover, #gameOverScreen button:hover {
-            background: #ff5252;
+        button:hover {
+            background-color: #ff5252;
+        }
+        
+        .hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            color: white;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 5;
+            font-weight: bold;
+        }
+        
+        .hud-item {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            color: #aaa;
+            font-size: 12px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px;
+            border-radius: 4px;
+            z-index: 5;
         }
     </style>
 </head>
 <body>
-    <div id="startScreen">
-        <h1>PENALTY KICK</h1>
-        <p>ペナルティキックシミュレーター</p>
-        <div class="instructions">
-            <p id="goalTargetText"></p>
-            <p id="totalShotsText"></p>
-            <p style="margin-top: 20px; font-size: 14px; color: #aaa;">画面をクリックしてボールを蹴る</p>
-            <p style="font-size: 14px; color: #aaa;">GKのダイブを避けてゴールを決めよう！</p>
-        </div>
-        <button onclick="startGame()">START</button>
-    </div>
-    
-    <div id="gameWrapper">
-        <div class="hud">
-            <div>ゴール: <span id="goalCount">0</span>/<span id="goalTarget2">5</span></div>
-            <div>残りシュート: <span id="shotsLeft">10</span></div>
-        </div>
+    <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        <div class="instructions-overlay">
-            クリックしてシュート
+        
+        <div id="startScreen">
+            <div class="screen-title">PENALTY KICK</div>
+            <div class="screen-subtitle">クリックしたい方向に蹴る！<br>GKのダイブを読め</div>
+            <button onclick="startGame()">START</button>
         </div>
-    </div>
-    
-    <div id="clearScreen">
-        <h2>CLEAR!</h2>
-        <p>ゴール数: <span id="finalGoals">0</span>/<span id="finalGoalsTarget">5</span></p>
-        <button onclick="retryGame()">もう一度プレイ</button>
-    </div>
-    
-    <div id="gameOverScreen">
-        <h2>GAME OVER</h2>
-        <p>ゴール数: <span id="finalGoals2">0</span>/<span id="finalGoalsTarget2">5</span></p>
-        <p>あと <span id="needGoals">0</span>本必要です</p>
-        <button onclick="retryGame()">リトライ</button>
+        
+        <div id="clearScreen">
+            <div class="screen-title">CLEAR!</div>
+            <div class="screen-content" id="clearMessage"></div>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        
+        <div id="gameOverScreen">
+            <div class="screen-title">GAME OVER</div>
+            <div class="screen-content" id="gameOverMessage"></div>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        
+        <div class="hud">
+            <div class="hud-item">Goals: <span id="goalsCount">0</span>/<span id="goalsTarget">5</span></div>
+            <div class="hud-item">Shots: <span id="shotsCount">0</span>/<span id="totalShots">10</span></div>
+        </div>
+        
+        <div class="instructions">Click where you want to shoot! Read the GK's dive!</div>
     </div>
 
     <script>
-        // パラメータスキーマ（コメント）
-        // theme:          string  // param生成への入力。HTMLには出ない
-        // title:          string  // config.title = '<title>'
-        // bg_color:       string  // config.bg_color = '<bg_color>'
-        // field_color:    string  // config.field_color = '<field_color>'
-        // goal_color:     string  // config.goal_color = '<goal_color>'
-        // ball_color:     string  // config.ball_color = '<ball_color>'
-        // gk_color:       string  // config.gk_color = '<gk_color>'
-        // win_goals:      int     // default: 5
-        // total_shots:    int     // default: 10
-
         const config = {
             title: 'PENALTY KICK',
             bg_color: '#1a3a1a',
@@ -204,201 +170,116 @@
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('gameContainer');
 
         canvas.width = 400;
         canvas.height = 600;
-        document.getElementById('gameWrapper').style.width = canvas.width + 'px';
-        document.getElementById('gameWrapper').style.height = canvas.height + 'px';
-
-        document.body.style.background = config.bg_color;
-
-        document.getElementById('goalTargetText').textContent = 'ゴール目標: ' + config.win_goals + '本以上のゴール成功';
-        document.getElementById('totalShotsText').textContent = config.total_shots + '本のシュートで挑戦します';
-        document.getElementById('goalTarget2').textContent = config.win_goals;
-        document.getElementById('shotsLeft').textContent = config.total_shots;
-        document.getElementById('finalGoalsTarget').textContent = config.win_goals;
-        document.getElementById('finalGoalsTarget2').textContent = config.win_goals;
+        gameContainer.style.width = canvas.width + 'px';
 
         const gameState = {
             running: false,
             goals: 0,
-            misses: 0,
             shots: 0,
-            ballX: canvas.width / 2,
-            ballY: canvas.height - 50,
-            ballRadius: 8,
-            ballVelX: 0,
-            ballVelY: 0,
-            ballMoving: false,
-            ballTravelTime: 0,
-            ballTravelDuration: 0.8,
-            ballStartY: 0,
-            gkX: canvas.width / 2 - 25,
+            ballX: 200,
+            ballY: 550,
+            ballStartX: 200,
+            ballStartY: 550,
+            ballTargetX: 200,
+            ballTargetY: 550,
+            ballProgress: 1,
+            ballTravelDuration: 0.7,
+            gkX: 170,
             gkY: 80,
-            gkWidth: 50,
+            gkStartX: 170,
+            gkStartY: 80,
+            gkTargetX: 170,
+            gkTargetY: 80,
+            gkProgress: 1,
+            gkTravelDuration: 0.5,
+            gkWidth: 60,
             gkHeight: 60,
-            gkDiving: false,
-            gkDiveDirection: 0,
-            gkDiveTime: 0,
-            gkDiveDuration: 0.5,
-            gkDiveDistance: 80,
-            gkStartX: 0
-        };
-
-        const goalArea = {
-            x: 80,
-            y: 40,
-            width: 240,
-            height: 100
+            goalLeft: 80,
+            goalRight: 320,
+            goalTop: 40,
+            goalBottom: 140,
+            goalWidth: 240,
+            goalHeight: 100
         };
 
         function startGame() {
             document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('gameWrapper').style.display = 'block';
             gameState.running = true;
             gameState.goals = 0;
-            gameState.misses = 0;
             gameState.shots = 0;
-            resetBallAndGK();
             updateHUD();
             gameLoop();
-        }
-
-        function resetBallAndGK() {
-            gameState.ballX = canvas.width / 2;
-            gameState.ballY = canvas.height - 50;
-            gameState.ballVelX = 0;
-            gameState.ballVelY = 0;
-            gameState.ballMoving = false;
-            gameState.ballTravelTime = 0;
-            gameState.ballStartY = gameState.ballY;
-            gameState.gkDiving = false;
-            gameState.gkDiveTime = 0;
-            gameState.gkX = canvas.width / 2 - 25;
-            gameState.gkStartX = gameState.gkX;
-        }
-
-        function updateHUD() {
-            document.getElementById('goalCount').textContent = gameState.goals;
-            document.getElementById('shotsLeft').textContent = config.total_shots - gameState.shots;
         }
 
         function retryGame() {
             document.getElementById('gameOverScreen').style.display = 'none';
             document.getElementById('clearScreen').style.display = 'none';
             document.getElementById('startScreen').style.display = 'flex';
-            document.getElementById('gameWrapper').style.display = 'none';
             gameState.running = false;
         }
 
-        canvas.addEventListener('click', (e) => {
-            if (!gameState.running || gameState.ballMoving || gameState.shots >= config.total_shots) return;
+        function updateHUD() {
+            document.getElementById('goalsCount').textContent = gameState.goals;
+            document.getElementById('goalsTarget').textContent = config.win_goals;
+            document.getElementById('shotsCount').textContent = gameState.shots;
+            document.getElementById('totalShots').textContent = config.total_shots;
+        }
 
-            const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+        function shootBall(targetX, targetY) {
+            gameState.ballStartX = gameState.ballX;
+            gameState.ballStartY = gameState.ballY;
+            gameState.ballTargetX = targetX;
+            gameState.ballTargetY = targetY;
+            gameState.ballProgress = 0;
 
-            const dirX = clickX - gameState.ballX;
-            const dirY = clickY - gameState.ballY;
-            const distance = Math.sqrt(dirX * dirX + dirY * dirY);
-
-            if (distance > 0) {
-                gameState.ballVelX = (dirX / distance) * 350;
-                gameState.ballVelY = (dirY / distance) * 350;
-                gameState.ballMoving = true;
-                gameState.ballTravelTime = 0;
-                gameState.ballStartY = gameState.ballY;
-                gameState.shots++;
-
-                gameState.gkDiving = true;
-                gameState.gkDiveTime = 0;
-                gameState.gkDiveDirection = Math.random() < 0.5 ? -1 : 1;
-                gameState.gkStartX = gameState.gkX;
-
-                updateHUD();
-            }
-        });
-
-        function gameLoop() {
-            if (!gameState.running) return;
-
-            ctx.fillStyle = config.field_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.strokeStyle = config.goal_color;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(goalArea.x, goalArea.y, goalArea.width, goalArea.height);
-
-            ctx.strokeStyle = '#99ff99';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(goalArea.x, goalArea.y, goalArea.width, goalArea.height);
-            ctx.setLineDash([]);
-
-            if (gameState.ballMoving) {
-                gameState.ballTravelTime += 1 / 60;
-                const progress = Math.min(gameState.ballTravelTime / gameState.ballTravelDuration, 1);
-
-                const arcHeight = Math.sin(progress * Math.PI) * 120;
-                const newY = gameState.ballStartY + gameState.ballVelY * progress * gameState.ballTravelDuration - arcHeight;
-
-                gameState.ballX += gameState.ballVelX / 60;
-                gameState.ballY = newY;
-
-                if (progress >= 1) {
-                    gameState.ballMoving = false;
-                    judgeGoal();
-                }
-            }
-
-            if (gameState.gkDiving) {
-                gameState.gkDiveTime += 1 / 60;
-                const divProgress = Math.min(gameState.gkDiveTime / gameState.gkDiveDuration, 1);
-
-                const diveAmount = Math.sin(divProgress * Math.PI) * gameState.gkDiveDistance;
-                gameState.gkX = gameState.gkStartX + gameState.gkDiveDirection * diveAmount;
-
-                if (divProgress >= 1) {
-                    gameState.gkDiving = false;
-                }
-            }
-
-            ctx.fillStyle = config.gk_color;
-            ctx.fillRect(gameState.gkX, gameState.gkY, gameState.gkWidth, gameState.gkHeight);
-
-            ctx.fillStyle = config.ball_color;
-            ctx.beginPath();
-            ctx.arc(gameState.ballX, gameState.ballY, gameState.ballRadius, 0, Math.PI * 2);
-            ctx.fill();
-
-            if (gameState.running) requestAnimationFrame(gameLoop);
+            const direction = Math.random() > 0.5 ? 1 : -1;
+            gameState.gkStartX = gameState.gkX;
+            gameState.gkStartY = gameState.gkY;
+            gameState.gkTargetX = gameState.gkX + direction * 80;
+            gameState.gkTargetY = gameState.gkY;
+            gameState.gkProgress = 0;
         }
 
         function judgeGoal() {
-            const isInGoalArea = gameState.ballX + gameState.ballRadius >= goalArea.x &&
-                                 gameState.ballX - gameState.ballRadius <= goalArea.x + goalArea.width &&
-                                 gameState.ballY + gameState.ballRadius >= goalArea.y &&
-                                 gameState.ballY - gameState.ballRadius <= goalArea.y + goalArea.height;
+            const ballX = gameState.ballX;
+            const ballY = gameState.ballY;
+            const ballRadius = 8;
 
-            const gkCenterX = gameState.gkX + gameState.gkWidth / 2;
-            const gkCenterY = gameState.gkY + gameState.gkHeight / 2;
-            const distX = gameState.ballX - gkCenterX;
-            const distY = gameState.ballY - gkCenterY;
-            const isHitGK = Math.abs(distX) < gameState.gkWidth / 2 + gameState.ballRadius &&
-                           Math.abs(distY) < gameState.gkHeight / 2 + gameState.ballRadius;
+            const isInGoalArea = (
+                ballX - ballRadius >= gameState.goalLeft &&
+                ballX + ballRadius <= gameState.goalRight &&
+                ballY - ballRadius >= gameState.goalTop &&
+                ballY + ballRadius <= gameState.goalBottom
+            );
+
+            const gkRect = {
+                x: gameState.gkX,
+                y: gameState.gkY,
+                width: gameState.gkWidth,
+                height: gameState.gkHeight
+            };
+
+            const isHitGK = (
+                ballX - ballRadius < gkRect.x + gkRect.width &&
+                ballX + ballRadius > gkRect.x &&
+                ballY - ballRadius < gkRect.y + gkRect.height &&
+                ballY + ballRadius > gkRect.y
+            );
 
             if (isInGoalArea && !isHitGK) {
                 gameState.goals++;
-            } else {
-                gameState.misses++;
+                updateHUD();
             }
 
+            gameState.shots++;
             updateHUD();
 
             if (gameState.shots >= config.total_shots) {
                 endGame();
-            } else {
-                resetBallAndGK();
             }
         }
 
@@ -406,14 +287,83 @@
             gameState.running = false;
 
             if (gameState.goals >= config.win_goals) {
-                document.getElementById('finalGoals').textContent = gameState.goals;
+                document.getElementById('clearMessage').textContent = 
+                    'Goals: ' + gameState.goals + '/' + config.win_goals;
                 document.getElementById('clearScreen').style.display = 'flex';
             } else {
-                document.getElementById('finalGoals2').textContent = gameState.goals;
-                document.getElementById('needGoals').textContent = config.win_goals - gameState.goals;
+                document.getElementById('gameOverMessage').textContent = 
+                    'Goals: ' + gameState.goals + '/' + config.win_goals;
                 document.getElementById('gameOverScreen').style.display = 'flex';
             }
         }
+
+        function gameLoop() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = config.field_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = config.goal_color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(gameState.goalLeft, gameState.goalTop, gameState.goalWidth, gameState.goalHeight);
+
+            if (gameState.ballProgress < 1) {
+                gameState.ballProgress += 1 / 60 / gameState.ballTravelDuration;
+
+                if (gameState.ballProgress > 1) {
+                    gameState.ballProgress = 1;
+                }
+
+                const t = gameState.ballProgress;
+                gameState.ballX = gameState.ballStartX + (gameState.ballTargetX - gameState.ballStartX) * t;
+                gameState.ballY = gameState.ballStartY + (gameState.ballTargetY - gameState.ballStartY) * t 
+                    - Math.sin(t * Math.PI) * 80;
+
+                if (gameState.ballProgress === 1) {
+                    judgeGoal();
+                }
+            } else {
+                gameState.ballX = 200;
+                gameState.ballY = 550;
+            }
+
+            if (gameState.gkProgress < 1) {
+                gameState.gkProgress += 1 / 60 / gameState.gkTravelDuration;
+                if (gameState.gkProgress > 1) {
+                    gameState.gkProgress = 1;
+                }
+
+                const t = gameState.gkProgress;
+                gameState.gkX = gameState.gkStartX + (gameState.gkTargetX - gameState.gkStartX) * t;
+                gameState.gkY = gameState.gkStartY + (gameState.gkTargetY - gameState.gkStartY) * t;
+            }
+
+            ctx.fillStyle = config.gk_color;
+            ctx.fillRect(gameState.gkX - gameState.gkWidth / 2, gameState.gkY, gameState.gkWidth, gameState.gkHeight);
+
+            ctx.fillStyle = config.ball_color;
+            ctx.beginPath();
+            ctx.arc(gameState.ballX, gameState.ballY, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        canvas.addEventListener('click', function(event) {
+            if (!gameState.running) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            shootBall(x, y);
+        });
+
+        document.getElementById('goalsTarget').textContent = config.win_goals;
+        document.getElementById('totalShots').textContent = config.total_shots;
     </script>
 </body>
 </html>
