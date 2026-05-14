@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUSIC HARD</title>
+    <script>
+    // title:         string
+    // bg_color:      string
+    // note_speed:    int  (default: 6)
+    // win_score:     int  (default: 50)
+    // total_notes:   int  (default: 40)
+    </script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #0d0d1a;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        canvas {
+            display: block;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 13, 26, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #gameOverScreen, #clearScreen {
+            display: none;
+        }
+        .screen-content {
+            text-align: center;
+        }
+        .screen-content h1 {
+            font-size: 4rem;
+            margin: 0 0 2rem 0;
+            color: #f6e05e;
+            text-shadow: 0 0 20px #f6e05e;
+        }
+        .screen-content p {
+            font-size: 1.5rem;
+            margin: 0 0 3rem 0;
+            color: #ccc;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #3182ce;
+        }
+        #stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.2rem;
+            color: #fff;
+            font-family: monospace;
+            z-index: 10;
+        }
+        .stat-line {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="startScreen">
+        <div class="screen-content">
+            <h1>MUSIC HARD</h1>
+            <p>D/F/J/K を叩いて groove に乗れ！</p>
+            <button onclick="startGame()">START</button>
+        </div>
+    </div>
+    
+    <div id="gameOverScreen">
+        <div class="screen-content">
+            <h1>GAME OVER</h1>
+            <p>スコア: <span id="finalScore">0</span></p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+    
+    <div id="clearScreen">
+        <div class="screen-content">
+            <h1>CLEAR!</h1>
+            <p>スコア: <span id="clearScore">0</span></p>
+            <button onclick="retryGame()">もう一度</button>
+        </div>
+    </div>
+    
+    <div id="stats">
+        <div class="stat-line">スコア: <span id="scoreDisplay">0</span>/50</div>
+        <div class="stat-line">コンボ: <span id="comboDisplay">0</span></div>
+        <div class="stat-line">倍率: <span id="multiplierDisplay">1.0</span>x</div>
+        <div class="stat-line">残: <span id="remainDisplay">40</span></div>
+    </div>
+
+    <script>
+    const config = {
+        title: 'MUSIC HARD',
+        bg_color: '#0d0d1a',
+        lane_color: '#1a1a2e',
+        note_color: '#f6e05e',
+        perfect_color: '#68d391',
+        good_color: '#4299e1',
+        miss_color: '#e53e3e',
+        note_speed: 6,
+        win_score: 50,
+        total_notes: 40
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const lanes = [
+        { key: 'd', x: 0 },
+        { key: 'f', x: 0 },
+        { key: 'j', x: 0 },
+        { key: 'k', x: 0 }
+    ];
+
+    const laneWidth = canvas.width / 4;
+    lanes.forEach((lane, i) => {
+        lane.x = i * laneWidth + laneWidth / 2;
+    });
+
+    const judgeLineY = canvas.height - 100;
+
+    let gameState = {
+        running: false,
+        score: 0,
+        combo: 0,
+        notes: [],
+        feedbackList: [],
+        keyPressed: {},
+        frameCount: 0
+    };
+
+    function generateNotes() {
+        const notes = [];
+        const notesPerLane = config.total_notes / 4;
+        
+        for (let lane = 0; lane < 4; lane++) {
+            for (let i = 0; i < notesPerLane; i++) {
+                notes.push({
+                    lane: lane,
+                    y: -100 - i * 200,
+                    judged: false
+                });
+            }
+        }
+        
+        return notes;
+    }
+
+    function startGame() {
+        document.getElementById('startScreen').style.display = 'none';
+        gameState = {
+            running: true,
+            score: 0,
+            combo: 0,
+            notes: generateNotes(),
+            feedbackList: [],
+            keyPressed: {},
+            frameCount: 0
+        };
+        gameLoop();
+    }
+
+    function retryGame() {
+        document.getElementById('gameOverScreen').style.display = 'none';
+        document.getElementById('clearScreen').style.display = 'none';
+        document.getElementById('startScreen').style.display = 'flex';
+    }
+
+    function getMultiplier() {
+        const tier = Math.floor(gameState.combo / 10);
+        return Math.min(1 + tier * 0.5, 4);
+    }
+
+    function updateStats() {
+        document.getElementById('scoreDisplay').textContent = Math.floor(gameState.score);
+        document.getElementById('comboDisplay').textContent = gameState.combo;
+        document.getElementById('multiplierDisplay').textContent = getMultiplier().toFixed(1);
+        const remaining = gameState.notes.filter(n => !n.judged).length;
+        document.getElementById('remainDisplay').textContent = remaining;
+    }
+
+    function handleKeyPress(key) {
+        const laneIndex = lanes.findIndex(l => l.key === key.toLowerCase());
+        if (laneIndex === -1) return;
+
+        const lane = lanes[laneIndex];
+        let bestNote = null;
+        let bestJudge = null;
+
+        for (let note of gameState.notes) {
+            if (!note.judged && note.lane === laneIndex) {
+                const distance = Math.abs(note.y - judgeLineY);
+                const tolerance3 = config.note_speed * 3;
+                const tolerance6 = config.note_speed * 6;
+                
+                if (distance <= tolerance6) {
+                    let judge = distance <= tolerance3 ? 'PERFECT' : 'GOOD';
+                    
+                    if (!bestNote || (judge === 'PERFECT' && bestJudge !== 'PERFECT')) {
+                        bestNote = note;
+                        bestJudge = judge;
+                    }
+                }
+            }
+        }
+
+        if (bestNote) {
+            bestNote.judged = true;
+            const points = bestJudge === 'PERFECT' ? 2 : 1;
+            gameState.score += points * getMultiplier();
+            gameState.combo++;
+            
+            gameState.feedbackList.push({
+                x: lane.x,
+                y: judgeLineY,
+                text: bestJudge,
+                judge: bestJudge,
+                frameCreated: gameState.frameCount
+            });
+        } else {
+            gameState.combo = 0;
+            gameState.feedbackList.push({
+                x: lane.x,
+                y: judgeLineY,
+                text: 'MISS',
+                judge: 'MISS',
+                frameCreated: gameState.frameCount
+            });
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (!gameState.running) return;
+        if (gameState.keyPressed[e.key]) return;
+        gameState.keyPressed[e.key] = true;
+        handleKeyPress(e.key);
+    });
+
+    document.addEventListener('keyup', (e) => {
+        gameState.keyPressed[e.key] = false;
+    });
+
+    function drawGame() {
+        ctx.fillStyle = config.bg_color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = config.lane_color;
+        ctx.lineWidth = 2;
+        for (let i = 1; i < 4; i++) {
+            const x = i * laneWidth;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+        }
+
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, judgeLineY);
+        ctx.lineTo(canvas.width, judgeLineY);
+        ctx.stroke();
+
+        ctx.fillStyle = config.note_color;
+        for (let note of gameState.notes) {
+            if (!note.judged && note.y < canvas.height + 100) {
+                const x = lanes[note.lane].x;
+                ctx.fillRect(x - 15, note.y - 10, 30, 20);
+            }
+        }
+
+        gameState.feedbackList = gameState.feedbackList.filter(f => gameState.frameCount - f.frameCreated < 120);
+        
+        for (let feedback of gameState.feedbackList) {
+            const elapsed = gameState.frameCount - feedback.frameCreated;
+            const alpha = Math.max(0, 1 - elapsed / 120);
+            
+            ctx.globalAlpha = alpha;
+            if (feedback.judge === 'PERFECT') {
+                ctx.fillStyle = config.perfect_color;
+            } else if (feedback.judge === 'GOOD') {
+                ctx.fillStyle = config.good_color;
+            } else {
+                ctx.fillStyle = config.miss_color;
+            }
+            ctx.font = 'bold 30px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(feedback.text, feedback.x, feedback.y - 30);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    function gameLoop() {
+        if (!gameState.running) return;
+
+        gameState.frameCount++;
+
+        for (let note of gameState.notes) {
+            if (!note.judged) {
+                note.y += config.note_speed;
+            }
+        }
+
+        for (let note of gameState.notes) {
+            if (!note.judged && note.y > judgeLineY + 50) {
+                note.judged = true;
+                gameState.combo = 0;
+                gameState.feedbackList.push({
+                    x: lanes[note.lane].x,
+                    y: judgeLineY,
+                    text: 'MISS',
+                    judge: 'MISS',
+                    frameCreated: gameState.frameCount
+                });
+            }
+        }
+
+        drawGame();
+        updateStats();
+
+        const allJudged = gameState.notes.every(n => n.judged);
+        if (allJudged) {
+            gameState.running = false;
+            if (gameState.score >= config.win_score) {
+                document.getElementById('clearScore').textContent = Math.floor(gameState.score);
+                document.getElementById('clearScreen').style.display = 'flex';
+            } else {
+                document.getElementById('finalScore').textContent = Math.floor(gameState.score);
+                document.getElementById('gameOverScreen').style.display = 'flex';
+            }
+            return;
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+    </script>
+</body>
+</html>

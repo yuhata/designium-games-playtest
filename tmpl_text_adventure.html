@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MYSTERY CASTLE</title>
+    <!-- title: string // config.title = '{{title}}' -->
+    <!-- bg_color: string // config.bg_color = '{{bg_color}}' -->
+    <!-- text_color: string // config.text_color = '{{text_color}}' -->
+    <!-- btn_color: string // config.btn_color = '{{btn_color}}' -->
+    <!-- btn_hover: string // config.btn_hover = '{{btn_hover}}' -->
+    <!-- scene_count: int // default: 8 -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Georgia', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        #gameContainer {
+            width: 100%;
+            max-width: 600px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 3px solid #8b7355;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
+        }
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #8b7355;
+            padding-bottom: 15px;
+        }
+        #title {
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+        #inventory {
+            font-size: 12px;
+            text-align: right;
+        }
+        .item {
+            display: inline-block;
+            background: #4a5568;
+            padding: 5px 10px;
+            margin-left: 5px;
+            border-radius: 4px;
+            border: 1px solid #718096;
+        }
+        #startScreen {
+            text-align: center;
+        }
+        .screen {
+            text-align: center;
+        }
+        .screen-title {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+            color: #d4af37;
+        }
+        .screen-subtitle {
+            font-size: 18px;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+        #sceneText {
+            font-size: 18px;
+            line-height: 1.8;
+            margin-bottom: 40px;
+            min-height: 120px;
+            text-align: center;
+            white-space: pre-wrap;
+        }
+        #choicesContainer {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: 2px solid #718096;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Georgia', serif;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .end-screen {
+            margin-top: 40px;
+        }
+        .end-title {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+        }
+        .clear-title {
+            color: #ffd700;
+        }
+        .gameover-title {
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="header">
+            <div id="title">MYSTERY CASTLE</div>
+            <div id="inventory">
+                <div>Inventory:</div>
+                <div id="inventoryList"></div>
+            </div>
+        </div>
+        <div id="startScreen" class="screen">
+            <div class="screen-title">MYSTERY CASTLE</div>
+            <div class="screen-subtitle">謎の古城を探索し、宝物を見つけよう！</div>
+            <button onclick="startGame()">START</button>
+        </div>
+        <div id="gameScreen" style="display: none;">
+            <div id="sceneText"></div>
+            <div id="choicesContainer"></div>
+        </div>
+        <div id="endScreen" style="display: none;" class="screen end-screen">
+            <div id="endTitle" class="end-title"></div>
+            <button id="endButton"></button>
+        </div>
+    </div>
+    <script>
+        const config = {
+            title: 'MYSTERY CASTLE',
+            bg_color: '#1a0a2e',
+            text_color: '#e2e8f0',
+            btn_color: '#4a5568',
+            btn_hover: '#718096',
+            scene_count: 8
+        };
+        const gameState = {
+            running: false,
+            currentScene: 0,
+            inventory: []
+        };
+        const scenes = {
+            0: {
+                text: '夜明け前、あなたは謎の古城の前に立っている。\n石造りの壁は苔むし、時が止まったかのような沈黙に包まれている。\n\n左手には金属の門が見える。右手には暗い小道が…',
+                choices: [
+                    { text: '正門から堂々と入る', next: 1 },
+                    { text: '右側の裏口を探す', next: 2 }
+                ]
+            },
+            1: {
+                text: 'あなたは重い門を押し開けた。\nきしむ音が響き渡る。広大な大広間が現れた。\nシャンデリアが薄暗い光を放ち、床には赤い絨毯が敷かれている。\n\n正面には立派な階段がある。一方、床に開いた穴から地下への道が見える。',
+                choices: [
+                    { text: '階段を上る', next: 3 },
+                    { text: '地下へ向かう', next: 4 }
+                ]
+            },
+            2: {
+                text: '薄暗い小道を進むと、古びた木の扉が見える。\n鍵がかかっているようだ。\n\nあなたは二つの方法を考える。',
+                choices: [
+                    { text: 'こじ開けようとする', next: 'gameover1' },
+                    { text: '窓から身軽に侵入する', next: 1 }
+                ]
+            },
+            3: {
+                text: '階段を登り詰めると、塔の最上階に着いた。\n回廊からは星が見える。そして…\n\nあるテーブルの上に古びた地図が置かれている！',
+                choices: [
+                    { text: '地図を手に入れる', next: 'getmap' },
+                    { text: '先に進む', next: 5 }
+                ]
+            },
+            4: {
+                text: '地下への階段を下りていく。\nひんやりとした空気。松明の光が照らす牢屋…\n\n暗い足音が聞こえる。あなたは奥へ進んだが、出口が見当たらない…',
+                choices: [
+                    { text: '戻る', next: 'gameover2' }
+                ]
+            },
+            5: {
+                text: 'さらに奥へ進むと、大きな金属の扉が現れた。\nそこには古い鍵穴がある。\n\n扉の向こうに何かがある…宝物庫の匂いがする。',
+                choices: [
+                    { text: '扉を開こうとする', next: 'checkkey' },
+                    { text: '別ルートを探す', next: 'gameover3' }
+                ]
+            },
+            6: {
+                text: 'ゴゴゴゴ…\n\n金属の扉が重く開いた。\n眼前には、金銀財宝が光り輝いている！\n歴史の秘宝、それはあなたの前に…\n\n探索成功！',
+                choices: []
+            }
+        };
+        function initGame() {
+            document.body.style.background = config.bg_color;
+            document.body.style.color = config.text_color;
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => {
+                btn.style.background = config.btn_color;
+                btn.style.color = config.text_color;
+            });
+        }
+        function startGame() {
+            gameState.running = true;
+            gameState.currentScene = 0;
+            gameState.inventory = [];
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'block';
+            document.getElementById('endScreen').style.display = 'none';
+            displayScene(0);
+        }
+        function displayScene(sceneId) {
+            const scene = scenes[sceneId];
+            const sceneText = document.getElementById('sceneText');
+            const choicesContainer = document.getElementById('choicesContainer');
+            sceneText.textContent = scene.text;
+            choicesContainer.innerHTML = '';
+            scene.choices.forEach(choice => {
+                const button = document.createElement('button');
+                button.textContent = choice.text;
+                button.style.background = config.btn_color;
+                button.style.color = config.text_color;
+                button.onmouseover = function() { this.style.background = config.btn_hover; };
+                button.onmouseout = function() { this.style.background = config.btn_color; };
+                button.onclick = () => makeChoice(choice.next);
+                choicesContainer.appendChild(button);
+            });
+            updateInventoryDisplay();
+        }
+        function makeChoice(nextScene) {
+            if (nextScene === 'getmap') {
+                gameState.inventory.push('地図');
+                displayScene(5);
+            } else if (nextScene === 'checkkey') {
+                if (gameState.inventory.includes('地図')) {
+                    displayScene(6);
+                    setTimeout(() => endGame(true), 1500);
+                } else {
+                    endGame(false);
+                }
+            } else if (nextScene === 'gameover1' || nextScene === 'gameover2' || nextScene === 'gameover3') {
+                endGame(false);
+            } else {
+                displayScene(nextScene);
+            }
+        }
+        function endGame(isWin) {
+            gameState.running = false;
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('endScreen').style.display = 'block';
+            const endTitle = document.getElementById('endTitle');
+            const endButton = document.getElementById('endButton');
+            if (isWin) {
+                endTitle.textContent = '宝物を発見！探索成功！';
+                endTitle.className = 'end-title clear-title';
+                endButton.textContent = 'AGAIN';
+            } else {
+                endTitle.textContent = '無念…もう一度挑戦しよう';
+                endTitle.className = 'end-title gameover-title';
+                endButton.textContent = 'RETRY';
+            }
+            endButton.style.background = config.btn_color;
+            endButton.style.color = config.text_color;
+            endButton.onmouseover = function() { this.style.background = config.btn_hover; };
+            endButton.onmouseout = function() { this.style.background = config.btn_color; };
+            endButton.onclick = () => startGame();
+        }
+        function updateInventoryDisplay() {
+            const inventoryList = document.getElementById('inventoryList');
+            inventoryList.innerHTML = '';
+            gameState.inventory.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item';
+                itemDiv.textContent = item;
+                inventoryList.appendChild(itemDiv);
+            });
+        }
+        initGame();
+    </script>
+</body>
+</html>

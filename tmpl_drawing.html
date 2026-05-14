@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paint by Number</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #startScreen {
+            flex-direction: column;
+            gap: 30px;
+            padding: 40px;
+        }
+        .title {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            color: #2d3748;
+        }
+        .subtitle {
+            font-size: 20px;
+            text-align: center;
+            color: #4a5568;
+        }
+        .palette-preview {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .color-sample {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .color-box {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            border: 2px solid #cbd5e0;
+        }
+        .color-label {
+            font-size: 14px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+        .button {
+            padding: 12px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background-color: #4299e1;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .button:hover {
+            background-color: #3182ce;
+        }
+        .button:active {
+            transform: scale(0.98);
+        }
+        #gameScreen {
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+        }
+        .game-content {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .status-bar {
+            text-align: center;
+            font-size: 18px;
+            color: #2d3748;
+            font-weight: bold;
+        }
+        .palette-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .palette-button {
+            width: 80px;
+            height: 80px;
+            border: 4px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 16px;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .palette-button:hover {
+            transform: scale(1.05);
+        }
+        .palette-button.selected {
+            border-color: #2d3748;
+            box-shadow: 0 0 10px rgba(45,55,72,0.4);
+        }
+        #grid {
+            display: inline-grid;
+            gap: 0;
+            border: 2px solid #cbd5e0;
+            background: white;
+        }
+        .cell {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #cbd5e0;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.1s;
+            user-select: none;
+        }
+        .cell:hover {
+            opacity: 0.8;
+        }
+        .cell.correct {
+            color: transparent;
+            font-size: 0;
+        }
+        .cell.wrong {
+            opacity: 0.4;
+            border-color: #e2e8f0;
+        }
+        #clearScreen {
+            flex-direction: column;
+            gap: 40px;
+        }
+        .clear-title {
+            font-size: 72px;
+            font-weight: bold;
+            color: #48bb78;
+            text-align: center;
+        }
+        .clear-subtitle {
+            font-size: 28px;
+            color: #4a5568;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen" class="screen">
+            <div class="title">PAINT BY NUMBER</div>
+            <div class="subtitle">番号の色で全セルを塗れ！</div>
+            <div class="palette-preview" id="startPalette"></div>
+            <button class="button" onclick="startGame()">START</button>
+        </div>
+
+        <div id="gameScreen" class="screen" style="display:none;">
+            <div class="status-bar">
+                <span id="progressText">0/100</span> | 選択: <span id="selectedColorText">1</span>
+            </div>
+            <div class="game-content">
+                <div class="palette-panel" id="palettePanel"></div>
+                <div id="grid"></div>
+            </div>
+        </div>
+
+        <div id="clearScreen" class="screen" style="display:none;">
+            <div class="clear-title">CLEAR!</div>
+            <div class="clear-subtitle">全てのセルを正しく塗りました</div>
+            <button class="button" onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <script>
+        // title: string
+        // bg_color: string
+        // grid_cols: int (default: 10)
+        // grid_rows: int (default: 10)
+        // palette: string[] (default: ['#e53e3e','#4299e1','#68d391','#f6e05e','#9f7aea'])
+        // border_color: string
+
+        const config = {
+            title: 'PAINT BY NUMBER',
+            bg_color: '#f7fafc',
+            grid_cols: 10,
+            grid_rows: 10,
+            palette: ['#e53e3e', '#4299e1', '#68d391', '#f6e05e', '#9f7aea'],
+            border_color: '#cbd5e0'
+        };
+
+        let gameState = {
+            running: false,
+            selectedColor: 1,
+            grid: [],
+            painted: []
+        };
+
+        function generateGrid() {
+            const totalCells = config.grid_cols * config.grid_rows;
+            const grid = [];
+            const paletteSize = config.palette.length;
+            const cellsPerColor = Math.floor(totalCells / paletteSize);
+
+            for (let i = 0; i < totalCells; i++) {
+                const colorIndex = Math.floor(i / cellsPerColor) % paletteSize;
+                grid.push(colorIndex + 1);
+            }
+
+            return grid.sort(() => Math.random() - 0.5);
+        }
+
+        function initGame() {
+            gameState.grid = generateGrid();
+            gameState.painted = new Array(gameState.grid.length).fill(0);
+            gameState.selectedColor = 1;
+            gameState.running = true;
+
+            renderStartPalette();
+            renderGameScreen();
+            updateStatus();
+        }
+
+        function renderStartPalette() {
+            const container = document.getElementById('startPalette');
+            container.innerHTML = '';
+
+            for (let i = 0; i < config.palette.length; i++) {
+                const sample = document.createElement('div');
+                sample.className = 'color-sample';
+                sample.innerHTML = `
+                    <div class="color-box" style="background-color: ${config.palette[i]};"></div>
+                    <div class="color-label">色${i + 1}</div>
+                `;
+                container.appendChild(sample);
+            }
+        }
+
+        function renderGameScreen() {
+            const palettePanel = document.getElementById('palettePanel');
+            palettePanel.innerHTML = '';
+
+            for (let i = 0; i < config.palette.length; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'palette-button';
+                btn.style.backgroundColor = config.palette[i];
+                btn.textContent = i + 1;
+                btn.onclick = () => selectColor(i + 1);
+                if (gameState.selectedColor === i + 1) {
+                    btn.classList.add('selected');
+                }
+                palettePanel.appendChild(btn);
+            }
+
+            const gridElement = document.getElementById('grid');
+            gridElement.style.gridTemplateColumns = `repeat(${config.grid_cols}, 40px)`;
+            gridElement.innerHTML = '';
+
+            for (let i = 0; i < gameState.grid.length; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.textContent = gameState.grid[i];
+                cell.style.backgroundColor = config.palette[gameState.grid[i] - 1];
+
+                if (gameState.painted[i] > 0) {
+                    const paintedColor = config.palette[gameState.painted[i] - 1];
+                    cell.style.backgroundColor = paintedColor;
+
+                    if (gameState.painted[i] === gameState.grid[i]) {
+                        cell.classList.add('correct');
+                    } else {
+                        cell.classList.add('wrong');
+                    }
+                }
+
+                cell.onclick = () => paintCell(i);
+                gridElement.appendChild(cell);
+            }
+
+            document.body.style.backgroundColor = config.bg_color;
+        }
+
+        function selectColor(colorNum) {
+            gameState.selectedColor = colorNum;
+            updatePaletteUI();
+            updateStatus();
+        }
+
+        function paintCell(index) {
+            if (!gameState.running) return;
+            gameState.painted[index] = gameState.selectedColor;
+            renderGameScreen();
+            updateStatus();
+            checkClear();
+        }
+
+        function updatePaletteUI() {
+            document.querySelectorAll('.palette-button').forEach((btn, idx) => {
+                if (idx + 1 === gameState.selectedColor) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+        }
+
+        function updateStatus() {
+            const painted = gameState.painted.filter(p => p > 0).length;
+            document.getElementById('progressText').textContent = `${painted}/${gameState.grid.length}`;
+            document.getElementById('selectedColorText').textContent = gameState.selectedColor;
+        }
+
+        function checkClear() {
+            const isComplete = gameState.painted.every((p, i) => p === gameState.grid[i]);
+            if (isComplete && gameState.running) {
+                gameState.running = false;
+                showClearScreen();
+            }
+        }
+
+        function startGame() {
+            initGame();
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'flex';
+            document.getElementById('clearScreen').style.display = 'none';
+        }
+
+        function showClearScreen() {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'flex';
+        }
+
+        function retryGame() {
+            document.getElementById('startScreen').style.display = 'flex';
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameState.running = false;
+        }
+
+        document.body.style.backgroundColor = config.bg_color;
+        renderStartPalette();
+    </script>
+</body>
+</html>

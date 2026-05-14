@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky Slots</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a0a00;
+        }
+
+        .container {
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 20px rgba(246, 224, 94, 0.5);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #f6e05e;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+            gap: 20px;
+        }
+
+        .info-box {
+            flex: 1;
+            padding: 10px;
+            background: rgba(45, 27, 0, 0.8);
+            border: 2px solid #f6e05e;
+            border-radius: 5px;
+            color: #f6e05e;
+            font-size: 1.1em;
+        }
+
+        .reel-container {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 10px;
+            margin: 30px auto;
+            padding: 20px;
+            background: rgba(45, 27, 0, 0.8);
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .reel-column {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .reel-cell {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #2d1b00;
+            border: 2px solid #8b4513;
+            border-radius: 5px;
+            font-size: 2.5em;
+            font-weight: bold;
+            transition: transform 0.1s;
+        }
+
+        .reel-cell.animate {
+            animation: spin 0.1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: translateY(-20px); }
+            50% { transform: translateY(0); }
+            100% { transform: translateY(-20px); }
+        }
+
+        .judge-line {
+            position: absolute;
+            top: 120px;
+            left: 0;
+            right: 0;
+            height: 110px;
+            border-top: 3px dashed #f6e05e;
+            border-bottom: 3px dashed #f6e05e;
+            pointer-events: none;
+            background: rgba(246, 224, 94, 0.08);
+            z-index: 10;
+        }
+
+        .button-row {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f6e05e;
+            color: #1a0a00;
+        }
+
+        button:hover:not(:disabled) {
+            background: #ffd700;
+            transform: scale(1.05);
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .win-display {
+            font-size: 2em;
+            margin: 20px 0;
+            color: #f6e05e;
+            text-shadow: 0 0 10px rgba(246, 224, 94, 0.8);
+            min-height: 40px;
+        }
+
+        .payoff-table {
+            margin: 20px auto;
+            width: fit-content;
+            background: rgba(45, 27, 0, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .payoff-table table {
+            border-collapse: collapse;
+            color: #f6e05e;
+        }
+
+        .payoff-table td {
+            padding: 8px 12px;
+            border: 1px solid #8b4513;
+            text-align: center;
+        }
+
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a0a00;
+            border: 3px solid #f6e05e;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 0 30px rgba(246, 224, 94, 0.8);
+            min-width: 300px;
+        }
+
+        .modal h2 {
+            color: #f6e05e;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+
+        .modal p {
+            color: #f6e05e;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            white-space: pre-wrap;
+        }
+
+        .modal button {
+            padding: 12px 25px;
+            font-size: 1em;
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            display: none;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen" class="container">
+        <h1>🎰 LUCKY SLOTS 🎰</h1>
+        <p style="color: #f6e05e; font-size: 1.2em; margin: 20px 0;">
+            <span id="startMessage">コイン 50 枚でスタート！<br>100 枚集めてCLEAR！</span>
+        </p>
+        <button onclick="startGame()" style="font-size: 1.3em; padding: 20px 40px;">START</button>
+    </div>
+
+    <div id="gameScreen" class="container" style="display: none;">
+        <h1>🎰 LUCKY SLOTS 🎰</h1>
+        
+        <div class="info-row">
+            <div class="info-box">
+                💰 コイン<br>
+                <span id="coinDisplay" style="font-size: 1.5em;">50</span>
+            </div>
+            <div class="info-box">
+                🎯 目標<br>
+                <span id="targetDisplay" style="font-size: 1.5em;">100</span>
+            </div>
+        </div>
+
+        <div class="reel-container">
+            <div class="judge-line"></div>
+            <div class="reel-column" id="reel0">
+                <div class="reel-cell">❤️</div>
+                <div class="reel-cell">⭐</div>
+                <div class="reel-cell">💎</div>
+            </div>
+            <div class="reel-column" id="reel1">
+                <div class="reel-cell">❤️</div>
+                <div class="reel-cell">⭐</div>
+                <div class="reel-cell">💎</div>
+            </div>
+            <div class="reel-column" id="reel2">
+                <div class="reel-cell">❤️</div>
+                <div class="reel-cell">⭐</div>
+                <div class="reel-cell">💎</div>
+            </div>
+        </div>
+
+        <div class="win-display" id="winDisplay"></div>
+
+        <div class="button-row">
+            <button id="spinButton" onclick="spin()" style="font-size: 1.2em; padding: 15px 40px;">SPIN</button>
+        </div>
+
+        <div class="payoff-table">
+            <table>
+                <tr>
+                    <td>❤️</td>
+                    <td>⭐</td>
+                    <td>💎</td>
+                    <td>🍀</td>
+                    <td>🎵</td>
+                </tr>
+                <tr>
+                    <td>+5</td>
+                    <td>+8</td>
+                    <td>+20</td>
+                    <td>+3</td>
+                    <td>+3</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div id="resultModal" class="modal hidden">
+        <h2 id="resultTitle"></h2>
+        <p id="resultMessage"></p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+
+    <div id="overlay" class="overlay"></div>
+
+    <script>
+        // title:        string  // config.title = 'LUCKY SLOTS'
+        // bg_color:     string  // config.bg_color = '#1a0a00'
+        // reel_color:   string  // config.reel_color = '#2d1b00'
+        // win_color:    string  // config.win_color = '#f6e05e'
+        // start_coins:  int     // default: 50
+        // spin_cost:    int     // default: 1
+        // target_score: int     // default: 100
+        // symbols:      int     // default: 5
+
+        const config = {
+            title: 'LUCKY SLOTS',
+            bg_color: '#1a0a00',
+            reel_color: '#2d1b00',
+            win_color: '#f6e05e',
+            start_coins: 50,
+            spin_cost: 1,
+            target_score: 100,
+            symbols: 5
+        };
+
+        const symbols = ['❤️', '⭐', '💎', '🍀', '🎵'];
+        const payoffs = { '❤️': 5, '⭐': 8, '💎': 20, '🍀': 3, '🎵': 3 };
+
+        let gameState = {
+            coins: config.start_coins,
+            target: config.target_score,
+            running: false,
+            spinning: false,
+            reels: [[], [], []]
+        };
+
+        function initializeReels() {
+            for (let i = 0; i < 3; i++) {
+                gameState.reels[i] = [];
+                for (let j = 0; j < 3; j++) {
+                    gameState.reels[i].push(symbols[Math.floor(Math.random() * symbols.length)]);
+                }
+            }
+        }
+
+        function updateDisplay() {
+            document.getElementById('coinDisplay').textContent = gameState.coins;
+            document.getElementById('targetDisplay').textContent = gameState.target;
+        }
+
+        function renderReels() {
+            for (let col = 0; col < 3; col++) {
+                const reelColumn = document.getElementById('reel' + col);
+                const cells = reelColumn.querySelectorAll('.reel-cell');
+                for (let row = 0; row < 3; row++) {
+                    cells[row].textContent = gameState.reels[col][row];
+                }
+            }
+        }
+
+        function getRandomSymbol() {
+            return symbols[Math.floor(Math.random() * symbols.length)];
+        }
+
+        function spin() {
+            if (!gameState.running || gameState.spinning) {
+                return;
+            }
+            
+            if (gameState.coins < config.spin_cost) {
+                endGame(false, 'コインが足りません！');
+                return;
+            }
+
+            gameState.coins -= config.spin_cost;
+            gameState.spinning = true;
+            document.getElementById('spinButton').disabled = true;
+            document.getElementById('winDisplay').textContent = '';
+
+            const reels = document.querySelectorAll('.reel-column');
+            reels.forEach((reel) => {
+                const cells = reel.querySelectorAll('.reel-cell');
+                cells.forEach(cell => cell.classList.add('animate'));
+            });
+
+            setTimeout(() => stopReel(0), 500);
+            setTimeout(() => stopReel(1), 1000);
+            setTimeout(() => stopReel(2), 1500);
+        }
+
+        function stopReel(reelIndex) {
+            gameState.reels[reelIndex] = [
+                getRandomSymbol(),
+                getRandomSymbol(),
+                getRandomSymbol()
+            ];
+            renderReels();
+
+            const cells = document.getElementById('reel' + reelIndex).querySelectorAll('.reel-cell');
+            cells.forEach(cell => cell.classList.remove('animate'));
+
+            if (reelIndex === 2) {
+                gameState.spinning = false;
+                document.getElementById('spinButton').disabled = false;
+                checkWin();
+            }
+        }
+
+        function checkWin() {
+            const middle = [gameState.reels[0][1], gameState.reels[1][1], gameState.reels[2][1]];
+            
+            if (middle[0] === middle[1] && middle[1] === middle[2]) {
+                const symbol = middle[0];
+                const payoff = payoffs[symbol];
+                gameState.coins += payoff;
+                document.getElementById('winDisplay').textContent = '🎉 WIN! +' + payoff;
+
+                if (gameState.coins >= gameState.target) {
+                    endGame(true, 'クリア！\n最終コイン: ' + gameState.coins);
+                } else {
+                    updateDisplay();
+                }
+            } else {
+                if (gameState.coins <= 0) {
+                    endGame(false, 'ゲームオーバー');
+                } else {
+                    updateDisplay();
+                }
+            }
+        }
+
+        function startGame() {
+            gameState.coins = config.start_coins;
+            gameState.target = config.target_score;
+            gameState.running = true;
+            gameState.spinning = false;
+            
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'block';
+            document.getElementById('resultModal').classList.add('hidden');
+            document.getElementById('overlay').classList.remove('active');
+
+            document.body.style.background = config.bg_color;
+            initializeReels();
+            renderReels();
+            updateDisplay();
+        }
+
+        function endGame(isWin, message) {
+            gameState.running = false;
+            document.getElementById('spinButton').disabled = true;
+
+            const modal = document.getElementById('resultModal');
+            const overlay = document.getElementById('overlay');
+            document.getElementById('resultTitle').textContent = isWin ? '🎉 SUCCESS! 🎉' : '💔 GAME OVER 💔';
+            document.getElementById('resultMessage').textContent = message;
+            
+            modal.classList.remove('hidden');
+            overlay.classList.add('active');
+        }
+
+        function retryGame() {
+            startGame();
+        }
+
+        document.body.style.background = config.bg_color;
+        document.getElementById('startMessage').innerHTML = 
+            'コイン ' + config.start_coins + ' 枚でスタート！<br>' + config.target_score + ' 枚集めてCLEAR！';
+    </script>
+</body>
+</html>

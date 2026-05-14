@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIM RACING</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 600px;
+            height: 450px;
+            border: 3px solid #444;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #startScreen {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            text-align: center;
+        }
+        #clearScreen {
+            background: rgba(0, 0, 0, 0.8);
+            color: #4ade80;
+            text-align: center;
+        }
+        .screen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        .screen p {
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+        .screen .info {
+            font-size: 14px;
+            margin-bottom: 20px;
+            color: #aaa;
+        }
+        button {
+            padding: 12px 32px;
+            font-size: 18px;
+            background: #e53e3e;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #c53030;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 5;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            border-radius: 4px;
+        }
+        #hud div {
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="hud">
+            <div>LAP: <span id="lapDisplay">0</span> / <span id="lapGoal">3</span></div>
+            <div>SPEED: <span id="speedDisplay">0</span> km/h</div>
+            <div>BEST LAP: <span id="bestLapDisplay">--:--</span></div>
+            <div style="margin-top: 6px; border-top: 1px solid #666; padding-top: 6px; font-size: 10px;">
+                ← / → or A / D: TURN<br>
+                ↑ / SPACE: ACCELERATE
+            </div>
+        </div>
+        <div id="startScreen" class="screen">
+            <h1>SIM RACING</h1>
+            <p id="startMessage">3周でCLEAR！コースをはみ出すと減速！</p>
+            <button onclick="startGame()">START</button>
+        </div>
+        <div id="clearScreen" class="screen" style="display: none;">
+            <h1>CLEAR!</h1>
+            <p id="clearMessage">Best Lap: --:--</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <script>
+        // title:      'SIM RACING'
+        // bg_color:   '#1a3a1a'
+        // track_color: '#4a5568'
+        // car_color:  '#e53e3e'
+        // line_color: '#ffffff'
+        // car_speed:  4
+        // turn_speed: 0.05
+        // friction:   0.92
+        // lap_count:  3
+
+        const config = {
+            title: 'SIM RACING',
+            bg_color: '#1a3a1a',
+            track_color: '#4a5568',
+            car_color: '#e53e3e',
+            line_color: '#ffffff',
+            car_speed: 4,
+            turn_speed: 0.05,
+            friction: 0.92,
+            lap_count: 3
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 600;
+        canvas.height = 450;
+
+        document.body.style.background = config.bg_color;
+        document.getElementById('lapGoal').textContent = config.lap_count;
+        document.getElementById('startMessage').textContent = `${config.lap_count}周でCLEAR！コースをはみ出すと減速！`;
+
+        const gameState = {
+            running: false,
+            player: {
+                x: 300,
+                y: 380,
+                vx: 0,
+                vy: 0,
+                angle: 0,
+                width: 12,
+                height: 8
+            },
+            lap: 0,
+            lapTimes: [],
+            bestLapTime: null,
+            lapStartTime: 0,
+            currentLapStartTime: 0,
+            crossedLine: false,
+            frameCount: 0
+        };
+
+        const keys = {
+            left: false,
+            right: false,
+            accelerate: false
+        };
+
+        const track = {
+            cx: 300,
+            cy: 225,
+            rx: 140,
+            ry: 100
+        };
+
+        const finishLine = {
+            y: 220,
+            x1: 280,
+            x2: 320
+        };
+
+        function startGame() {
+            gameState.running = true;
+            gameState.player.x = 300;
+            gameState.player.y = 380;
+            gameState.player.vx = 0;
+            gameState.player.vy = 0;
+            gameState.player.angle = Math.PI / 2;
+            gameState.lap = 0;
+            gameState.lapTimes = [];
+            gameState.bestLapTime = null;
+            gameState.lapStartTime = performance.now();
+            gameState.currentLapStartTime = performance.now();
+            gameState.crossedLine = false;
+            gameState.frameCount = 0;
+
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            updateHUD();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('startScreen').style.display = 'flex';
+            document.getElementById('clearScreen').style.display = 'none';
+            gameState.running = false;
+        }
+
+        function updateHUD() {
+            document.getElementById('lapDisplay').textContent = gameState.lap;
+            const speed = Math.sqrt(gameState.player.vx ** 2 + gameState.player.vy ** 2) * 10;
+            document.getElementById('speedDisplay').textContent = Math.floor(speed);
+            if (gameState.bestLapTime !== null) {
+                const minutes = Math.floor(gameState.bestLapTime / 60);
+                const seconds = (gameState.bestLapTime % 60).toFixed(2);
+                document.getElementById('bestLapDisplay').textContent = `${minutes}:${seconds.padStart(5, '0')}`;
+            }
+        }
+
+        function isOnTrack(x, y) {
+            const dx = (x - track.cx) / track.rx;
+            const dy = (y - track.cy) / track.ry;
+            const distSq = dx * dx + dy * dy;
+            return distSq >= 0.5 && distSq <= 1.0;
+        }
+
+        function updatePlayer() {
+            const p = gameState.player;
+
+            if (keys.left) {
+                p.angle += config.turn_speed;
+            }
+            if (keys.right) {
+                p.angle -= config.turn_speed;
+            }
+
+            if (keys.accelerate) {
+                p.vx += Math.cos(p.angle) * config.car_speed;
+                p.vy += Math.sin(p.angle) * config.car_speed;
+            }
+
+            p.vx *= config.friction;
+            p.vy *= config.friction;
+
+            const nextX = p.x + p.vx;
+            const nextY = p.y + p.vy;
+
+            if (!isOnTrack(nextX, nextY)) {
+                p.vx *= 0.5;
+                p.vy *= 0.5;
+            }
+
+            p.x += p.vx;
+            p.y += p.vy;
+
+            const wasAbove = gameState.crossedLine === false;
+            const isAbove = p.y < finishLine.y;
+            const isInFinishZone = p.x > finishLine.x1 && p.x < finishLine.x2;
+
+            if (wasAbove !== isAbove && isInFinishZone) {
+                if (!gameState.crossedLine) {
+                    gameState.lap++;
+                    const lapTime = (performance.now() - gameState.currentLapStartTime) / 1000;
+                    if (gameState.lap > 1) {
+                        gameState.lapTimes.push(lapTime);
+                        if (gameState.bestLapTime === null || lapTime < gameState.bestLapTime) {
+                            gameState.bestLapTime = lapTime;
+                        }
+                    }
+                    gameState.currentLapStartTime = performance.now();
+                }
+                gameState.crossedLine = !gameState.crossedLine;
+            }
+
+            if (gameState.lap >= config.lap_count) {
+                endGame();
+            }
+        }
+
+        function drawTrack() {
+            ctx.strokeStyle = config.track_color;
+            ctx.lineWidth = 60;
+            ctx.beginPath();
+            ctx.ellipse(track.cx, track.cy, track.rx, track.ry, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = config.line_color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(finishLine.x1, finishLine.y);
+            ctx.lineTo(finishLine.x2, finishLine.y);
+            ctx.stroke();
+        }
+
+        function drawPlayer() {
+            const p = gameState.player;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.angle);
+            ctx.fillStyle = config.car_color;
+            ctx.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawTrack();
+            drawPlayer();
+        }
+
+        function endGame() {
+            gameState.running = false;
+            const minutes = Math.floor(gameState.bestLapTime / 60);
+            const seconds = (gameState.bestLapTime % 60).toFixed(2);
+            document.getElementById('clearMessage').textContent = `Best Lap: ${minutes}:${seconds.padStart(5, '0')}`;
+            document.getElementById('clearScreen').style.display = 'flex';
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            updatePlayer();
+            updateHUD();
+            draw();
+
+            gameState.frameCount++;
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+            if (e.key === 'ArrowUp' || e.key === ' ') { keys.accelerate = true; e.preventDefault(); }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+            if (e.key === 'ArrowUp' || e.key === ' ') { keys.accelerate = false; }
+        });
+    </script>
+</body>
+</html>
