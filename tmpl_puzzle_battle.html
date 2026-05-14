@@ -1,420 +1,551 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PUZZLE BATTLE</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            transition: background-color 0.3s;
-        }
-        #gameContainer {
-            width: 100%;
-            max-width: 1000px;
-            padding: 20px;
-        }
-        #startScreen {
-            text-align: center;
-            padding: 100px 20px;
-        }
-        #startScreen h1 {
-            font-size: 3em;
-            margin-bottom: 40px;
-            color: #fff;
-        }
-        #startScreen button {
-            padding: 20px 60px;
-            font-size: 1.5em;
-            cursor: pointer;
-            background-color: #fff;
-            border: none;
-            border-radius: 8px;
-        }
-        #gameBoard {
-            display: flex;
-            gap: 30px;
-            align-items: flex-start;
-            display: none;
-        }
-        #gridContainer {
-            flex: 0 0 auto;
-        }
-        #grid {
-            display: grid;
-            grid-template-columns: repeat(5, 60px);
-            grid-template-rows: repeat(5, 60px);
-            gap: 4px;
-        }
-        .tile {
-            width: 60px;
-            height: 60px;
-            border: 2px solid #333;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 2em;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.1s;
-        }
-        .tile:hover { transform: scale(1.05); }
-        .tile.selected { border: 3px solid #fff; }
-        #enemySection {
-            flex: 1;
-            color: #fff;
-        }
-        #enemy {
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        #enemyChar {
-            font-size: 4em;
-            margin: 20px 0;
-        }
-        #enemyStats {
-            font-size: 1.2em;
-            margin: 10px 0;
-        }
-        #hud {
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            color: #fff;
-            font-size: 1.1em;
-        }
-        #hud div { margin: 8px 0; }
-        #gameOverScreen, #clearScreen {
-            display: none;
-            text-align: center;
-            padding: 100px 20px;
-            color: #fff;
-        }
-        #gameOverScreen h1, #clearScreen h1 {
-            font-size: 3em;
-            margin-bottom: 40px;
-        }
-        #gameOverScreen button, #clearScreen button {
-            padding: 15px 40px;
-            font-size: 1.2em;
-            margin-top: 20px;
-            cursor: pointer;
-            background-color: #fff;
-            border: none;
-            border-radius: 8px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PUZZLE BATTLE</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Arial', sans-serif;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    
+    #startScreen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+    }
+    
+    #startScreen h1 {
+      font-size: 3.5em;
+      margin-bottom: 40px;
+      color: #ffffff;
+      text-shadow: 0 2px 10px rgba(255, 255, 255, 0.3);
+    }
+    
+    #startScreen button {
+      padding: 18px 50px;
+      font-size: 1.8em;
+      font-weight: bold;
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    #startScreen button:hover {
+      transform: scale(1.1);
+    }
+    
+    #gameScreen {
+      display: none;
+      width: 100%;
+      height: 100%;
+      padding: 40px;
+      flex-direction: row;
+      gap: 50px;
+      justify-content: flex-start;
+      align-items: flex-start;
+      overflow: hidden;
+    }
+    
+    #gameOverScreen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    #clearScreen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .screen-overlay h2 {
+      font-size: 4em;
+      color: #ffffff;
+      margin-bottom: 40px;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    }
+    
+    .screen-overlay button {
+      padding: 18px 50px;
+      font-size: 1.8em;
+      font-weight: bold;
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .screen-overlay button:hover {
+      transform: scale(1.1);
+    }
+    
+    #gridContainer {
+      display: grid;
+      grid-template-columns: repeat(5, 70px);
+      gap: 8px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+    }
+    
+    .tile {
+      width: 70px;
+      height: 70px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    }
+    
+    .tile:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
+    }
+    
+    .tile.selected {
+      border-color: #ffffff;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.8), inset 0 0 15px rgba(255, 255, 255, 0.2);
+      transform: scale(1.08);
+    }
+    
+    #enemyArea {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      min-width: 200px;
+    }
+    
+    #hud {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      color: #ffffff;
+      font-size: 1.1em;
+      font-weight: bold;
+    }
+    
+    .hud-item {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      border-left: 3px solid #4299e1;
+    }
+    
+    #enemyCharacter {
+      width: 100%;
+      aspect-ratio: 1;
+      background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #ffffff;
+      font-size: 2em;
+      font-weight: bold;
+      text-align: center;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    }
+  </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <div id="startScreen">
-            <h1>PUZZLE BATTLE</h1>
-            <button onclick="startGame()">START</button>
-        </div>
-        <div id="gameBoard">
-            <div id="gridContainer">
-                <div id="grid"></div>
-            </div>
-            <div id="enemySection">
-                <div id="enemy">
-                    <div>ENEMY</div>
-                    <div id="enemyChar">👹</div>
-                    <div id="enemyStats"></div>
-                </div>
-                <div id="hud"></div>
-            </div>
-        </div>
-        <div id="gameOverScreen">
-            <h1>GAME OVER</h1>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
-        <div id="clearScreen">
-            <h1>CLEAR!</h1>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
+
+<div id="startScreen">
+  <h1>PUZZLE BATTLE</h1>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="gameScreen">
+  <div>
+    <div id="gridContainer"></div>
+  </div>
+  <div id="enemyArea">
+    <div id="hud">
+      <div class="hud-item">Player HP<br><span style="font-size:1.4em" id="playerHpDisplay">30</span></div>
+      <div class="hud-item">Shield<br><span style="font-size:1.4em" id="shieldDisplay">No</span></div>
+      <div class="hud-item">Enemy HP<br><span style="font-size:1.4em" id="enemyHpDisplay">50</span></div>
+      <div class="hud-item">Attack in<br><span style="font-size:1.4em" id="enemyTurnDisplay">3</span> turns</div>
     </div>
+    <div id="enemyCharacter">
+      <div>ENEMY</div>
+    </div>
+  </div>
+</div>
 
-    <script>
-        // Schema: config = { title, bg_color, atk_color, def_color, heal_color, grid_size, player_hp, enemy_hp, enemy_atk, enemy_atk_turn }
-        const config = {
-            title: 'PUZZLE BATTLE',
-            bg_color: '#1a0a2e',
-            atk_color: '#e53e3e',
-            def_color: '#4299e1',
-            heal_color: '#68d391',
-            grid_size: 5,
-            player_hp: 30,
-            enemy_hp: 50,
-            enemy_atk: 5,
-            enemy_atk_turn: 3
-        };
+<div id="gameOverScreen">
+  <div class="screen-overlay">
+    <h2>GAME OVER</h2>
+    <button onclick="retryGame()">RETRY</button>
+  </div>
+</div>
 
-        const COLORS = {
-            ATK: 'atk',
-            DEF: 'def',
-            HEAL: 'heal'
-        };
+<div id="clearScreen">
+  <div class="screen-overlay">
+    <h2>VICTORY!</h2>
+    <button onclick="retryGame()">RETRY</button>
+  </div>
+</div>
 
-        let gameState = {
-            running: false,
-            grid: [],
-            playerHP: config.player_hp,
-            enemyHP: config.enemy_hp,
-            shield: 0,
-            turnCount: 0,
-            selectedTile: null,
-            firstClick: null
-        };
+<script>
+/*
+Schema:
+- config.title: string
+- config.bg_color: string (hex)
+- config.atk_color: string (hex)
+- config.def_color: string (hex)
+- config.heal_color: string (hex)
+- config.grid_size: number
+- config.player_hp: number
+- config.enemy_hp: number
+- config.enemy_atk: number
+- config.enemy_atk_turn: number
+*/
 
-        function initGrid() {
-            gameState.grid = [];
-            for (let i = 0; i < config.grid_size; i++) {
-                gameState.grid[i] = [];
-                for (let j = 0; j < config.grid_size; j++) {
-                    gameState.grid[i][j] = getRandomColor();
-                }
+const config = {
+    title: 'PUZZLE BATTLE',
+    bg_color: '#1a0a2e',
+    atk_color: '#e53e3e',
+    def_color: '#4299e1',
+    heal_color: '#68d391',
+    grid_size: 5,
+    player_hp: 30,
+    enemy_hp: 50,
+    enemy_atk: 5,
+    enemy_atk_turn: 3
+};
+
+const gameState = {
+    running: false,
+    playerHP: config.player_hp,
+    maxPlayerHP: config.player_hp,
+    enemyHP: config.enemy_hp,
+    maxEnemyHP: config.enemy_hp,
+    shield: false,
+    turnCount: 0,
+    grid: [],
+    selected: null
+};
+
+const colorMap = { red: 0, blue: 1, green: 2 };
+
+function initGame() {
+    document.body.style.background = config.bg_color;
+    gameState.running = true;
+    gameState.playerHP = config.player_hp;
+    gameState.maxPlayerHP = config.player_hp;
+    gameState.enemyHP = config.enemy_hp;
+    gameState.maxEnemyHP = config.enemy_hp;
+    gameState.shield = false;
+    gameState.turnCount = 0;
+    gameState.selected = null;
+    
+    initGrid();
+    renderGrid();
+    updateHUD();
+    requestAnimationFrame(gameLoop);
+}
+
+function initGrid() {
+    gameState.grid = [];
+    const colors = ['red', 'blue', 'green'];
+    
+    for (let row = 0; row < config.grid_size; row++) {
+        gameState.grid[row] = [];
+        for (let col = 0; col < config.grid_size; col++) {
+            gameState.grid[row][col] = colors[Math.floor(Math.random() * 3)];
+        }
+    }
+    
+    for (let row = 0; row < config.grid_size; row++) {
+        for (let col = 0; col < config.grid_size; col++) {
+            while (hasMatchAt(row, col)) {
+                gameState.grid[row][col] = colors[Math.floor(Math.random() * 3)];
             }
         }
+    }
+}
 
-        function getRandomColor() {
-            const colors = [COLORS.ATK, COLORS.DEF, COLORS.HEAL];
-            return colors[Math.floor(Math.random() * colors.length)];
-        }
+function hasMatchAt(row, col) {
+    const color = gameState.grid[row][col];
+    let hCount = 1;
+    for (let c = col - 1; c >= 0 && gameState.grid[row][c] === color; c--) hCount++;
+    for (let c = col + 1; c < config.grid_size && gameState.grid[row][c] === color; c++) hCount++;
+    if (hCount >= 3) return true;
+    
+    let vCount = 1;
+    for (let r = row - 1; r >= 0 && gameState.grid[r][col] === color; r--) vCount++;
+    for (let r = row + 1; r < config.grid_size && gameState.grid[r][col] === color; r++) vCount++;
+    if (vCount >= 3) return true;
+    
+    return false;
+}
 
-        function getTileColor(color) {
-            if (color === COLORS.ATK) return config.atk_color;
-            if (color === COLORS.DEF) return config.def_color;
-            if (color === COLORS.HEAL) return config.heal_color;
-            return '#fff';
-        }
-
-        function getTileSymbol(color) {
-            if (color === COLORS.ATK) return '⚔️';
-            if (color === COLORS.DEF) return '🛡️';
-            if (color === COLORS.HEAL) return '💚';
-            return '';
-        }
-
-        function render() {
-            const grid = document.getElementById('grid');
-            grid.innerHTML = '';
-            for (let i = 0; i < config.grid_size; i++) {
-                for (let j = 0; j < config.grid_size; j++) {
-                    const tile = document.createElement('div');
-                    tile.className = 'tile';
-                    tile.style.backgroundColor = getTileColor(gameState.grid[i][j]);
-                    tile.textContent = getTileSymbol(gameState.grid[i][j]);
-                    tile.onclick = () => onTileClick(i, j);
-                    if (gameState.selectedTile && gameState.selectedTile[0] === i && gameState.selectedTile[1] === j) {
-                        tile.classList.add('selected');
-                    }
-                    grid.appendChild(tile);
-                }
-            }
-        }
-
-        function onTileClick(row, col) {
-            if (!gameState.running) return;
-
-            if (gameState.firstClick === null) {
-                gameState.firstClick = [row, col];
-                gameState.selectedTile = [row, col];
-                render();
-                return;
-            }
-
-            const [r1, c1] = gameState.firstClick;
-            const distance = Math.abs(row - r1) + Math.abs(col - c1);
-
-            if (distance === 1) {
-                swapTiles(r1, c1, row, col);
-                gameState.firstClick = null;
-                gameState.selectedTile = null;
-                gameState.turnCount++;
-                processMatches();
-                applyGravity();
-                refillGrid();
-                processMatches();
-                updateHUD();
-                
-                if (gameState.enemyHP <= 0) {
-                    endGame(true);
-                    return;
-                }
-                
-                if (gameState.turnCount % config.enemy_atk_turn === 0) {
-                    enemyAttack();
-                }
-                
-                if (gameState.playerHP <= 0) {
-                    endGame(false);
-                    return;
-                }
-                
-                render();
-            } else {
-                gameState.firstClick = [row, col];
-                gameState.selectedTile = [row, col];
-                render();
-            }
-        }
-
-        function swapTiles(r1, c1, r2, c2) {
-            const temp = gameState.grid[r1][c1];
-            gameState.grid[r1][c1] = gameState.grid[r2][c2];
-            gameState.grid[r2][c2] = temp;
-        }
-
-        function findMatches() {
-            const matches = [];
+function renderGrid() {
+    const container = document.getElementById('gridContainer');
+    container.innerHTML = '';
+    
+    const colorToHex = { red: config.atk_color, blue: config.def_color, green: config.heal_color };
+    
+    for (let row = 0; row < config.grid_size; row++) {
+        for (let col = 0; col < config.grid_size; col++) {
+            const tile = document.createElement('div');
+            tile.className = 'tile';
+            tile.style.backgroundColor = colorToHex[gameState.grid[row][col]];
             
-            for (let i = 0; i < config.grid_size; i++) {
-                for (let j = 0; j < config.grid_size; j++) {
-                    const color = gameState.grid[i][j];
-                    
-                    let hCount = 1;
-                    for (let k = j + 1; k < config.grid_size && gameState.grid[i][k] === color; k++) {
-                        hCount++;
-                    }
-                    if (hCount >= 3) {
-                        for (let k = j; k < j + hCount; k++) {
-                            matches.push([i, k]);
-                        }
-                    }
-                    
-                    let vCount = 1;
-                    for (let k = i + 1; k < config.grid_size && gameState.grid[k][j] === color; k++) {
-                        vCount++;
-                    }
-                    if (vCount >= 3) {
-                        for (let k = i; k < i + vCount; k++) {
-                            matches.push([k, j]);
-                        }
-                    }
-                }
+            if (gameState.selected && gameState.selected[0] === row && gameState.selected[1] === col) {
+                tile.classList.add('selected');
             }
             
-            return [...new Set(matches.map(m => m.join(',')))].map(m => m.split(',').map(Number));
+            tile.onclick = () => handleTileClick(row, col);
+            container.appendChild(tile);
         }
+    }
+}
 
-        function processMatches() {
-            while (true) {
-                const matches = findMatches();
-                if (matches.length === 0) break;
+function handleTileClick(row, col) {
+    if (!gameState.running) return;
+    
+    if (gameState.selected === null) {
+        gameState.selected = [row, col];
+        renderGrid();
+    } else {
+        const [r, c] = gameState.selected;
+        
+        if (r === row && c === col) {
+            gameState.selected = null;
+            renderGrid();
+            return;
+        }
+        
+        if (isAdjacent(r, c, row, col)) {
+            swapTiles(r, c, row, col);
+            gameState.selected = null;
+            
+            processMatches();
+            gameState.turnCount++;
+            
+            checkGameState();
+        } else {
+            gameState.selected = [row, col];
+        }
+        
+        renderGrid();
+    }
+}
 
-                const atkMatches = matches.filter(m => gameState.grid[m[0]][m[1]] === COLORS.ATK);
-                const defMatches = matches.filter(m => gameState.grid[m[0]][m[1]] === COLORS.DEF);
-                const healMatches = matches.filter(m => gameState.grid[m[0]][m[1]] === COLORS.HEAL);
+function isAdjacent(r1, c1, r2, c2) {
+    return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+}
 
-                if (atkMatches.length >= 3) {
-                    gameState.enemyHP -= atkMatches.length * 3;
-                }
-                if (defMatches.length >= 3) {
-                    gameState.shield += 1;
-                }
-                if (healMatches.length >= 3) {
-                    gameState.playerHP = Math.min(gameState.playerHP + healMatches.length * 2, config.player_hp);
-                }
+function swapTiles(r1, c1, r2, c2) {
+    [gameState.grid[r1][c1], gameState.grid[r2][c2]] = [gameState.grid[r2][c2], gameState.grid[r1][c1]];
+}
 
-                matches.forEach(m => {
-                    gameState.grid[m[0]][m[1]] = null;
-                });
+function processMatches() {
+    for (let cascadeCount = 0; cascadeCount < 10; cascadeCount++) {
+        const matches = findMatches();
+        if (matches.length === 0) break;
+        
+        const colorCounts = { red: 0, blue: 0, green: 0 };
+        for (const [row, col, color] of matches) {
+            gameState.grid[row][col] = null;
+            colorCounts[color]++;
+        }
+        
+        applyEffects(colorCounts);
+        applyGravity();
+    }
+}
 
-                applyGravity();
-                refillGrid();
+function findMatches() {
+    const matches = [];
+    const matched = new Set();
+    
+    for (let row = 0; row < config.grid_size; row++) {
+        for (let col = 0; col < config.grid_size; col++) {
+            if (gameState.grid[row][col] === null) continue;
+            const color = gameState.grid[row][col];
+            let count = 1;
+            
+            while (col + count < config.grid_size && gameState.grid[row][col + count] === color) {
+                count++;
             }
-        }
-
-        function applyGravity() {
-            for (let j = 0; j < config.grid_size; j++) {
-                for (let i = config.grid_size - 1; i >= 0; i--) {
-                    if (gameState.grid[i][j] === null) {
-                        for (let k = i - 1; k >= 0; k--) {
-                            if (gameState.grid[k][j] !== null) {
-                                gameState.grid[i][j] = gameState.grid[k][j];
-                                gameState.grid[k][j] = null;
-                                break;
-                            }
-                        }
+            
+            if (count >= 3) {
+                for (let c = col; c < col + count; c++) {
+                    const key = row + ',' + c;
+                    if (!matched.has(key)) {
+                        matched.add(key);
+                        matches.push([row, c, color]);
                     }
                 }
+                col += count - 1;
             }
         }
-
-        function refillGrid() {
-            for (let i = 0; i < config.grid_size; i++) {
-                for (let j = 0; j < config.grid_size; j++) {
-                    if (gameState.grid[i][j] === null) {
-                        gameState.grid[i][j] = getRandomColor();
+    }
+    
+    for (let col = 0; col < config.grid_size; col++) {
+        for (let row = 0; row < config.grid_size; row++) {
+            if (gameState.grid[row][col] === null) continue;
+            const color = gameState.grid[row][col];
+            let count = 1;
+            
+            while (row + count < config.grid_size && gameState.grid[row + count][col] === color) {
+                count++;
+            }
+            
+            if (count >= 3) {
+                for (let r = row; r < row + count; r++) {
+                    const key = r + ',' + col;
+                    if (!matched.has(key)) {
+                        matched.add(key);
+                        matches.push([r, col, color]);
                     }
                 }
+                row += count - 1;
             }
         }
+    }
+    
+    return matches;
+}
 
-        function enemyAttack() {
-            let damage = config.enemy_atk;
-            if (gameState.shield > 0) {
-                damage = Math.ceil(damage / 2);
-                gameState.shield--;
+function applyEffects(colorCounts) {
+    if (colorCounts.red > 0) {
+        gameState.enemyHP -= colorCounts.red * 3;
+    }
+    if (colorCounts.blue > 0) {
+        gameState.shield = true;
+    }
+    if (colorCounts.green > 0) {
+        gameState.playerHP += colorCounts.green * 2;
+        if (gameState.playerHP > gameState.maxPlayerHP) {
+            gameState.playerHP = gameState.maxPlayerHP;
+        }
+    }
+}
+
+function applyGravity() {
+    const colors = ['red', 'blue', 'green'];
+    
+    for (let col = 0; col < config.grid_size; col++) {
+        const column = [];
+        for (let row = 0; row < config.grid_size; row++) {
+            if (gameState.grid[row][col] !== null) {
+                column.push(gameState.grid[row][col]);
             }
-            gameState.playerHP -= damage;
         }
-
-        function updateHUD() {
-            const hud = document.getElementById('hud');
-            const shieldText = gameState.shield > 0 ? `🛡️ Shield x${gameState.shield}` : 'No Shield';
-            const turnToAttack = config.enemy_atk_turn - (gameState.turnCount % config.enemy_atk_turn);
-            hud.innerHTML = `
-                <div>❤️ Player HP: ${Math.max(0, gameState.playerHP)} / ${config.player_hp}</div>
-                <div>${shieldText}</div>
-                <div>Enemy HP: ${Math.max(0, gameState.enemyHP)} / ${config.enemy_hp}</div>
-                <div>Turn: ${gameState.turnCount} | Enemy attacks in ${turnToAttack} turn(s)</div>
-            `;
+        
+        while (column.length < config.grid_size) {
+            column.unshift(colors[Math.floor(Math.random() * 3)]);
         }
+        
+        for (let row = 0; row < config.grid_size; row++) {
+            gameState.grid[row][col] = column[row];
+        }
+    }
+}
 
-        function startGame() {
-            gameState = {
-                running: true,
-                grid: [],
-                playerHP: config.player_hp,
-                enemyHP: config.enemy_hp,
-                shield: 0,
-                turnCount: 0,
-                selectedTile: null,
-                firstClick: null
-            };
-            
-            document.body.style.background = config.bg_color;
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('gameBoard').style.display = 'flex';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            
-            initGrid();
+function checkGameState() {
+    updateHUD();
+    
+    if (gameState.turnCount > 0 && gameState.turnCount % config.enemy_atk_turn === 0) {
+        if (gameState.enemyHP > 0) {
+            enemyAttack();
             updateHUD();
-            render();
         }
+    }
+    
+    if (gameState.playerHP <= 0) {
+        gameState.running = false;
+        document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+    
+    if (gameState.enemyHP <= 0) {
+        gameState.running = false;
+        document.getElementById('clearScreen').style.display = 'flex';
+    }
+}
 
-        function endGame(isWin) {
-            gameState.running = false;
-            if (isWin) {
-                document.getElementById('clearScreen').style.display = 'block';
-            } else {
-                document.getElementById('gameOverScreen').style.display = 'block';
-            }
-        }
+function enemyAttack() {
+    let damage = config.enemy_atk;
+    if (gameState.shield) {
+        damage = Math.ceil(damage / 2);
+        gameState.shield = false;
+    }
+    gameState.playerHP -= damage;
+}
 
-        function retryGame() {
-            startGame();
-        }
-    </script>
+function updateHUD() {
+    document.getElementById('playerHpDisplay').textContent = Math.max(0, gameState.playerHP);
+    document.getElementById('shieldDisplay').textContent = gameState.shield ? 'Yes' : 'No';
+    document.getElementById('enemyHpDisplay').textContent = Math.max(0, gameState.enemyHP);
+    
+    let turnsUntilAttack = config.enemy_atk_turn - (gameState.turnCount % config.enemy_atk_turn);
+    if (turnsUntilAttack === 0) turnsUntilAttack = config.enemy_atk_turn;
+    document.getElementById('enemyTurnDisplay').textContent = turnsUntilAttack;
+}
+
+function gameLoop() {
+    if (gameState.running) {
+        requestAnimationFrame(gameLoop);
+    }
+}
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'flex';
+    initGame();
+}
+
+function retryGame() {
+    gameState.running = false;
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+</script>
+
 </body>
 </html>
