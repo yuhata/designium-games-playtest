@@ -5,87 +5,115 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BEAT EM UP</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Arial', sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0a0a0a;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #666;
             background: #000;
         }
-        #gameContainer { position: relative; }
-        canvas { display: block; border: 2px solid #fff; }
-        .screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: none; flex-direction: column; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.9); color: #fff; z-index: 100;
+        canvas {
+            display: block;
         }
-        .screen.show { display: flex; }
-        #startScreen { 
-            background: linear-gradient(135deg, #1a0a0a 0%, #3d2817 100%);
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 10, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
         }
-        .screen h1 { font-size: 48px; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
-        .screen p { font-size: 16px; margin: 10px 0; text-align: center; max-width: 400px; }
-        .btn {
-            padding: 12px 30px; margin-top: 20px; font-size: 18px;
-            background: #f6e05e; color: #000; border: none; cursor: pointer;
-            border-radius: 4px; font-weight: bold; transition: 0.2s;
+        #startScreen {
+            display: flex;
         }
-        .btn:hover { background: #e0b800; transform: scale(1.05); }
-        #gameOverScreen { background: rgba(0,0,0,0.95); }
-        #clearScreen { background: rgba(0,0,0,0.95); }
-        .instructions {
-            font-size: 14px; margin-top: 20px; line-height: 1.6;
-            background: rgba(0,0,0,0.5); padding: 15px; border-radius: 4px;
+        #gameOverScreen, #clearScreen {
+            display: none;
+        }
+        h1 {
+            font-size: 48px;
+            margin: 20px;
+            color: #f6e05e;
+            text-shadow: 0 0 10px #f6e05e;
+        }
+        h2 {
+            font-size: 32px;
+            margin: 20px;
+            color: #f6e05e;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 400px;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .info {
+            font-size: 14px;
+            color: #aaa;
+            max-width: 380px;
+            text-align: center;
+        }
+        button {
+            padding: 12px 30px;
+            font-size: 18px;
+            margin: 20px;
+            background: #f6e05e;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #0a0a0a;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #ffd700;
+            transform: scale(1.1);
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        
-        <div id="startScreen" class="screen show">
+        <div id="startScreen">
             <h1>BEAT EM UP</h1>
-            <p>横スクロールベルトアクション</p>
-            <p>敵を全員倒してステージをクリアしよう！</p>
-            <div class="instructions">
-                <strong>操作方法</strong><br>
-                A/D または ← → : 左右移動<br>
-                W/S または ↑ ↓ : 奥行き変更（上下レーン移動）<br>
-                SPACE : パンチ
-            </div>
-            <p style="margin-top: 15px; font-size: 13px;">HP 5 でスタート | 敵に接触するとHP-1<br>全敵撃破で次ステージ | 3ステージクリアでゲームクリア</p>
-            <button class="btn" onclick="startGame()">START</button>
+            <p>敵を全て倒して先へ進もう</p>
+            <p class="info">全てのエリアをクリアしたらVICTORY</p>
+            <p class="info">敵と接触するとHP減少。HP0でGAME OVER</p>
+            <p class="info">移動: A/D または矢印キー左右</p>
+            <p class="info">上下移動: W/S または矢印キー上下</p>
+            <p class="info">攻撃: スペースキー</p>
+            <button onclick="startGame()">START</button>
         </div>
-        
-        <div id="gameOverScreen" class="screen">
-            <h1>GAME OVER</h1>
-            <p>HP が 0 になってしまった...</p>
-            <button class="btn" onclick="retryGame()">RETRY</button>
+        <div id="gameOverScreen">
+            <h2>GAME OVER</h2>
+            <p>敵に倒されてしまった...</p>
+            <button onclick="retryGame()">RETRY</button>
         </div>
-        
-        <div id="clearScreen" class="screen">
-            <h1>CLEAR!</h1>
-            <p>3ステージをクリアしました！</p>
-            <button class="btn" onclick="retryGame()">PLAY AGAIN</button>
+        <div id="clearScreen">
+            <h2>VICTORY</h2>
+            <p>全てのエリアをクリアした!</p>
+            <button onclick="retryGame()">PLAY AGAIN</button>
         </div>
     </div>
 
     <script>
-        // パラメータスキーマ（コメント）
-        // theme:              string
-        // title:              string
-        // bg_color:           string
-        // ground_color:       string
-        // player_color:       string
-        // enemy_color:        string
-        // player_hp:          int
-        // player_speed:       int
-        // punch_range:        int
-        // enemies_per_screen: int
-        // win_screens:        int
-
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
         const config = {
             title: 'BEAT EM UP',
             bg_color: '#1a0a0a',
@@ -99,43 +127,62 @@
             win_screens: 3
         };
 
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 500;
-        canvas.height = 400;
-        document.getElementById('gameContainer').style.width = canvas.width + 'px';
-        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        const LANE_TOP = 150;
+        const LANE_BOTTOM = 280;
 
         const gameState = {
             running: false,
-            screen: 0,
-            player: { x: 50, y: 150, width: 30, height: 50, hp: config.player_hp, laneY: 150 },
+            screen: 1,
+            player: null,
             enemies: [],
             keys: {},
-            isPunching: false,
-            punchCooldown: 0
+            invulnerable: 0,
+            punchFrame: 0
         };
 
-        const gameConfig = {
-            width: 500,
-            height: 400,
-            groundY: 350,
-            lanes: [50, 150, 250],
-            enemySize: 30,
-            enemySpeed: 1.5
-        };
+        function setupCanvas() {
+            canvas.width = 500;
+            canvas.height = 350;
+            document.getElementById('gameContainer').style.width = canvas.width + 'px';
+            document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        }
+
+        function initGame() {
+            gameState.running = true;
+            gameState.screen = 1;
+            gameState.player = {
+                x: 80,
+                y: 220,
+                w: 30,
+                h: 40,
+                hp: config.player_hp
+            };
+            gameState.enemies = [];
+            gameState.invulnerable = 0;
+            gameState.punchFrame = 0;
+            spawnEnemies(config.enemies_per_screen);
+        }
+
+        function spawnEnemies(count) {
+            gameState.enemies = [];
+            for (let i = 0; i < count; i++) {
+                const x = 350 + Math.random() * 122;
+                const y = LANE_TOP + 30 + Math.random() * (LANE_BOTTOM - LANE_TOP - 60);
+                gameState.enemies.push({
+                    x: x,
+                    y: Math.max(LANE_TOP, Math.min(LANE_BOTTOM, y)),
+                    w: 28,
+                    h: 38,
+                    hp: 3,
+                    speed: 1.2
+                });
+            }
+        }
 
         function startGame() {
             document.getElementById('startScreen').style.display = 'none';
-            gameState.running = true;
-            gameState.screen = 0;
-            gameState.player.hp = config.player_hp;
-            gameState.player.x = 50;
-            gameState.player.y = 150;
-            gameState.player.laneY = 150;
-            gameState.enemies = [];
-            gameState.isPunching = false;
-            spawnEnemies();
+            setupCanvas();
+            initGame();
             gameLoop();
         }
 
@@ -146,69 +193,73 @@
             gameState.running = false;
         }
 
-        function spawnEnemies() {
-            gameState.enemies = [];
-            const enemyCount = config.enemies_per_screen + Math.floor(gameState.screen * 0.5);
-            const isBoss = gameState.screen === config.win_screens - 1;
-            for (let i = 0; i < (isBoss ? 1 : enemyCount); i++) {
-                gameState.enemies.push({
-                    x: gameConfig.width - 50 - i * 60,
-                    y: gameConfig.lanes[i % gameConfig.lanes.length],
-                    width: gameConfig.enemySize,
-                    height: gameConfig.enemySize,
-                    hp: isBoss ? 5 : 1,
-                    maxHp: isBoss ? 5 : 1
-                });
-            }
-        }
-
-        document.addEventListener('keydown', (e) => { gameState.keys[e.key.toLowerCase()] = true; });
-        document.addEventListener('keyup', (e) => { gameState.keys[e.key.toLowerCase()] = false; });
-
         function handleInput() {
-            const keys = gameState.keys;
-            if (keys['a'] || keys['arrowleft']) gameState.player.x -= config.player_speed;
-            if (keys['d'] || keys['arrowright']) gameState.player.x += config.player_speed;
-            gameState.player.x = Math.max(0, Math.min(gameState.player.x, gameConfig.width - gameState.player.width));
-            
-            if (keys['w'] || keys['arrowup']) {
-                const idx = gameConfig.lanes.indexOf(gameState.player.y);
-                if (idx > 0) gameState.player.y = gameConfig.lanes[idx - 1];
+            const aKey = gameState.keys['a'];
+            const dKey = gameState.keys['d'];
+            const wKey = gameState.keys['w'];
+            const sKey = gameState.keys['s'];
+            const arrowLeft = gameState.keys['arrowleft'];
+            const arrowRight = gameState.keys['arrowright'];
+            const arrowUp = gameState.keys['arrowup'];
+            const arrowDown = gameState.keys['arrowdown'];
+
+            if (aKey || arrowLeft) {
+                gameState.player.x -= config.player_speed;
             }
-            if (keys['s'] || keys['arrowdown']) {
-                const idx = gameConfig.lanes.indexOf(gameState.player.y);
-                if (idx < gameConfig.lanes.length - 1) gameState.player.y = gameConfig.lanes[idx + 1];
+            if (dKey || arrowRight) {
+                gameState.player.x += config.player_speed;
+            }
+            if (wKey || arrowUp) {
+                gameState.player.y -= config.player_speed;
+            }
+            if (sKey || arrowDown) {
+                gameState.player.y += config.player_speed;
             }
 
-            if ((keys[' '] || keys['spacebar']) && gameState.punchCooldown <= 0) {
-                gameState.isPunching = true;
-                gameState.punchCooldown = 15;
+            gameState.player.x = Math.max(20, Math.min(480, gameState.player.x));
+            gameState.player.y = Math.max(LANE_TOP, Math.min(LANE_BOTTOM, gameState.player.y));
+
+            if (gameState.keys[' '] && gameState.punchFrame === 0) {
+                gameState.punchFrame = 10;
+                performPunch();
             }
-            if (gameState.punchCooldown > 0) gameState.punchCooldown--;
         }
 
-        function update() {
-            handleInput();
+        function performPunch() {
+            const baseX = gameState.player.x + 15;
+            const baseY = gameState.player.y;
 
             for (let i = gameState.enemies.length - 1; i >= 0; i--) {
-                const enemy = gameState.enemies[i];
-                if (enemy.x > gameState.player.x) enemy.x -= gameConfig.enemySpeed;
-                
-                if (gameState.isPunching && 
-                    gameState.player.x < enemy.x + enemy.width + config.punch_range &&
-                    gameState.player.y === enemy.y) {
-                    enemy.hp--;
-                    if (enemy.hp <= 0) {
+                const e = gameState.enemies[i];
+                const dx = e.x - baseX;
+                const dy = e.y - baseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < config.punch_range) {
+                    e.hp -= 1;
+                    if (e.hp <= 0) {
                         gameState.enemies.splice(i, 1);
-                        continue;
                     }
                 }
+            }
+        }
 
-                if (gameState.player.x < enemy.x + enemy.width && 
-                    gameState.player.x + gameState.player.width > enemy.x &&
-                    gameState.player.y === enemy.y) {
-                    gameState.player.hp--;
-                    enemy.x -= 30;
+        function updateEnemies() {
+            for (let e of gameState.enemies) {
+                const dx = gameState.player.x - e.x;
+                const dy = gameState.player.y - e.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                e.x += (dx / dist) * e.speed;
+                e.y += (dy / dist) * e.speed;
+
+                e.y = Math.max(LANE_TOP, Math.min(LANE_BOTTOM, e.y));
+
+                const collideDist = 25;
+                if (dist < collideDist && gameState.invulnerable === 0) {
+                    gameState.player.hp -= 1;
+                    gameState.invulnerable = 60;
+
                     if (gameState.player.hp <= 0) {
                         gameState.running = false;
                         document.getElementById('gameOverScreen').style.display = 'flex';
@@ -216,74 +267,96 @@
                     }
                 }
             }
+        }
+
+        function updateGame() {
+            if (gameState.invulnerable > 0) {
+                gameState.invulnerable -= 1;
+            }
+            if (gameState.punchFrame > 0) {
+                gameState.punchFrame -= 1;
+            }
+
+            handleInput();
+            updateEnemies();
 
             if (gameState.enemies.length === 0) {
-                gameState.screen++;
                 if (gameState.screen >= config.win_screens) {
                     gameState.running = false;
                     document.getElementById('clearScreen').style.display = 'flex';
                     return;
                 }
-                spawnEnemies();
+                gameState.screen += 1;
+                spawnEnemies(config.enemies_per_screen);
             }
-
-            gameState.isPunching = false;
         }
 
-        function draw() {
+        function drawGame() {
             ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, gameConfig.width, gameConfig.height);
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            for (const lane of gameConfig.lanes) {
-                ctx.strokeStyle = 'rgba(139,69,19,0.3)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(0, lane + 30);
-                ctx.lineTo(gameConfig.width, lane + 30);
-                ctx.stroke();
-            }
+            ctx.fillStyle = config.ground_color;
+            ctx.fillRect(0, LANE_BOTTOM, canvas.width, canvas.height - LANE_BOTTOM);
 
-            ctx.fillStyle = config.player_color;
-            ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height);
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, LANE_TOP);
+            ctx.lineTo(canvas.width, LANE_TOP);
+            ctx.stroke();
 
-            if (gameState.isPunching) {
-                ctx.strokeStyle = config.player_color;
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(gameState.player.x + gameState.player.width, gameState.player.y + 15);
-                ctx.lineTo(gameState.player.x + gameState.player.width + config.punch_range, gameState.player.y + 15);
-                ctx.stroke();
-            }
-
-            for (const enemy of gameState.enemies) {
+            for (let e of gameState.enemies) {
                 ctx.fillStyle = config.enemy_color;
-                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-                if (enemy.maxHp > 1) {
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '10px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(enemy.hp, enemy.x + enemy.width / 2, enemy.y + enemy.height / 2 + 3);
-                }
+                ctx.fillRect(e.x - e.w / 2, e.y - e.h, e.w, e.h);
+            }
+
+            const playerAlpha = gameState.invulnerable > 0 && gameState.invulnerable % 6 < 3 ? 0.5 : 1;
+            ctx.globalAlpha = playerAlpha;
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(gameState.player.x - gameState.player.w / 2, gameState.player.y - gameState.player.h, gameState.player.w, gameState.player.h);
+            ctx.globalAlpha = 1;
+
+            if (gameState.punchFrame > 0) {
+                ctx.strokeStyle = config.player_color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(gameState.player.x + 20, gameState.player.y, config.punch_range, 0, Math.PI * 2);
+                ctx.stroke();
             }
 
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 16px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText('HP: ' + gameState.player.hp, 10, 25);
-            ctx.fillText('STAGE: ' + (gameState.screen + 1) + '/' + config.win_screens, 10, 50);
-            ctx.fillText('ENEMIES: ' + gameState.enemies.length, 10, 75);
+            ctx.font = '16px Arial';
+            ctx.fillText('HP: ' + gameState.player.hp, 10, 30);
+            ctx.fillText('AREA: ' + gameState.screen + '/' + config.win_screens, 10, 50);
+            ctx.fillText('ENEMIES: ' + gameState.enemies.length, 10, 70);
 
-            ctx.font = '12px Arial';
-            ctx.fillText('[A/D] Left/Right  [W/S] Lane  [SPACE] Punch', 10, gameConfig.height - 10);
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#aaa';
+            ctx.textAlign = 'right';
+            ctx.fillText('Move: A/D or Arrows | Attack: Space', canvas.width - 10, canvas.height - 10);
+            ctx.textAlign = 'left';
         }
 
         function gameLoop() {
             if (gameState.running) {
-                update();
-                draw();
-                requestAnimationFrame(gameLoop);
+                updateGame();
             }
+            drawGame();
+            requestAnimationFrame(gameLoop);
         }
+
+        document.addEventListener('keydown', function(event) {
+            const key = event.key === ' ' ? ' ' : event.key.toLowerCase();
+            gameState.keys[key] = true;
+            if (event.key === ' ') event.preventDefault();
+        });
+
+        document.addEventListener('keyup', function(event) {
+            const key = event.key === ' ' ? ' ' : event.key.toLowerCase();
+            gameState.keys[key] = false;
+        });
+
+        setupCanvas();
     </script>
 </body>
 </html>

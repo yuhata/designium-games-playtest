@@ -1,200 +1,87 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tower Offense</title>
+    <title>TOWER OFFENSE</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1a1a; }
+        #gameContainer { position: relative; }
+        canvas { display: block; border: 2px solid #444; }
+        
         #startScreen {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            width: 100%;
-            height: 100%;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 1000;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;
+            width: 100%; height: 100%;
         }
-
-        .screen-overlay {
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            width: 100%;
-            height: 100%;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 999;
-            background: rgba(0, 0, 0, 0.9);
+        #startScreen h1 { color: #58a6ff; font-size: 48px; margin-bottom: 20px; text-shadow: 0 0 10px rgba(88,166,255,0.5); }
+        #startScreen .desc { color: #aaa; font-size: 13px; margin-bottom: 40px; text-align: center; line-height: 1.8; max-width: 400px; }
+        #startButton { padding: 12px 32px; font-size: 18px; background: #0366d6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        #startButton:hover { background: #0860c2; }
+        
+        #clearScreen {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95);
+            display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 200;
+            width: 100%; height: 100%;
         }
-
-        .screen-content {
-            text-align: center;
-            color: white;
+        #clearScreen h2 { color: #4caf50; font-size: 36px; margin-bottom: 20px; }
+        #clearScreen p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+        
+        #gameOverScreen {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95);
+            display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 200;
+            width: 100%; height: 100%;
         }
-
-        .screen-content h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-
-        .screen-content p {
-            font-size: 18px;
-            margin-bottom: 10px;
-        }
-
-        button {
-            padding: 10px 30px;
-            font-size: 18px;
-            margin-top: 20px;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            background-color: #58a6ff;
-            color: #0d1117;
-            font-weight: bold;
-        }
-
-        button:hover {
-            background-color: #79c0ff;
-        }
-
-        #gameContainer {
-            position: relative;
-            border: 2px solid #58a6ff;
-            background: #0d1117;
-            margin-bottom: 20px;
-        }
-
-        canvas {
-            display: block;
-            background: #0d1117;
-        }
-
-        #unitButtons {
-            display: none;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .unit-button {
-            padding: 10px 20px;
-            font-size: 14px;
-            cursor: pointer;
-            border: 2px solid #58a6ff;
-            border-radius: 5px;
-            background-color: transparent;
-            color: #58a6ff;
-            font-weight: bold;
-            transition: all 0.2s;
-        }
-
-        .unit-button:hover {
-            background-color: #58a6ff;
-            color: #0d1117;
-        }
-
-        .unit-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        #hud {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #58a6ff;
-            font-size: 14px;
-            font-weight: bold;
-            z-index: 10;
-        }
-
-        #instructions {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            color: #79c0ff;
-            font-size: 12px;
-            z-index: 10;
-        }
-
-        #goal {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: #f78166;
-            font-size: 14px;
-            font-weight: bold;
-            z-index: 10;
-        }
+        #gameOverScreen h2 { color: #f44336; font-size: 36px; margin-bottom: 20px; }
+        #gameOverScreen p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+        
+        .retry-button { padding: 10px 24px; font-size: 16px; background: #0366d6; color: #fff; border: none; border-radius: 6px; cursor: pointer; margin-top: 20px; font-weight: bold; }
+        .retry-button:hover { background: #0860c2; }
+        
+        #unitButtons { display: none; gap: 12px; margin-top: 12px; justify-content: center; flex-wrap: wrap; }
+        .unit-button { padding: 8px 12px; background: #2d3748; color: #fff; border: 2px solid #555; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; }
+        .unit-button:hover { border-color: #58a6ff; box-shadow: 0 0 6px rgba(88,166,255,0.3); }
+        .unit-button:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
-    <div id="startScreen">
-        <div class="screen-content">
-            <h1>TOWER OFFENSE</h1>
-            <p>Produce units and destroy the enemy base!</p>
-            <p style="font-size: 14px; margin-top: 30px;">
-                <span style="color: #58a6ff;">■ Destroy Enemy Base</span> | 
-                <span style="color: #f78166;">■ Defend Your Base</span>
-            </p>
-            <button onclick="startGame()">START</button>
-        </div>
-    </div>
-
-    <div id="gameOverScreen" class="screen-overlay">
-        <div class="screen-content">
-            <h1>GAME OVER</h1>
-            <p>Your base was destroyed!</p>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
-    </div>
-
-    <div id="clearScreen" class="screen-overlay">
-        <div class="screen-content">
-            <h1>VICTORY!</h1>
-            <p>Enemy base destroyed!</p>
-            <button onclick="retryGame()">PLAY AGAIN</button>
-        </div>
-    </div>
-
     <div id="gameContainer">
-        <div id="hud">
-            Gold: <span id="goldDisplay">0</span> | Ally Base: <span id="allyHPDisplay">0</span>
-        </div>
-        <div id="goal">
-            Enemy Base: <span id="enemyHPDisplay">0</span>
-        </div>
-        <div id="instructions">
-            Click unit buttons to produce units. They auto-attack enemies.
-        </div>
         <canvas id="gameCanvas"></canvas>
-    </div>
-
-    <div id="unitButtons">
-        <button class="unit-button" id="soldierBtn" onclick="produceUnit('soldier')">Soldier (50g)</button>
-        <button class="unit-button" id="tankBtn" onclick="produceUnit('tank')">Tank (150g)</button>
-        <button class="unit-button" id="archerBtn" onclick="produceUnit('archer')">Archer (100g)</button>
+        
+        <div id="startScreen">
+            <h1>⚔ TOWER OFFENSE ⚔</h1>
+            <div class="desc">
+                <strong style="color:#fff;">ゲーム目標:</strong> 敵の基地のHPを0にせよ<br>
+                <strong style="color:#fff;">ゲームオーバー:</strong> あなたの基地のHP 0<br>
+                <strong style="color:#fff;">操作:</strong> ボタンをクリックしてユニット生産。自動で敵へ進みます。
+            </div>
+            <button id="startButton">START GAME</button>
+        </div>
+        
+        <div id="clearScreen">
+            <h2>🎉 VICTORY! 🎉</h2>
+            <p>敵の基地を倒しました！</p>
+            <button class="retry-button" onclick="retryGame()">RETRY</button>
+        </div>
+        
+        <div id="gameOverScreen">
+            <h2>💀 GAME OVER 💀</h2>
+            <p>あなたの基地が破壊されました...</p>
+            <button class="retry-button" onclick="retryGame()">RETRY</button>
+        </div>
+        
+        <div id="unitButtons">
+            <button class="unit-button" onclick="buyUnit('soldier')">
+                🗡 兵士<br>50G | HP10 ATK3
+            </button>
+            <button class="unit-button" onclick="buyUnit('tank')">
+                🛡 重装<br>150G | HP30 ATK5
+            </button>
+            <button class="unit-button" onclick="buyUnit('archer')">
+                🏹 弓兵<br>100G | HP6 ATK2 遠
+            </button>
+        </div>
     </div>
 
     <script>
@@ -214,43 +101,115 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         canvas.width = 600;
-        canvas.height = 300;
+        canvas.height = 250;
         document.getElementById('gameContainer').style.width = canvas.width + 'px';
         document.getElementById('gameContainer').style.height = canvas.height + 'px';
 
-        const gameState = {
-            running: false,
-            gold: 100,
-            allyBase: { x: 30, y: 150, width: 30, height: 60, hp: config.base_hp, maxHp: config.base_hp },
-            enemyBase: { x: 540, y: 150, width: 30, height: 60, hp: config.base_hp, maxHp: config.base_hp },
-            allyUnits: [],
-            enemyUnits: [],
-            time: 0,
-            lastEnemySpawn: 0,
-            enemySpawnInterval: 1000,
-            difficulty: 0
+        const gameState = { running: false };
+        let gold = 100;
+        const allyBase  = { x: 0, y: 0, w: 60, h: 250, hp: config.base_hp, maxHp: config.base_hp };
+        const enemyBase = { x: 540, y: 0, w: 60, h: 250, hp: config.base_hp, maxHp: config.base_hp };
+        let allyUnits  = [];
+        let enemyUnits = [];
+
+        const UNIT_DEFS = {
+            soldier: { cost: 50, hp: 10, maxHp: 10, atk: 3, spd: 1.5, range: 0, w: 16, h: 24, color: '#58a6ff' },
+            tank:    { cost: 150, hp: 30, maxHp: 30, atk: 5, spd: 0.8, range: 0, w: 22, h: 30, color: '#90cdf4' },
+            archer:  { cost: 100, hp: 6, maxHp: 6, atk: 2, spd: 1.2, range: 80, w: 14, h: 22, color: '#b794f4' }
         };
 
-        const unitTypes = {
-            soldier: { hp: 10, atk: 3, spd: 3, cost: config.soldier_cost, range: 0, color: config.ally_color },
-            tank: { hp: 30, atk: 5, spd: 1.5, cost: config.tank_cost, range: 0, color: config.ally_color },
-            archer: { hp: 6, atk: 2, spd: 2, cost: config.archer_cost, range: 80, color: config.ally_color },
-            e_soldier: { hp: 10, atk: 3, spd: 3, cost: 0, range: 0, color: config.enemy_color },
-            e_tank: { hp: 30, atk: 5, spd: 1.5, cost: 0, range: 0, color: config.enemy_color },
-            e_archer: { hp: 6, atk: 2, spd: 2, cost: 0, range: 80, color: config.enemy_color }
-        };
+        function buyUnit(type) {
+            if (!gameState.running) return;
+            const def = UNIT_DEFS[type];
+            if (gold < def.cost) return;
+            gold -= def.cost;
+            allyUnits.push({ x: allyBase.x + allyBase.w + 5, hp: def.hp, maxHp: def.maxHp, atk: def.atk, spd: def.spd, range: def.range, w: def.w, h: def.h, color: def.color, atkCd: 0 });
+        }
+
+        function updateUnits() {
+            for (const u of allyUnits) {
+                const target = enemyUnits.find(e => e.x - (u.x + u.w) <= Math.max(u.range, 5) && e.x > u.x);
+                if (target) {
+                    if (u.atkCd <= 0) { target.hp -= u.atk; u.atkCd = 60; } else u.atkCd--;
+                } else {
+                    u.x += u.spd;
+                }
+                if (u.x >= enemyBase.x) { enemyBase.hp -= 0.05; u.x = enemyBase.x - u.w; }
+            }
+            for (const e of enemyUnits) {
+                const target = allyUnits.find(a => (e.x - a.x - a.w) <= Math.max(e.range, 5) && a.x < e.x);
+                if (target) {
+                    if (e.atkCd <= 0) { target.hp -= e.atk; e.atkCd = 60; } else e.atkCd--;
+                } else {
+                    e.x -= e.spd;
+                }
+                if (e.x + e.w <= allyBase.x + allyBase.w) { allyBase.hp -= 0.05; e.x = allyBase.x + allyBase.w; }
+            }
+            allyUnits = allyUnits.filter(u => u.hp > 0);
+            enemyUnits = enemyUnits.filter(e => e.hp > 0);
+        }
+
+        function drawUnits() {
+            const laneY = canvas.height / 2;
+            for (const u of allyUnits) {
+                ctx.fillStyle = u.color;
+                ctx.fillRect(u.x, laneY - u.h/2, u.w, u.h);
+                ctx.fillStyle = '#333'; ctx.fillRect(u.x, laneY - u.h/2 - 6, u.w, 4);
+                ctx.fillStyle = '#4caf50'; ctx.fillRect(u.x, laneY - u.h/2 - 6, u.w * (u.hp / u.maxHp), 4);
+            }
+            for (const e of enemyUnits) {
+                ctx.fillStyle = e.color || config.enemy_color;
+                ctx.fillRect(e.x, laneY - e.h/2, e.w, e.h);
+                ctx.fillStyle = '#333'; ctx.fillRect(e.x, laneY - e.h/2 - 6, e.w, 4);
+                ctx.fillStyle = '#f44336'; ctx.fillRect(e.x, laneY - e.h/2 - 6, e.w * (e.hp / e.maxHp), 4);
+            }
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 13px monospace';
+            ctx.fillText(`GOLD: ${Math.floor(gold)}`, 10, 20);
+            ctx.fillText(`MY BASE: ${Math.floor(allyBase.hp)}/${allyBase.maxHp}`, 10, 38);
+            ctx.fillText(`ENEMY BASE: ${Math.floor(enemyBase.hp)}/${enemyBase.maxHp}`, 200, 20);
+            ctx.font = '11px monospace'; ctx.fillStyle = '#aaa';
+            ctx.fillText('Click buttons to spawn units →', 200, 38);
+        }
+
+        function drawBases() {
+            ctx.fillStyle = config.base_color;
+            ctx.fillRect(allyBase.x, allyBase.y, allyBase.w, allyBase.h);
+            ctx.fillStyle = '#4caf50';
+            const allyHpHeight = (allyBase.hp / allyBase.maxHp) * 240;
+            ctx.fillRect(allyBase.x + 5, allyBase.h - allyHpHeight - 5, allyBase.w - 10, allyHpHeight);
+            
+            ctx.fillStyle = config.base_color;
+            ctx.fillRect(enemyBase.x, enemyBase.y, enemyBase.w, enemyBase.h);
+            ctx.fillStyle = '#f44336';
+            const enemyHpHeight = (enemyBase.hp / enemyBase.maxHp) * 240;
+            ctx.fillRect(enemyBase.x + 5, enemyBase.h - enemyHpHeight - 5, enemyBase.w - 10, enemyHpHeight);
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawBases();
+            updateUnits();
+            drawUnits();
+            drawHUD();
+            if (enemyBase.hp <= 0) { gameState.running = false; document.getElementById('clearScreen').style.display = 'flex'; return; }
+            if (allyBase.hp <= 0) { gameState.running = false; document.getElementById('gameOverScreen').style.display = 'flex'; return; }
+            requestAnimationFrame(gameLoop);
+        }
 
         function startGame() {
+            gameState.running = true;
+            gold = 100;
+            allyBase.hp = allyBase.maxHp;
+            enemyBase.hp = enemyBase.maxHp;
+            allyUnits = [];
+            enemyUnits = [];
             document.getElementById('startScreen').style.display = 'none';
             document.getElementById('unitButtons').style.display = 'flex';
-            gameState.running = true;
-            gameState.gold = 100;
-            gameState.allyBase.hp = gameState.allyBase.maxHp;
-            gameState.enemyBase.hp = gameState.enemyBase.maxHp;
-            gameState.allyUnits = [];
-            gameState.enemyUnits = [];
-            gameState.time = 0;
-            gameState.difficulty = 0;
             gameLoop();
         }
 
@@ -262,157 +221,17 @@
             gameState.running = false;
         }
 
-        function produceUnit(type) {
+        setInterval(() => {
             if (!gameState.running) return;
-            const cost = unitTypes[type].cost;
-            if (gameState.gold >= cost) {
-                gameState.gold -= cost;
-                gameState.allyUnits.push({
-                    x: gameState.allyBase.x + gameState.allyBase.width,
-                    y: gameState.allyBase.y + gameState.allyBase.height / 2,
-                    type: type,
-                    hp: unitTypes[type].hp,
-                    maxHp: unitTypes[type].hp,
-                    lastAttackTime: 0
-                });
-            }
-        }
+            const types = ['soldier', 'soldier', 'tank'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const def = UNIT_DEFS[type];
+            enemyUnits.push({ x: enemyBase.x - def.w - 5, hp: def.hp, maxHp: def.maxHp, atk: def.atk, spd: def.spd, range: def.range, w: def.w, h: def.h, color: config.enemy_color, atkCd: 0 });
+        }, 5000);
 
-        function spawnEnemyUnit() {
-            const types = ['e_soldier', 'e_tank', 'e_archer'];
-            const rand = Math.random();
-            let type = 'e_soldier';
-            if (gameState.difficulty > 5 && rand < 0.3) type = 'e_tank';
-            if (gameState.difficulty > 8 && rand < 0.2) type = 'e_archer';
-            
-            gameState.enemyUnits.push({
-                x: gameState.enemyBase.x - 50,
-                y: gameState.enemyBase.y + gameState.enemyBase.height / 2,
-                type: type,
-                hp: unitTypes[type].hp,
-                maxHp: unitTypes[type].hp,
-                lastAttackTime: 0
-            });
-        }
+        setInterval(() => { if (gameState.running) gold += config.gold_rate; }, 1000);
 
-        function updateUnits() {
-            const attackCooldown = 500;
-
-            gameState.allyUnits = gameState.allyUnits.filter(u => u.hp > 0);
-            gameState.enemyUnits = gameState.enemyUnits.filter(u => u.hp > 0);
-
-            for (let unit of gameState.allyUnits) {
-                unit.x += unitTypes[unit.type].spd;
-
-                if (unit.x >= gameState.enemyBase.x) {
-                    gameState.enemyBase.hp -= unitTypes[unit.type].atk;
-                    unit.hp = 0;
-                    continue;
-                }
-
-                for (let enemy of gameState.enemyUnits) {
-                    const dist = Math.hypot(unit.x - enemy.x, unit.y - enemy.y);
-                    if (dist < unitTypes[unit.type].range + 20) {
-                        if (gameState.time - unit.lastAttackTime > attackCooldown) {
-                            enemy.hp -= unitTypes[unit.type].atk;
-                            unit.lastAttackTime = gameState.time;
-                        }
-                    }
-                }
-            }
-
-            for (let unit of gameState.enemyUnits) {
-                unit.x -= unitTypes[unit.type].spd;
-
-                if (unit.x <= gameState.allyBase.x + gameState.allyBase.width) {
-                    gameState.allyBase.hp -= unitTypes[unit.type].atk;
-                    unit.hp = 0;
-                    continue;
-                }
-
-                for (let ally of gameState.allyUnits) {
-                    const dist = Math.hypot(unit.x - ally.x, unit.y - ally.y);
-                    if (dist < unitTypes[unit.type].range + 20) {
-                        if (gameState.time - unit.lastAttackTime > attackCooldown) {
-                            ally.hp -= unitTypes[unit.type].atk;
-                            unit.lastAttackTime = gameState.time;
-                        }
-                    }
-                }
-            }
-        }
-
-        function updateGold() {
-            gameState.gold += config.gold_rate / 60;
-        }
-
-        function draw() {
-            ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = config.base_color;
-            ctx.fillRect(gameState.allyBase.x, gameState.allyBase.y, gameState.allyBase.width, gameState.allyBase.height);
-            ctx.fillRect(gameState.enemyBase.x, gameState.enemyBase.y, gameState.enemyBase.width, gameState.enemyBase.height);
-
-            for (let unit of gameState.allyUnits) {
-                ctx.fillStyle = unitTypes[unit.type].color;
-                ctx.beginPath();
-                ctx.arc(unit.x, unit.y, 8, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            for (let unit of gameState.enemyUnits) {
-                ctx.fillStyle = unitTypes[unit.type].color;
-                ctx.beginPath();
-                ctx.arc(unit.x, unit.y, 8, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        function updateHUD() {
-            document.getElementById('goldDisplay').textContent = Math.floor(gameState.gold);
-            document.getElementById('allyHPDisplay').textContent = Math.max(0, gameState.allyBase.hp) + '/' + gameState.allyBase.maxHp;
-            document.getElementById('enemyHPDisplay').textContent = Math.max(0, gameState.enemyBase.hp) + '/' + gameState.enemyBase.maxHp;
-
-            document.getElementById('soldierBtn').disabled = gameState.gold < config.soldier_cost;
-            document.getElementById('tankBtn').disabled = gameState.gold < config.tank_cost;
-            document.getElementById('archerBtn').disabled = gameState.gold < config.archer_cost;
-        }
-
-        function gameLoop() {
-            if (!gameState.running) return;
-
-            gameState.time += 1000 / 60;
-
-            updateGold();
-            updateUnits();
-
-            if (gameState.time - gameState.lastEnemySpawn > gameState.enemySpawnInterval) {
-                spawnEnemyUnit();
-                gameState.lastEnemySpawn = gameState.time;
-                gameState.difficulty = Math.min(10, gameState.difficulty + 0.1);
-                gameState.enemySpawnInterval = Math.max(500, 2000 - gameState.difficulty * 100);
-            }
-
-            draw();
-            updateHUD();
-
-            if (gameState.enemyBase.hp <= 0) {
-                gameState.running = false;
-                document.getElementById('clearScreen').style.display = 'flex';
-                document.getElementById('unitButtons').style.display = 'none';
-                return;
-            }
-
-            if (gameState.allyBase.hp <= 0) {
-                gameState.running = false;
-                document.getElementById('gameOverScreen').style.display = 'flex';
-                document.getElementById('unitButtons').style.display = 'none';
-                return;
-            }
-
-            if (gameState.running) requestAnimationFrame(gameLoop);
-        }
+        document.getElementById('startButton').addEventListener('click', startGame);
     </script>
 </body>
 </html>

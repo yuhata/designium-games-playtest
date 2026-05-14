@@ -15,110 +15,81 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: Arial, sans-serif;
             background-color: #1a1a2e;
+            font-family: Arial, sans-serif;
         }
         #gameContainer {
             position: relative;
-            border: 2px solid #444;
-            overflow: hidden;
+            background-color: #0a0a1a;
         }
         canvas {
             display: block;
+            background-color: #0a0a1a;
         }
-        .screen {
+        .overlay {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            right: 0;
+            bottom: 0;
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: rgba(10, 10, 26, 0.95);
-            z-index: 100;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            font-size: 28px;
+            text-align: center;
+            z-index: 10;
         }
-        #startScreen {
+        .overlay.active {
             display: flex;
         }
-        .screen h1 {
-            color: #68d391;
-            font-size: 2.5em;
+        .overlay h1 {
+            font-size: 48px;
             margin-bottom: 20px;
-            text-shadow: 0 0 10px #68d391;
         }
-        .screen p {
+        .overlay p {
+            font-size: 16px;
+            margin-bottom: 30px;
             color: #aaa;
-            font-size: 0.95em;
-            margin: 8px 0;
-            text-align: center;
-            max-width: 350px;
         }
-        .screen button {
-            margin-top: 30px;
-            padding: 12px 40px;
-            font-size: 1.2em;
-            background-color: #68d391;
-            color: #0a0a1a;
-            border: none;
-            border-radius: 4px;
+        .overlay button {
+            margin-top: 20px;
+            padding: 12px 30px;
+            font-size: 20px;
             cursor: pointer;
+            background-color: #68d391;
+            border: none;
+            color: black;
             font-weight: bold;
-            transition: all 0.3s;
+            border-radius: 5px;
+            transition: background-color 0.2s;
         }
-        .screen button:hover {
-            background-color: #48c069;
-            box-shadow: 0 0 15px #68d391;
-        }
-        #hud {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #68d391;
-            font-size: 13px;
-            font-family: monospace;
-            z-index: 10;
-            line-height: 1.6;
-        }
-        .controls {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            right: 10px;
-            color: #888;
-            font-size: 11px;
-            z-index: 10;
-            text-align: center;
+        .overlay button:hover {
+            background-color: #56c987;
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
-        <div id="startScreen" class="screen">
+        <div id="startScreen" class="overlay active">
             <h1>RUN & GUN</h1>
-            <p style="color: #ffd700; font-weight: bold;">Reach distance 500 to clear!</p>
-            <p>SPACE: Jump (2 times)</p>
-            <p>X / ↑: Shoot</p>
-            <p>Avoid enemies and holes!</p>
+            <p>Reach the target distance to win!</p>
+            <p>SPACE: Jump | Z: Shoot</p>
             <button onclick="startGame()">START</button>
         </div>
-        <div id="gameOverScreen" class="screen">
+        <div id="gameOverScreen" class="overlay">
             <h1>GAME OVER</h1>
-            <p>HP: 0</p>
+            <p>You lost all your HP</p>
             <button onclick="retryGame()">RETRY</button>
         </div>
-        <div id="clearScreen" class="screen">
+        <div id="clearScreen" class="overlay">
             <h1>CLEAR!</h1>
-            <p>You reached the goal!</p>
-            <button onclick="retryGame()">PLAY AGAIN</button>
+            <p>You reached the target!</p>
+            <button onclick="retryGame()">RETRY</button>
         </div>
-        <div id="hud">
-            <div>HP: <span id="hpDisplay">3</span></div>
-            <div>Distance: <span id="distanceDisplay">0</span>/<span id="goalDisplay">500</span></div>
-        </div>
-        <div class="controls">SPACE: Jump | X/↑: Shoot</div>
+        <canvas id="gameCanvas"></canvas>
     </div>
 
     <script>
@@ -138,60 +109,65 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        canvas.width = 400;
-        canvas.height = 400;
+        canvas.width = 500;
+        canvas.height = 350;
         document.getElementById('gameContainer').style.width = canvas.width + 'px';
         document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+        const PLAYER_SCREEN_X = 100;
+        const GROUND_Y = canvas.height - 80;
+        const PLAYER_WIDTH = 20;
+        const PLAYER_HEIGHT = 30;
+        const ENEMY_WIDTH = 25;
+        const ENEMY_HEIGHT = 30;
 
         const gameState = {
             running: false,
             cameraX: 0,
-            hp: config.player_hp
+            playerY: GROUND_Y - PLAYER_HEIGHT,
+            playerVelocityY: 0,
+            playerHP: config.player_hp,
+            playerInvincibleTimer: 0,
+            enemies: [],
+            bullets: [],
+            enemySpawnTimer: 0
         };
 
-        const player = {
-            x: 100,
-            y: 280,
-            width: 20,
-            height: 30,
-            velocityY: 0,
-            jumping: false,
-            doubleJumpAvailable: true
-        };
+        window.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                if (gameState.running && isPlayerOnGround()) {
+                    gameState.playerVelocityY = -12;
+                }
+            }
+            if (e.key === 'z' || e.key === 'Z') {
+                if (gameState.running) {
+                    const playerWorldX = gameState.cameraX + PLAYER_SCREEN_X;
+                    gameState.bullets.push({
+                        worldX: playerWorldX + PLAYER_WIDTH,
+                        worldY: gameState.playerY + PLAYER_HEIGHT / 2 - 2,
+                        width: 8,
+                        height: 4
+                    });
+                }
+            }
+        });
 
-        let bullets = [];
-        let enemies = [];
-        let platforms = [];
-        let spawnCounter = 0;
-        let lastShotTime = 0;
-
-        function createPlatforms() {
-            platforms = [
-                { x: 0, y: 320, width: 150, height: 80 },
-                { x: 200, y: 280, width: 150, height: 20 },
-                { x: 450, y: 320, width: 150, height: 80 },
-                { x: 650, y: 260, width: 150, height: 20 },
-                { x: 900, y: 320, width: 150, height: 80 },
-                { x: 1150, y: 240, width: 150, height: 20 }
-            ];
+        function isPlayerOnGround() {
+            return gameState.playerY >= GROUND_Y - PLAYER_HEIGHT - 1;
         }
 
         function startGame() {
             document.getElementById('startScreen').style.display = 'none';
             gameState.running = true;
             gameState.cameraX = 0;
-            gameState.hp = config.player_hp;
-            player.x = 100;
-            player.y = 280;
-            player.velocityY = 0;
-            player.jumping = false;
-            player.doubleJumpAvailable = true;
-            bullets = [];
-            enemies = [];
-            spawnCounter = 0;
-            createPlatforms();
-            document.getElementById('goalDisplay').textContent = config.win_distance;
-            updateHUD();
+            gameState.playerY = GROUND_Y - PLAYER_HEIGHT;
+            gameState.playerVelocityY = 0;
+            gameState.playerHP = config.player_hp;
+            gameState.playerInvincibleTimer = 0;
+            gameState.enemies = [];
+            gameState.bullets = [];
+            gameState.enemySpawnTimer = 0;
             gameLoop();
         }
 
@@ -202,204 +178,83 @@
             gameState.running = false;
         }
 
-        const keys = {};
-        window.addEventListener('keydown', (e) => {
-            if (e.key === ' ') {
-                e.preventDefault();
-                if (!player.jumping) {
-                    player.velocityY = -12;
-                    player.jumping = true;
-                    player.doubleJumpAvailable = true;
-                } else if (player.doubleJumpAvailable) {
-                    player.velocityY = -10;
-                    player.doubleJumpAvailable = false;
-                }
-            }
-            if (e.key === 'x' || e.key === 'X' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                const now = Date.now();
-                if (now - lastShotTime > 100) {
-                    bullets.push({
-                        x: player.x + player.width,
-                        y: player.y + player.height / 2 - 2,
-                        velocityX: config.bullet_speed,
-                        width: 8,
-                        height: 4
-                    });
-                    lastShotTime = now;
-                }
-            }
-        });
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
 
-        function spawnEnemy() {
-            const worldX = gameState.cameraX + 400 + Math.random() * 100;
-            const isAirborne = Math.random() > 0.5;
-            enemies.push({
-                x: worldX,
-                y: isAirborne ? 180 + Math.random() * 120 : 310,
-                width: 24,
-                height: 24,
-                velocityX: -2,
-                hp: 1
+        function update() {
+            if (!gameState.running) return;
+
+            gameState.cameraX += config.scroll_speed;
+
+            gameState.playerVelocityY += 0.5;
+            gameState.playerY += gameState.playerVelocityY;
+
+            if (gameState.playerY > GROUND_Y - PLAYER_HEIGHT) {
+                gameState.playerY = GROUND_Y - PLAYER_HEIGHT;
+                gameState.playerVelocityY = 0;
+            }
+
+            if (gameState.playerInvincibleTimer > 0) {
+                gameState.playerInvincibleTimer--;
+            }
+
+            gameState.enemySpawnTimer++;
+            if (gameState.enemySpawnTimer > 90) {
+                gameState.enemySpawnTimer = 0;
+                const spawnY = Math.random() > 0.5 ? GROUND_Y - ENEMY_HEIGHT - 10 : GROUND_Y - 120;
+                gameState.enemies.push({
+                    worldX: gameState.cameraX + canvas.width + 100,
+                    worldY: spawnY,
+                    width: ENEMY_WIDTH,
+                    height: ENEMY_HEIGHT
+                });
+            }
+
+            gameState.enemies = gameState.enemies.filter(enemy => {
+                enemy.worldX -= 1.5;
+                return enemy.worldX > -50;
             });
-        }
 
-        function updatePlayer() {
-            player.velocityY += 0.5;
-            player.y += player.velocityY;
-            
-            for (let platform of platforms) {
-                if (
-                    player.y + player.height >= platform.y &&
-                    player.y + player.height <= platform.y + 10 &&
-                    player.x + player.width > platform.x &&
-                    player.x < platform.x + platform.width &&
-                    player.velocityY >= 0
-                ) {
-                    player.y = platform.y - player.height;
-                    player.velocityY = 0;
-                    player.jumping = false;
-                    player.doubleJumpAvailable = true;
-                    break;
-                }
-            }
-            
-            if (player.y > canvas.height) {
-                gameState.hp--;
-                if (gameState.hp <= 0) {
-                    gameState.running = false;
-                    document.getElementById('gameOverScreen').style.display = 'flex';
-                    return;
-                }
-                player.y = 280;
-                player.velocityY = 0;
-                player.jumping = false;
-                gameState.cameraX = Math.max(0, gameState.cameraX - 100);
-            }
-        }
+            gameState.bullets = gameState.bullets.filter(bullet => {
+                bullet.worldX += config.bullet_speed;
+                return bullet.worldX < gameState.cameraX + canvas.width + 100;
+            });
 
-        function updateBullets() {
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                bullets[i].x += bullets[i].velocityX;
-                if (bullets[i].x > gameState.cameraX + canvas.width + 50) {
-                    bullets.splice(i, 1);
-                }
-            }
-        }
-
-        function updateEnemies() {
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                enemies[i].x += enemies[i].velocityX;
-                
-                for (let j = bullets.length - 1; j >= 0; j--) {
-                    if (
-                        bullets[j].x < enemies[i].x + enemies[i].width &&
-                        bullets[j].x + bullets[j].width > enemies[i].x &&
-                        bullets[j].y < enemies[i].y + enemies[i].height &&
-                        bullets[j].y + bullets[j].height > enemies[i].y
-                    ) {
-                        enemies[i].hp--;
-                        bullets.splice(j, 1);
-                        if (enemies[i].hp <= 0) {
-                            enemies.splice(i, 1);
-                        }
+            for (let i = gameState.bullets.length - 1; i >= 0; i--) {
+                for (let j = gameState.enemies.length - 1; j >= 0; j--) {
+                    const bullet = gameState.bullets[i];
+                    const enemy = gameState.enemies[j];
+                    if (checkCollision(
+                        { x: bullet.worldX, y: bullet.worldY, width: bullet.width, height: bullet.height },
+                        { x: enemy.worldX, y: enemy.worldY, width: enemy.width, height: enemy.height }
+                    )) {
+                        gameState.bullets.splice(i, 1);
+                        gameState.enemies.splice(j, 1);
                         break;
                     }
                 }
             }
-            
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                if (enemies[i].x < gameState.cameraX - 50) {
-                    enemies.splice(i, 1);
-                }
-            }
-        }
 
-        function checkCollisions() {
-            for (let enemy of enemies) {
-                if (
-                    player.x < enemy.x + enemy.width &&
-                    player.x + player.width > enemy.x &&
-                    player.y < enemy.y + enemy.height &&
-                    player.y + player.height > enemy.y
-                ) {
-                    gameState.hp--;
-                    if (gameState.hp <= 0) {
-                        gameState.running = false;
-                        document.getElementById('gameOverScreen').style.display = 'flex';
-                        return;
+            const playerWorldX = gameState.cameraX + PLAYER_SCREEN_X;
+            for (let enemy of gameState.enemies) {
+                if (checkCollision(
+                    { x: playerWorldX, y: gameState.playerY, width: PLAYER_WIDTH, height: PLAYER_HEIGHT },
+                    { x: enemy.worldX, y: enemy.worldY, width: enemy.width, height: enemy.height }
+                )) {
+                    if (gameState.playerInvincibleTimer === 0) {
+                        gameState.playerHP--;
+                        gameState.playerInvincibleTimer = 60;
+                        if (gameState.playerHP <= 0) {
+                            gameState.running = false;
+                            document.getElementById('gameOverScreen').style.display = 'flex';
+                            return;
+                        }
                     }
-                    player.x = 100;
-                    player.y = 280;
-                    gameState.cameraX = Math.max(0, gameState.cameraX - 100);
                 }
-            }
-        }
-
-        function draw() {
-            ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = config.ground_color;
-            for (let platform of platforms) {
-                ctx.fillRect(
-                    platform.x - gameState.cameraX,
-                    platform.y,
-                    platform.width,
-                    platform.height
-                );
-            }
-            
-            ctx.fillStyle = config.enemy_color;
-            for (let enemy of enemies) {
-                ctx.fillRect(
-                    enemy.x - gameState.cameraX,
-                    enemy.y,
-                    enemy.width,
-                    enemy.height
-                );
-            }
-            
-            ctx.fillStyle = config.bullet_color;
-            for (let bullet of bullets) {
-                ctx.fillRect(
-                    bullet.x - gameState.cameraX,
-                    bullet.y,
-                    bullet.width,
-                    bullet.height
-                );
-            }
-            
-            ctx.fillStyle = config.player_color;
-            ctx.fillRect(
-                player.x - gameState.cameraX,
-                player.y,
-                player.width,
-                player.height
-            );
-        }
-
-        function updateHUD() {
-            document.getElementById('hpDisplay').textContent = Math.max(0, gameState.hp);
-            document.getElementById('distanceDisplay').textContent = Math.floor(gameState.cameraX);
-        }
-
-        function gameLoop() {
-            if (!gameState.running) {
-                return;
-            }
-
-            gameState.cameraX += config.scroll_speed;
-
-            updatePlayer();
-            updateBullets();
-            updateEnemies();
-            checkCollisions();
-
-            spawnCounter++;
-            if (spawnCounter > 80) {
-                spawnEnemy();
-                spawnCounter = 0;
             }
 
             if (gameState.cameraX >= config.win_distance) {
@@ -407,14 +262,53 @@
                 document.getElementById('clearScreen').style.display = 'flex';
                 return;
             }
-
-            draw();
-            updateHUD();
-
-            requestAnimationFrame(gameLoop);
         }
 
-        createPlatforms();
+        function draw() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = config.ground_color;
+            ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+            if (gameState.playerInvincibleTimer > 0 && Math.floor(gameState.playerInvincibleTimer / 10) % 2 === 0) {
+                ctx.globalAlpha = 0.5;
+            }
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(PLAYER_SCREEN_X, gameState.playerY, PLAYER_WIDTH, PLAYER_HEIGHT);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = config.enemy_color;
+            for (let enemy of gameState.enemies) {
+                const screenX = enemy.worldX - gameState.cameraX;
+                if (screenX > -50 && screenX < canvas.width + 50) {
+                    ctx.fillRect(screenX, enemy.worldY, enemy.width, enemy.height);
+                }
+            }
+
+            ctx.fillStyle = config.bullet_color;
+            for (let bullet of gameState.bullets) {
+                const screenX = bullet.worldX - gameState.cameraX;
+                if (screenX > -10 && screenX < canvas.width + 10) {
+                    ctx.fillRect(screenX, bullet.worldY, bullet.width, bullet.height);
+                }
+            }
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText('HP: ' + gameState.playerHP, 10, 25);
+            ctx.fillText('Distance: ' + Math.floor(gameState.cameraX) + ' / ' + config.win_distance, 10, 50);
+            ctx.font = '14px Arial';
+            ctx.fillText('SPACE: Jump | Z: Shoot', 10, canvas.height - 10);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
     </script>
 </body>
 </html>
