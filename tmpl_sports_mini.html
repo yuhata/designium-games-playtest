@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports Mini Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+        }
+        
+        #gameContainer {
+            position: relative;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        canvas {
+            display: block;
+            border: 2px solid #333;
+        }
+        
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 400px;
+            height: 600px;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            z-index: 100;
+            text-align: center;
+        }
+        
+        #startScreen {
+            display: flex;
+        }
+        
+        .screen h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .screen p {
+            font-size: 16px;
+            margin: 8px 20px;
+            line-height: 1.4;
+        }
+        
+        .screen-info {
+            font-size: 14px;
+            margin-top: 25px;
+            color: #ffff99;
+        }
+        
+        button {
+            padding: 12px 40px;
+            font-size: 20px;
+            margin-top: 30px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .rank-display {
+            font-size: 64px;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #ffff99;
+        }
+        
+        .score-display {
+            font-size: 36px;
+            margin: 15px 0;
+            color: #ffff99;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="startScreen" class="screen">
+            <h1>SPORTS MINI</h1>
+            <p>タイミングを合わせて高得点を狙おう！</p>
+            <p style="margin-top: 15px; font-size: 18px; color: #ffff99; font-weight: bold;">3つの競技で合計200点以上を目指す</p>
+            <div class="screen-info">
+                <p style="margin-top: 20px;">走り幅跳び</p>
+                <p>円盤投げ</p>
+                <p>ハンマー投げ</p>
+                <p style="margin-top: 20px;">ランク判定:</p>
+                <p>S: 270点以上 / A: 220点以上</p>
+                <p>B: 170点以上 / C: 170点未満</p>
+            </div>
+            <p style="margin-top: 30px; font-size: 14px;">【操作方法】</p>
+            <p style="font-size: 14px;">スペースキー または クリック</p>
+            <button onclick="startGame()">START</button>
+        </div>
+        
+        <div id="clearScreen" class="screen">
+            <h1>CLEAR!</h1>
+            <div class="rank-display" id="rankDisplay">S</div>
+            <div class="score-display" id="clearScoreDisplay">300点</div>
+            <p style="margin-top: 15px;">素晴らしい成績です！</p>
+            <button onclick="retryGame()">もう一度</button>
+        </div>
+        
+        <div id="gameOverScreen" class="screen">
+            <h1>GAME OVER</h1>
+            <div class="score-display" id="gameOverScoreDisplay">150点</div>
+            <p>目標まであと少し...</p>
+            <p style="font-size: 14px; margin-top: 15px;">目標: 合計200点以上</p>
+            <button onclick="retryGame()">もう一度</button>
+        </div>
+    </div>
+    
+    <script>
+        const config = {
+            title: 'SPORTS MINI',
+            bg_color: '#87ceeb',
+            ground_color: '#8fbc8f',
+            meter_color: '#f6e05e',
+            win_score: 200,
+            events: 3
+        };
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 400;
+        canvas.height = 600;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        
+        const gameState = {
+            running: false,
+            currentEvent: 0,
+            scores: [],
+            meterValue: 50,
+            meterDirection: 1,
+            meterSpeed: 2,
+            waiting: false,
+            eventNames: ['走り幅跳び', '円盤投げ', 'ハンマー投げ'],
+            inputLocked: false
+        };
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.currentEvent = 0;
+            gameState.scores = [];
+            gameState.meterValue = 50;
+            gameState.inputLocked = false;
+            gameLoop();
+        }
+        
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+            gameState.inputLocked = false;
+        }
+        
+        function calculateScore(meterValue) {
+            const distance = Math.abs(meterValue - 50);
+            return Math.max(0, Math.round(100 - (distance * 2)));
+        }
+        
+        function getRank(totalScore) {
+            if (totalScore >= 270) return 'S';
+            if (totalScore >= 220) return 'A';
+            if (totalScore >= 170) return 'B';
+            return 'C';
+        }
+        
+        function handleInput() {
+            if (gameState.running && !gameState.inputLocked) {
+                gameState.inputLocked = true;
+                const score = calculateScore(gameState.meterValue);
+                gameState.scores.push(score);
+                gameState.currentEvent++;
+                
+                if (gameState.currentEvent >= config.events) {
+                    setTimeout(() => {
+                        endGame();
+                    }, 800);
+                } else {
+                    setTimeout(() => {
+                        gameState.meterValue = 50;
+                        gameState.inputLocked = false;
+                    }, 500);
+                }
+            }
+        }
+        
+        function endGame() {
+            const totalScore = gameState.scores.reduce((a, b) => a + b, 0);
+            gameState.running = false;
+            
+            if (totalScore >= config.win_score) {
+                document.getElementById('rankDisplay').textContent = getRank(totalScore);
+                document.getElementById('clearScoreDisplay').textContent = totalScore + '点';
+                document.getElementById('clearScreen').style.display = 'flex';
+            } else {
+                document.getElementById('gameOverScoreDisplay').textContent = totalScore + '点';
+                document.getElementById('gameOverScreen').style.display = 'flex';
+            }
+        }
+        
+        function gameLoop() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = config.ground_color;
+            ctx.fillRect(0, 470, canvas.width, 130);
+            
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('競技 ' + (gameState.currentEvent + 1) + '/' + config.events, 20, 35);
+            
+            ctx.font = '18px Arial';
+            ctx.fillText(gameState.eventNames[gameState.currentEvent], 20, 60);
+            
+            const totalScore = gameState.scores.reduce((a, b) => a + b, 0);
+            ctx.fillText('合計スコア: ' + totalScore + '/' + config.win_score, 20, 90);
+            
+            ctx.fillStyle = '#333';
+            ctx.font = '13px Arial';
+            ctx.fillText('目標: 合計' + config.win_score + '点以上でクリア', 20, 120);
+            
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('パワーメーター', 20, 170);
+            
+            ctx.fillStyle = '#ccc';
+            ctx.fillRect(50, 180, 300, 50);
+            
+            ctx.strokeStyle = '#00aa00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(200, 180);
+            ctx.lineTo(200, 230);
+            ctx.stroke();
+            
+            ctx.fillStyle = 'rgba(0, 200, 0, 0.25)';
+            ctx.fillRect(175, 180, 50, 50);
+            
+            ctx.fillStyle = config.meter_color;
+            const meterX = 50 + (gameState.meterValue / 100) * 300;
+            ctx.beginPath();
+            ctx.moveTo(meterX, 180);
+            ctx.lineTo(meterX - 6, 195);
+            ctx.lineTo(meterX + 6, 195);
+            ctx.fill();
+            ctx.fillRect(meterX - 4, 195, 8, 35);
+            
+            gameState.meterValue += gameState.meterDirection * gameState.meterSpeed;
+            if (gameState.meterValue >= 100 || gameState.meterValue <= 0) {
+                gameState.meterDirection *= -1;
+            }
+            
+            if (gameState.scores.length > gameState.currentEvent) {
+                ctx.fillStyle = '#ff4444';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText('ラウンド' + (gameState.currentEvent) + ' スコア: ' + gameState.scores[gameState.currentEvent - 1] + '点', 20, 290);
+            }
+            
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('【操作】スペースキー または クリック', 20, 360);
+            
+            ctx.font = '13px Arial';
+            ctx.fillText('メーターの中央(緑)に合わせて確定！', 20, 385);
+            
+            ctx.fillStyle = '#999';
+            ctx.font = '12px Arial';
+            ctx.fillText('中央=100点  端=0点', 20, 410);
+            
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                handleInput();
+            }
+        });
+        
+        canvas.addEventListener('click', handleInput);
+    </script>
+</body>
+</html>

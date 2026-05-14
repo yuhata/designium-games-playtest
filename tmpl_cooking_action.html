@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COOKING</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            border: 3px solid #333;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        #startScreen, #gameScreen, #clearScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #gameScreen {
+            display: flex;
+            position: static;
+            flex-direction: column;
+        }
+        #startScreen, #clearScreen, #gameOverScreen {
+            gap: 30px;
+        }
+        .screen-title {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .screen-text {
+            font-size: 20px;
+            text-align: center;
+            max-width: 80%;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.1s;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        #gameScreen {
+            padding: 10px;
+            gap: 10px;
+        }
+        #hudContainer {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        #orderContainer {
+            display: flex;
+            gap: 10px;
+            min-height: 80px;
+        }
+        .order-slot {
+            flex: 1;
+            border: 2px solid #555;
+            border-radius: 4px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            font-size: 12px;
+        }
+        .order-recipe {
+            font-weight: bold;
+        }
+        .order-timer {
+            flex: 1;
+            background: #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .order-progress {
+            height: 100%;
+            background: #4CAF50;
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+        #mainGameArea {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+        }
+        #ingredientPanel {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 80px;
+        }
+        .ingredient-btn {
+            padding: 8px 4px;
+            font-size: 11px;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border: 2px solid #333;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #000;
+        }
+        #cookingStation {
+            flex: 1;
+            border: 2px dashed #999;
+            border-radius: 4px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 120px;
+        }
+        #cookingStack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex: 1;
+            align-content: flex-start;
+        }
+        .stacked-item {
+            padding: 6px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+        }
+        #serveBtn {
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            display: none;
+        }
+        #serveBtn.show {
+            display: block;
+        }
+        .instruction {
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- START SCREEN -->
+        <div id="startScreen" style="display: flex;">
+            <div class="screen-title">COOKING</div>
+            <div class="screen-text">
+                <p>レシピ通りに食材を選んで完成させよう！</p>
+                <p style="margin-top: 10px; font-size: 14px;" id="goalText"></p>
+                <p style="margin-top: 8px; font-size: 14px;" id="missLimitText"></p>
+            </div>
+            <button onclick="startGame()" style="background: #2196F3; color: white;">START</button>
+        </div>
+
+        <!-- GAME SCREEN -->
+        <div id="gameScreen" style="display: none;">
+            <div id="hudContainer">
+                <div>完成: <span id="winCounter">0</span>/<span id="winTarget">10</span></div>
+                <div>ミス: <span id="missCounter">0</span>/<span id="missTarget">3</span></div>
+            </div>
+
+            <div id="orderContainer"></div>
+
+            <div id="mainGameArea">
+                <div id="ingredientPanel">
+                    <button class="ingredient-btn" onclick="addIngredient('パン')" style="background: #d4a574;">パン</button>
+                    <button class="ingredient-btn" onclick="addIngredient('肉')" style="background: #c94c4c;">肉</button>
+                    <button class="ingredient-btn" onclick="addIngredient('レタス')" style="background: #7cb342;">レタス</button>
+                    <button class="ingredient-btn" onclick="addIngredient('チーズ')" style="background: #fbc02d;">チーズ</button>
+                    <button class="ingredient-btn" onclick="addIngredient('ソース')" style="background: #bf360c;">ソース</button>
+                </div>
+
+                <div id="cookingStation">
+                    <div id="cookingStack"></div>
+                    <button id="serveBtn" onclick="serveOrder()">提供</button>
+                    <div class="instruction">クリックで食材を追加</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLEAR SCREEN -->
+        <div id="clearScreen" style="display: none;">
+            <div class="screen-title">CLEAR!</div>
+            <div class="screen-text">
+                <p>全てのオーダーを完成させた！</p>
+            </div>
+            <button onclick="retryGame()" style="background: #2196F3; color: white;">もう一度</button>
+        </div>
+
+        <!-- GAME OVER SCREEN -->
+        <div id="gameOverScreen" style="display: none;">
+            <div class="screen-title">GAME OVER</div>
+            <div class="screen-text">
+                <p>ミスが多すぎた...</p>
+            </div>
+            <button onclick="retryGame()" style="background: #FF9800; color: white;">リトライ</button>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'COOKING',
+            bg_color: '#2d1b00',
+            counter_color: '#8b4513',
+            ingredient_color: '#f6e05e',
+            win_orders: 10,
+            miss_limit: 3,
+            order_time: 15
+        };
+
+        const recipes = {
+            'バーガー': ['パン', '肉', 'レタス'],
+            'サラダ': ['レタス', 'チーズ'],
+            'ホットドッグ': ['パン', '肉']
+        };
+
+        const ingredientColors = {
+            'パン': '#d4a574',
+            '肉': '#c94c4c',
+            'レタス': '#7cb342',
+            'チーズ': '#fbc02d',
+            'ソース': '#bf360c'
+        };
+
+        let gameState = {
+            running: false,
+            wins: 0,
+            misses: 0,
+            currentStack: [],
+            orders: [],
+            orderTimers: {}
+        };
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'flex';
+            document.getElementById('gameContainer').style.width = '400px';
+            document.getElementById('gameContainer').style.height = '600px';
+            document.getElementById('gameContainer').style.background = config.bg_color;
+
+            gameState.running = true;
+            gameState.wins = 0;
+            gameState.misses = 0;
+            gameState.currentStack = [];
+            gameState.orders = [];
+            gameState.orderTimers = {};
+
+            document.getElementById('winCounter').textContent = '0';
+            document.getElementById('missCounter').textContent = '0';
+            document.getElementById('winTarget').textContent = config.win_orders;
+            document.getElementById('missTarget').textContent = config.miss_limit;
+
+            addNewOrder();
+            gameLoop();
+        }
+
+        function addNewOrder() {
+            if (gameState.orders.length < 2) {
+                const recipeNames = Object.keys(recipes);
+                const recipe = recipeNames[Math.floor(Math.random() * recipeNames.length)];
+                const orderId = Date.now();
+                gameState.orders.push({
+                    id: orderId,
+                    recipe: recipe,
+                    startTime: Date.now()
+                });
+                gameState.orderTimers[orderId] = config.order_time * 1000;
+                renderOrders();
+            }
+        }
+
+        function renderOrders() {
+            const container = document.getElementById('orderContainer');
+            container.innerHTML = '';
+            gameState.orders.forEach((order, index) => {
+                const slot = document.createElement('div');
+                slot.className = 'order-slot';
+                slot.style.background = gameState.orderTimers[order.id] > 0 ? '#fff' : '#ffcccc';
+                
+                const recipe = document.createElement('div');
+                recipe.className = 'order-recipe';
+                recipe.textContent = order.recipe;
+                
+                const timer = document.createElement('div');
+                timer.className = 'order-timer';
+                const progress = document.createElement('div');
+                progress.className = 'order-progress';
+                const percentage = Math.max(0, gameState.orderTimers[order.id] / (config.order_time * 1000)) * 100;
+                progress.style.width = percentage + '%';
+                timer.appendChild(progress);
+                
+                slot.appendChild(recipe);
+                slot.appendChild(timer);
+                container.appendChild(slot);
+            });
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            const now = Date.now();
+            let ordersToRemove = [];
+
+            gameState.orders.forEach(order => {
+                const elapsed = now - order.startTime;
+                gameState.orderTimers[order.id] = (config.order_time * 1000) - elapsed;
+
+                if (gameState.orderTimers[order.id] <= 0) {
+                    gameState.misses++;
+                    ordersToRemove.push(order.id);
+                    document.getElementById('missCounter').textContent = gameState.misses;
+
+                    if (gameState.misses >= config.miss_limit) {
+                        gameState.running = false;
+                        document.getElementById('gameScreen').style.display = 'none';
+                        document.getElementById('gameOverScreen').style.display = 'flex';
+                        return;
+                    }
+                }
+            });
+
+            ordersToRemove.forEach(id => {
+                gameState.orders = gameState.orders.filter(o => o.id !== id);
+            });
+
+            renderOrders();
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function addIngredient(ingredient) {
+            if (!gameState.running) return;
+            gameState.currentStack.push(ingredient);
+            renderStack();
+            checkRecipe();
+        }
+
+        function renderStack() {
+            const stack = document.getElementById('cookingStack');
+            stack.innerHTML = '';
+            gameState.currentStack.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'stacked-item';
+                div.style.background = ingredientColors[item];
+                div.textContent = item;
+                stack.appendChild(div);
+            });
+        }
+
+        function checkRecipe() {
+            if (gameState.orders.length === 0) return;
+
+            const currentRecipe = gameState.orders[0].recipe;
+            const expectedIngredients = recipes[currentRecipe];
+
+            if (gameState.currentStack.length === expectedIngredients.length) {
+                const matches = gameState.currentStack.every((ing, i) => ing === expectedIngredients[i]);
+                document.getElementById('serveBtn').classList.toggle('show', matches);
+            } else {
+                document.getElementById('serveBtn').classList.remove('show');
+            }
+        }
+
+        function serveOrder() {
+            if (gameState.orders.length === 0) return;
+
+            gameState.wins++;
+            gameState.orders.shift();
+            gameState.currentStack = [];
+            document.getElementById('serveBtn').classList.remove('show');
+            renderStack();
+            document.getElementById('winCounter').textContent = gameState.wins;
+
+            if (gameState.wins >= config.win_orders) {
+                gameState.running = false;
+                document.getElementById('gameScreen').style.display = 'none';
+                document.getElementById('clearScreen').style.display = 'flex';
+            } else {
+                addNewOrder();
+            }
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        window.addEventListener('load', function() {
+            document.getElementById('goalText').textContent = config.win_orders + '個完成でクリア';
+            document.getElementById('missLimitText').textContent = 'ミス' + config.miss_limit + '回でゲームオーバー';
+        });
+    </script>
+</body>
+</html>
