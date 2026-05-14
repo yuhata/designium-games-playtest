@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACTION RPG</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #333;
+            background: #0d1117;
+        }
+        canvas {
+            display: block;
+            background: #0d1117;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 100;
+        }
+        .screen.active {
+            display: flex;
+        }
+        .screen h1 {
+            color: #58a6ff;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .screen p {
+            color: #c9d1d9;
+            font-size: 1.1em;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .screen button {
+            margin-top: 30px;
+            padding: 12px 30px;
+            font-size: 1.2em;
+            background: #58a6ff;
+            color: #0d1117;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        .screen button:hover {
+            background: #79c0ff;
+        }
+        .instructions {
+            color: #8b949e;
+            font-size: 0.9em;
+            margin-top: 40px;
+            max-width: 300px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen" class="screen active">
+            <h1>ACTION RPG</h1>
+            <p>敵を倒してクリアを目指そう</p>
+            <p>目標: 20体を撃破</p>
+            <div class="instructions">
+                <p><strong>移動:</strong> WASD or 矢印キー</p>
+                <p><strong>攻撃:</strong> スペースキー or F</p>
+                <p><strong>敵に接触でHPダメージ</strong></p>
+            </div>
+            <button onclick="startGame()">START</button>
+        </div>
+
+        <div id="gameOverScreen" class="screen">
+            <h1>GAME OVER</h1>
+            <p>HPが 0 になりました</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+
+        <div id="clearScreen" class="screen">
+            <h1>CLEAR!</h1>
+            <p>20体の敵を撃破しました</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 400;
+        canvas.height = 600;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+        const config = {
+            title: 'ACTION RPG',
+            bg_color: '#0d1117',
+            player_color: '#58a6ff',
+            enemy_color: '#f78166',
+            player_hp: 30,
+            player_atk: 5,
+            player_speed: 4,
+            attack_range: 50,
+            win_kills: 20,
+            exp_per_kill: 10,
+            level_up_exp: 30
+        };
+
+        const gameState = {
+            running: false,
+            player: null,
+            enemies: [],
+            particles: [],
+            kills: 0,
+            nextSpawnTime: 0,
+            spawnInterval: 1500
+        };
+
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 20;
+                this.height = 20;
+                this.hp = config.player_hp;
+                this.maxHp = config.player_hp;
+                this.atk = config.player_atk;
+                this.speed = config.player_speed;
+                this.level = 1;
+                this.exp = 0;
+                this.maxExp = config.level_up_exp;
+                this.keys = {};
+                this.lastAttackTime = 0;
+                this.attackCooldown = 300;
+            }
+
+            update() {
+                let vx = 0, vy = 0;
+                if (this.keys['w'] || this.keys['ArrowUp']) vy -= this.speed;
+                if (this.keys['s'] || this.keys['ArrowDown']) vy += this.speed;
+                if (this.keys['a'] || this.keys['ArrowLeft']) vx -= this.speed;
+                if (this.keys['d'] || this.keys['ArrowRight']) vx += this.speed;
+
+                this.x += vx;
+                this.y += vy;
+
+                this.x = Math.max(this.width / 2, Math.min(canvas.width - this.width / 2, this.x));
+                this.y = Math.max(this.height / 2, Math.min(canvas.height - this.height / 2, this.y));
+
+                if ((this.keys[' '] || this.keys['f']) && Date.now() - this.lastAttackTime > this.attackCooldown) {
+                    this.attack();
+                    this.lastAttackTime = Date.now();
+                }
+            }
+
+            attack() {
+                for (let enemy of gameState.enemies) {
+                    const dx = enemy.x - this.x;
+                    const dy = enemy.y - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < config.attack_range) {
+                        enemy.takeDamage(this.atk);
+                    }
+                }
+            }
+
+            gainExp(amount) {
+                this.exp += amount;
+                if (this.exp >= this.maxExp) {
+                    this.levelUp();
+                }
+            }
+
+            levelUp() {
+                this.level++;
+                this.atk += 2;
+                this.exp = 0;
+            }
+
+            takeDamage(damage) {
+                this.hp -= damage;
+                if (this.hp <= 0) {
+                    this.hp = 0;
+                }
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = config.player_color;
+                ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+                ctx.strokeStyle = '#79c0ff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+            }
+        }
+
+        class Enemy {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 18;
+                this.height = 18;
+                this.hp = 5;
+                this.maxHp = 5;
+                this.speed = 1.5;
+            }
+
+            update() {
+                const dx = gameState.player.x - this.x;
+                const dy = gameState.player.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 0) {
+                    this.x += (dx / dist) * this.speed;
+                    this.y += (dy / dist) * this.speed;
+                }
+
+                const pdx = gameState.player.x - this.x;
+                const pdy = gameState.player.y - this.y;
+                const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+                if (pdist < 15) {
+                    gameState.player.takeDamage(1);
+                }
+            }
+
+            takeDamage(damage) {
+                this.hp -= damage;
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = config.enemy_color;
+                ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+                ctx.strokeStyle = '#ff7b72';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+            }
+        }
+
+        class Particle {
+            constructor(x, y, vx, vy) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.life = 60;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = `rgba(88, 166, 255, ${this.life / 60})`;
+                ctx.fillRect(this.x - 3, this.y - 3, 6, 6);
+            }
+        }
+
+        function spawnEnemy() {
+            if (gameState.enemies.length >= 5) return;
+            const side = Math.floor(Math.random() * 4);
+            let x, y;
+            if (side === 0) { x = Math.random() * canvas.width; y = -10; }
+            else if (side === 1) { x = canvas.width + 10; y = Math.random() * canvas.height; }
+            else if (side === 2) { x = Math.random() * canvas.width; y = canvas.height + 10; }
+            else { x = -10; y = Math.random() * canvas.height; }
+            gameState.enemies.push(new Enemy(x, y));
+        }
+
+        function update() {
+            if (!gameState.running) return;
+
+            gameState.player.update();
+
+            for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+                gameState.enemies[i].update();
+                if (gameState.enemies[i].hp <= 0) {
+                    gameState.player.gainExp(config.exp_per_kill);
+                    gameState.kills++;
+                    for (let j = 0; j < 5; j++) {
+                        const angle = (j / 5) * Math.PI * 2;
+                        gameState.particles.push(new Particle(
+                            gameState.enemies[i].x,
+                            gameState.enemies[i].y,
+                            Math.cos(angle) * 3,
+                            Math.sin(angle) * 3
+                        ));
+                    }
+                    gameState.enemies.splice(i, 1);
+                }
+            }
+
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                gameState.particles[i].update();
+                if (gameState.particles[i].life <= 0) {
+                    gameState.particles.splice(i, 1);
+                }
+            }
+
+            if (Date.now() > gameState.nextSpawnTime) {
+                spawnEnemy();
+                gameState.nextSpawnTime = Date.now() + gameState.spawnInterval;
+            }
+
+            if (gameState.player.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+
+            if (gameState.kills >= config.win_kills) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            gameState.player.draw(ctx);
+            for (let enemy of gameState.enemies) {
+                enemy.draw(ctx);
+            }
+            for (let particle of gameState.particles) {
+                particle.draw(ctx);
+            }
+
+            ctx.fillStyle = '#c9d1d9';
+            ctx.font = '14px Arial';
+            ctx.fillText(`HP: ${gameState.player.hp}/${gameState.player.maxHp}`, 10, 20);
+            ctx.fillText(`Level: ${gameState.player.level}`, 10, 40);
+            ctx.fillText(`EXP: ${gameState.player.exp}/${gameState.player.maxExp}`, 10, 60);
+            ctx.fillText(`Kills: ${gameState.kills}/${config.win_kills}`, canvas.width - 150, 20);
+
+            ctx.strokeStyle = '#58a6ff';
+            ctx.lineWidth = 2;
+            const barWidth = 100;
+            const barHeight = 6;
+            ctx.strokeRect(10, 70, barWidth, barHeight);
+            const fillWidth = (gameState.player.hp / gameState.player.maxHp) * barWidth;
+            ctx.fillStyle = '#58a6ff';
+            ctx.fillRect(10, 70, fillWidth, barHeight);
+
+            ctx.fillStyle = '#8b949e';
+            ctx.font = '12px Arial';
+            ctx.fillText('WASD: Move | Space/F: Attack', 10, canvas.height - 10);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.kills = 0;
+            gameState.enemies = [];
+            gameState.particles = [];
+            gameState.player = new Player(canvas.width / 2, canvas.height / 2);
+            
+            gameState.player.keys = {};
+            window.addEventListener('keydown', (e) => {
+                gameState.player.keys[e.key.toLowerCase()] = true;
+                gameState.player.keys[e.key] = true;
+            });
+            window.addEventListener('keyup', (e) => {
+                gameState.player.keys[e.key.toLowerCase()] = false;
+                gameState.player.keys[e.key] = false;
+            });
+
+            gameState.nextSpawnTime = Date.now();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+    </script>
+</body>
+</html>

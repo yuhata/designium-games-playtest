@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDLE FACTORY</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #gameContainer {
+            width: 400px;
+            height: 600px;
+            background: #1a1a2e;
+            border: 2px solid #fff;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #startScreen h1 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        #startScreen p {
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #aaa;
+            max-width: 80%;
+        }
+
+        #startBtn {
+            padding: 12px 40px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #startBtn:hover {
+            transform: scale(1.05);
+        }
+
+        #gameScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            display: none;
+            flex-direction: column;
+        }
+
+        .hud {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+
+        .hud-label {
+            color: #aaa;
+        }
+
+        .hud-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+
+        #clickButton {
+            width: 100%;
+            padding: 20px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: transform 0.1s;
+        }
+
+        #clickButton:active {
+            transform: scale(0.95);
+        }
+
+        .facilities {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+
+        .facility-btn {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: rgba(100, 120, 200, 0.3);
+            color: white;
+            border: 1px solid #667eea;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .facility-btn:hover:not(:disabled) {
+            background: rgba(100, 120, 200, 0.6);
+        }
+
+        .facility-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+
+        .clear-content {
+            text-align: center;
+        }
+
+        .clear-content h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        #retryBtn {
+            padding: 12px 40px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+
+        #retryBtn:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1>IDLE FACTORY</h1>
+            <p>目標: 1000ゴールドを集める</p>
+            <p>クリックして収入源を構築しよう</p>
+            <button id="startBtn">START</button>
+        </div>
+
+        <div id="gameScreen">
+            <div class="hud">
+                <div class="hud-row">
+                    <span class="hud-label">Gold:</span>
+                    <span class="hud-value" id="goldDisplay">0</span>
+                </div>
+                <div class="hud-row">
+                    <span class="hud-label">Target:</span>
+                    <span class="hud-value" id="targetDisplay">1000</span>
+                </div>
+                <div class="hud-row">
+                    <span class="hud-label">Income/sec:</span>
+                    <span class="hud-value" id="incomeDisplay">0</span>
+                </div>
+            </div>
+
+            <div class="hud">
+                <div class="hud-row">
+                    <span class="hud-label">施設A (+1/s):</span>
+                    <span class="hud-value" id="countA">0</span>
+                </div>
+                <div class="hud-row">
+                    <span class="hud-label">施設B (+5/s):</span>
+                    <span class="hud-value" id="countB">0</span>
+                </div>
+                <div class="hud-row">
+                    <span class="hud-label">施設C (+15/s):</span>
+                    <span class="hud-value" id="countC">0</span>
+                </div>
+            </div>
+
+            <button id="clickButton">CLICK</button>
+
+            <div class="facilities">
+                <button class="facility-btn" id="buyA">施設A: Cost <span id="costA">50</span></button>
+                <button class="facility-btn" id="buyB">施設B: Cost <span id="costB">200</span></button>
+                <button class="facility-btn" id="buyC">施設C: Cost <span id="costC">500</span></button>
+            </div>
+        </div>
+
+        <div id="clearScreen">
+            <div class="clear-content">
+                <h2>CLEAR!</h2>
+                <p>目標達成おめでとう!</p>
+                <button id="retryBtn">RETRY</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // パラメータスキーマ (ファイル冒頭コメント: param生成への入力のみ。JSコードには影響しない)
+        // theme:              string
+        // title:              string
+        // bg_color:           string
+        // click_value:        int
+        // target_gold:        int
+        // facility_a_cost:    int
+        // facility_a_rate:    int
+        // facility_b_cost:    int
+        // facility_b_rate:    int
+        // facility_c_cost:    int
+        // facility_c_rate:    int
+
+        const config = {
+            title: 'IDLE FACTORY',
+            bg_color: '#1a1a2e',
+            click_value: 1,
+            target_gold: 1000,
+            facility_a_cost: 50,
+            facility_a_rate: 1,
+            facility_b_cost: 200,
+            facility_b_rate: 5,
+            facility_c_cost: 500,
+            facility_c_rate: 15
+        };
+
+        const gameState = {
+            gold: 0,
+            purchased_a: 0,
+            purchased_b: 0,
+            purchased_c: 0,
+            running: false
+        };
+
+        let autoInterval;
+
+        document.getElementById('gameContainer').style.width = '400px';
+        document.getElementById('gameContainer').style.height = '600px';
+        document.getElementById('gameContainer').style.backgroundColor = config.bg_color;
+
+        function updateDisplay() {
+            document.getElementById('goldDisplay').textContent = gameState.gold;
+            document.getElementById('targetDisplay').textContent = config.target_gold;
+            document.getElementById('countA').textContent = gameState.purchased_a;
+            document.getElementById('countB').textContent = gameState.purchased_b;
+            document.getElementById('countC').textContent = gameState.purchased_c;
+            
+            const income = gameState.purchased_a * config.facility_a_rate + 
+                          gameState.purchased_b * config.facility_b_rate + 
+                          gameState.purchased_c * config.facility_c_rate;
+            document.getElementById('incomeDisplay').textContent = income;
+
+            document.getElementById('buyA').disabled = gameState.gold < config.facility_a_cost;
+            document.getElementById('buyB').disabled = gameState.gold < config.facility_b_cost;
+            document.getElementById('buyC').disabled = gameState.gold < config.facility_c_cost;
+        }
+
+        document.getElementById('clickButton').addEventListener('click', () => {
+            if (gameState.running) {
+                gameState.gold += config.click_value;
+                updateDisplay();
+                checkClear();
+            }
+        });
+
+        document.getElementById('buyA').addEventListener('click', () => {
+            if (gameState.gold >= config.facility_a_cost) {
+                gameState.gold -= config.facility_a_cost;
+                gameState.purchased_a += 1;
+                updateDisplay();
+            }
+        });
+
+        document.getElementById('buyB').addEventListener('click', () => {
+            if (gameState.gold >= config.facility_b_cost) {
+                gameState.gold -= config.facility_b_cost;
+                gameState.purchased_b += 1;
+                updateDisplay();
+            }
+        });
+
+        document.getElementById('buyC').addEventListener('click', () => {
+            if (gameState.gold >= config.facility_c_cost) {
+                gameState.gold -= config.facility_c_cost;
+                gameState.purchased_c += 1;
+                updateDisplay();
+            }
+        });
+
+        function checkClear() {
+            if (gameState.gold >= config.target_gold) {
+                clearInterval(autoInterval);
+                document.getElementById('clearScreen').style.display = 'flex';
+                gameState.running = false;
+            }
+        }
+
+        function startAutoIncome() {
+            autoInterval = setInterval(() => {
+                if (gameState.running) {
+                    const income = gameState.purchased_a * config.facility_a_rate + 
+                                  gameState.purchased_b * config.facility_b_rate + 
+                                  gameState.purchased_c * config.facility_c_rate;
+                    gameState.gold += income;
+                    updateDisplay();
+                    checkClear();
+                }
+            }, 1000);
+        }
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'flex';
+            gameState.running = true;
+            updateDisplay();
+            startAutoIncome();
+        });
+
+        function retryGame() {
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.gold = 0;
+            gameState.purchased_a = 0;
+            gameState.purchased_b = 0;
+            gameState.purchased_c = 0;
+            gameState.running = false;
+            clearInterval(autoInterval);
+        }
+
+        document.getElementById('retryBtn').addEventListener('click', retryGame);
+    </script>
+</body>
+</html>

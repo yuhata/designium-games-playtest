@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DUNGEON RUN</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #444;
+        }
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10;
+            font-size: 24px;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+        .screen.active {
+            display: flex;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            display: none;
+        }
+        #startScreen.active, #gameOverScreen.active, #clearScreen.active {
+            display: flex;
+        }
+        .screen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #58a6ff;
+        }
+        .screen p {
+            font-size: 16px;
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        .screen button {
+            margin-top: 30px;
+            padding: 12px 30px;
+            font-size: 20px;
+            background: #58a6ff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .screen button:hover {
+            background: #79c0ff;
+        }
+        #enhanceScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9;
+            padding: 20px;
+        }
+        #enhanceScreen.active {
+            display: flex;
+        }
+        #enhanceScreen h2 {
+            font-size: 32px;
+            color: #58a6ff;
+            margin-bottom: 40px;
+        }
+        .enhance-options {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .enhance-btn {
+            padding: 20px 30px;
+            font-size: 18px;
+            background: #2a2a3a;
+            color: #fff;
+            border: 2px solid #58a6ff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 150px;
+        }
+        .enhance-btn:hover {
+            background: #58a6ff;
+            color: #000;
+        }
+        .hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #58a6ff;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 5;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: #aaa;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px;
+            border-radius: 4px;
+            z-index: 5;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="startScreen" class="screen active">
+            <h1>DUNGEON RUN</h1>
+            <p>Explore the dungeon and defeat the boss!</p>
+            <p>3 floors to conquer. Defeat all enemies, collect upgrades.</p>
+            <button onclick="startGame()">START</button>
+        </div>
+        
+        <div id="enhanceScreen" class="screen">
+            <h2>POWER UP</h2>
+            <div class="enhance-options">
+                <button class="enhance-btn" onclick="chooseEnhance(0)">Attack + 3</button>
+                <button class="enhance-btn" onclick="chooseEnhance(1)">HP Restore</button>
+                <button class="enhance-btn" onclick="chooseEnhance(2)">Speed + 1</button>
+            </div>
+        </div>
+        
+        <div id="gameOverScreen" class="screen">
+            <h1>GAME OVER</h1>
+            <p>You were defeated...</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        
+        <div id="clearScreen" class="screen">
+            <h1>VICTORY!</h1>
+            <p>You defeated the boss and conquered the dungeon!</p>
+            <button onclick="retryGame()">PLAY AGAIN</button>
+        </div>
+        
+        <div class="hud">
+            <div>HP: <span id="hudHp">30</span></div>
+            <div>Room: <span id="hudRoom">1</span> / <span id="hudRoomMax">3</span></div>
+        </div>
+        
+        <div class="controls">
+            WASD/Arrows: Move<br>Space/Click: Attack<br>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'DUNGEON RUN',
+            bg_color: '#0d0d0d',
+            floor_color: '#2a2a3a',
+            player_color: '#58a6ff',
+            enemy_color: '#f78166',
+            boss_color: '#ff6b6b',
+            player_hp: 30,
+            player_atk: 5,
+            player_speed: 3,
+            room_count: 3,
+            win_rooms: 4
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400;
+        canvas.height = 600;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        document.body.style.background = config.bg_color;
+
+        const gameState = {
+            running: false,
+            currentRoom: 1,
+            player: null,
+            enemies: [],
+            doorOpen: false,
+            doorX: canvas.width - 40,
+            doorY: canvas.height - 40,
+            doorSize: 30
+        };
+
+        const keys = {};
+        let mouseX = 0, mouseY = 0;
+        let lastClickTime = 0;
+
+        class Player {
+            constructor() {
+                this.x = canvas.width / 2;
+                this.y = canvas.height / 2;
+                this.radius = 12;
+                this.hp = config.player_hp;
+                this.maxHp = config.player_hp;
+                this.atk = config.player_atk;
+                this.speed = config.player_speed;
+                this.attackCooldown = 0;
+            }
+
+            update() {
+                let dx = 0, dy = 0;
+                if (keys['w'] || keys['W'] || keys['ArrowUp']) dy -= this.speed;
+                if (keys['s'] || keys['S'] || keys['ArrowDown']) dy += this.speed;
+                if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx -= this.speed;
+                if (keys['d'] || keys['D'] || keys['ArrowRight']) dx += this.speed;
+
+                this.x += dx;
+                this.y += dy;
+
+                if (this.x - this.radius < 0) this.x = this.radius;
+                if (this.x + this.radius > canvas.width) this.x = canvas.width - this.radius;
+                if (this.y - this.radius < 0) this.y = this.radius;
+                if (this.y + this.radius > canvas.height) this.y = canvas.height - this.radius;
+
+                if (this.attackCooldown > 0) this.attackCooldown--;
+            }
+
+            attack() {
+                if (this.attackCooldown > 0) return;
+                this.attackCooldown = 15;
+                for (let enemy of gameState.enemies) {
+                    let dist = Math.sqrt((enemy.x - this.x) ** 2 + (enemy.y - this.y) ** 2);
+                    if (dist < 50) {
+                        enemy.hp -= this.atk;
+                    }
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = config.player_color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class Enemy {
+            constructor(isBoss = false) {
+                let attempts = 0;
+                do {
+                    this.x = Math.random() * (canvas.width - 80) + 40;
+                    this.y = Math.random() * (canvas.height - 80) + 40;
+                    attempts++;
+                } while (Math.hypot(this.x - gameState.player.x, this.y - gameState.player.y) < 100 && attempts < 10);
+
+                this.radius = isBoss ? 16 : 10;
+                this.hp = isBoss ? 25 : 8;
+                this.maxHp = this.hp;
+                this.speed = 1.5;
+                this.isBoss = isBoss;
+                this.damageCooldown = 0;
+            }
+
+            update() {
+                let dx = gameState.player.x - this.x;
+                let dy = gameState.player.y - this.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) {
+                    this.x += (dx / dist) * this.speed;
+                    this.y += (dy / dist) * this.speed;
+                }
+
+                if (this.damageCooldown > 0) this.damageCooldown--;
+            }
+
+            draw() {
+                let color = this.isBoss ? config.boss_color : config.enemy_color;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                let hpPercent = this.hp / this.maxHp;
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(this.x - this.radius, this.y - this.radius - 8, this.radius * 2 * hpPercent, 4);
+                ctx.strokeStyle = '#fff';
+                ctx.strokeRect(this.x - this.radius, this.y - this.radius - 8, this.radius * 2, 4);
+            }
+        }
+
+        function spawnRoom() {
+            gameState.enemies = [];
+            gameState.doorOpen = false;
+
+            let enemyCount = Math.floor(Math.random() * 3) + 3;
+            let isBossRoom = gameState.currentRoom === config.room_count;
+
+            if (isBossRoom) {
+                gameState.enemies.push(new Enemy(true));
+            } else {
+                for (let i = 0; i < enemyCount; i++) {
+                    gameState.enemies.push(new Enemy(false));
+                }
+            }
+        }
+
+        function advanceRoom() {
+            gameState.currentRoom++;
+            if (gameState.currentRoom > config.room_count) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+            spawnRoom();
+        }
+
+        function chooseEnhance(choice) {
+            document.getElementById('enhanceScreen').classList.remove('active');
+            if (choice === 0) {
+                gameState.player.atk += 3;
+            } else if (choice === 1) {
+                gameState.player.hp = gameState.player.maxHp;
+            } else if (choice === 2) {
+                gameState.player.speed += 1;
+            }
+            advanceRoom();
+            gameState.running = true;
+        }
+
+        function checkCollisions() {
+            for (let enemy of gameState.enemies) {
+                let dist = Math.sqrt((enemy.x - gameState.player.x) ** 2 + (enemy.y - gameState.player.y) ** 2);
+                if (dist < gameState.player.radius + enemy.radius) {
+                    if (enemy.damageCooldown === 0) {
+                        gameState.player.hp -= 5;
+                        enemy.damageCooldown = 60;
+                        if (gameState.player.hp <= 0) {
+                            gameState.running = false;
+                            document.getElementById('gameOverScreen').style.display = 'flex';
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (gameState.doorOpen) {
+                let doorDist = Math.sqrt((gameState.player.x - gameState.doorX) ** 2 + (gameState.player.y - gameState.doorY) ** 2);
+                if (doorDist < gameState.player.radius + gameState.doorSize) {
+                    gameState.running = false;
+                    document.getElementById('enhanceScreen').classList.add('active');
+                    return;
+                }
+            }
+        }
+
+        function updateEnemies() {
+            gameState.enemies = gameState.enemies.filter(e => e.hp > 0);
+            for (let enemy of gameState.enemies) {
+                enemy.update();
+            }
+
+            if (gameState.enemies.length === 0 && !gameState.doorOpen) {
+                gameState.doorOpen = true;
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = config.floor_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState.doorOpen) {
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(gameState.doorX - gameState.doorSize, gameState.doorY - gameState.doorSize, gameState.doorSize * 2, gameState.doorSize * 2);
+            }
+
+            gameState.player.draw();
+            for (let enemy of gameState.enemies) {
+                enemy.draw();
+            }
+
+            ctx.fillStyle = '#58a6ff';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('HP: ' + gameState.player.hp, 10, 20);
+            ctx.fillText('Room: ' + gameState.currentRoom + ' / ' + config.room_count, 10, 40);
+        }
+
+        function gameLoop() {
+            if (gameState.running) {
+                gameState.player.update();
+                updateEnemies();
+                checkCollisions();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('enhanceScreen').classList.remove('active');
+
+            gameState.running = true;
+            gameState.currentRoom = 1;
+            gameState.player = new Player();
+            spawnRoom();
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('enhanceScreen').classList.remove('active');
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        document.addEventListener('keydown', (e) => { keys[e.key] = true; });
+        document.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+        document.getElementById('gameCanvas').addEventListener('mousemove', (e) => {
+            let rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+
+        document.getElementById('gameCanvas').addEventListener('click', (e) => {
+            if (gameState.running && Date.now() - lastClickTime > 200) {
+                gameState.player.attack();
+                lastClickTime = Date.now();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.key === ' ' || e.code === 'Space') && gameState.running) {
+                e.preventDefault();
+                gameState.player.attack();
+            }
+        });
+
+        document.getElementById('hudRoom').textContent = config.room_count;
+        document.getElementById('hudRoomMax').textContent = config.room_count;
+    </script>
+</body>
+</html>
