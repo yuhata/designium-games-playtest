@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PICROSS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #f8f9fa;
+    }
+    #gameContainer {
+      position: relative;
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #startScreen {
+      text-align: center;
+      min-width: 400px;
+    }
+    #startScreen h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: #2d3748;
+    }
+    #startScreen p {
+      font-size: 16px;
+      margin-bottom: 30px;
+      color: #4a5568;
+    }
+    #gameScreen {
+      position: relative;
+    }
+    canvas {
+      display: block;
+      border: 2px solid #2d3748;
+      margin-bottom: 20px;
+      cursor: crosshair;
+      background: white;
+    }
+    #controlPanel {
+      text-align: center;
+      display: none;
+    }
+    #controlPanel.active {
+      display: block;
+    }
+    #clearScreen {
+      text-align: center;
+    }
+    #clearScreen h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: #2d3748;
+    }
+    #silhouetteDisplay {
+      margin: 30px 0;
+      min-height: 200px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .btn {
+      padding: 12px 30px;
+      font-size: 16px;
+      font-weight: bold;
+      background: #4299e1;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: #3182ce;
+    }
+    #checkBtn {
+      padding: 12px 30px;
+      font-size: 16px;
+      font-weight: bold;
+      background: #48bb78;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    #checkBtn:hover {
+      background: #38a169;
+    }
+    #resetBtn {
+      padding: 12px 30px;
+      font-size: 16px;
+      font-weight: bold;
+      background: #ed8936;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #resetBtn:hover {
+      background: #dd6b20;
+    }
+    .info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #718096;
+    }
+    #progressBar {
+      margin-top: 15px;
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #progressFill {
+      height: 100%;
+      background: #48bb78;
+      width: 0%;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="startScreen" style="display: block;">
+      <h1>PICROSS</h1>
+      <p>ヒント数字をたよりに、グリッドを塗りつぶしてシルエットを完成させよう</p>
+      <p style="font-size: 14px; margin-top: 15px; color: #718096;">
+        左クリック: 黒く塗る ｜ 右クリック: ×マーク（空き）
+      </p>
+      <button class="btn" style="margin-top: 30px;">START</button>
+    </div>
+
+    <div id="gameScreen" style="display: none;">
+      <canvas id="gameCanvas" width="560" height="560"></canvas>
+      <div id="controlPanel" class="active">
+        <button id="checkBtn">完成判定</button>
+        <button id="resetBtn">リセット</button>
+        <div class="info" id="hintText">ヒント: 数字は行・列の連続した塗りマス数です</div>
+        <div id="progressBar">
+          <div id="progressFill"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="clearScreen" style="display: none;">
+      <h1>完成!</h1>
+      <p style="font-size: 18px; margin: 20px 0; color: #4a5568;">シルエットを見つけました</p>
+      <div id="silhouetteDisplay"></div>
+      <button class="btn" style="margin-top: 20px;">NEXT</button>
+    </div>
+  </div>
+
+  <script>
+    const config = {
+      title: 'PICROSS',
+      bg_color: '#f8f9fa',
+      filled_color: '#2d3748',
+      empty_color: '#ffffff',
+      wrong_color: '#ef4444',
+      hint_color: '#4299e1',
+      grid_size: 7
+    };
+
+    const CELL_SIZE = 70;
+    const HINT_WIDTH = 60;
+    const HINT_HEIGHT = 60;
+
+    const PATTERNS = [
+      [
+        [0, 0, 1, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [0, 1, 1, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0, 0]
+      ],
+      [
+        [0, 0, 1, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [0, 1, 0, 1, 0, 0, 0],
+        [0, 1, 0, 1, 0, 0, 0]
+      ],
+      [
+        [0, 0, 1, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [0, 1, 1, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0, 0]
+      ],
+      [
+        [1, 0, 0, 0, 0, 0, 1],
+        [1, 1, 0, 0, 0, 1, 1],
+        [1, 1, 1, 0, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [0, 1, 1, 1, 1, 1, 0],
+        [0, 0, 1, 1, 1, 0, 0]
+      ],
+      [
+        [0, 1, 1, 1, 1, 1, 0],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 0, 1, 0, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [0, 1, 1, 1, 1, 1, 0],
+        [0, 0, 1, 1, 1, 0, 0]
+      ]
+    ];
+
+    var gameState = {
+      running: false,
+      grid: [],
+      correctPattern: [],
+      patterns: PATTERNS,
+      currentPatternIdx: 0,
+      gridSize: config.grid_size,
+      hintWidth: HINT_WIDTH,
+      hintHeight: HINT_HEIGHT,
+      rowHints: [],
+      colHints: [],
+      rowComplete: [],
+      colComplete: [],
+      lastDrawTime: 0
+    };
+
+    var canvas = document.getElementById('gameCanvas');
+    var ctx = canvas.getContext('2d');
+
+    function getRunLengthEncoding(arr) {
+      var result = [];
+      var count = 0;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] === 1) {
+          count++;
+        } else {
+          if (count > 0) {
+            result.push(count);
+            count = 0;
+          }
+        }
+      }
+      if (count > 0) {
+        result.push(count);
+      }
+      return result.length === 0 ? [0] : result;
+    }
+
+    function generateHints() {
+      gameState.rowHints = [];
+      gameState.colHints = [];
+
+      for (var i = 0; i < gameState.gridSize; i++) {
+        gameState.rowHints.push(getRunLengthEncoding(gameState.correctPattern[i]));
+      }
+
+      for (var j = 0; j < gameState.gridSize; j++) {
+        var col = [];
+        for (var i = 0; i < gameState.gridSize; i++) {
+          col.push(gameState.correctPattern[i][j]);
+        }
+        gameState.colHints.push(getRunLengthEncoding(col));
+      }
+
+      gameState.rowComplete = [];
+      gameState.colComplete = [];
+      for (var i = 0; i < gameState.gridSize; i++) {
+        gameState.rowComplete.push(false);
+        gameState.colComplete.push(false);
+      }
+    }
+
+    function initGame() {
+      gameState.currentPatternIdx = Math.floor(Math.random() * gameState.patterns.length);
+      gameState.correctPattern = gameState.patterns[gameState.currentPatternIdx];
+
+      gameState.grid = [];
+      for (var i = 0; i < gameState.gridSize; i++) {
+        var row = [];
+        for (var j = 0; j < gameState.gridSize; j++) {
+          row.push(0);
+        }
+        gameState.grid.push(row);
+      }
+
+      generateHints();
+    }
+
+    function drawGrid() {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+
+      for (var i = 0; i <= gameState.gridSize; i++) {
+        var y = gameState.hintHeight + i * CELL_SIZE;
+        ctx.beginPath();
+        ctx.moveTo(gameState.hintWidth, y);
+        ctx.lineTo(gameState.hintWidth + gameState.gridSize * CELL_SIZE, y);
+        ctx.stroke();
+
+        var x = gameState.hintWidth + i * CELL_SIZE;
+        ctx.beginPath();
+        ctx.moveTo(x, gameState.hintHeight);
+        ctx.lineTo(x, gameState.hintHeight + gameState.gridSize * CELL_SIZE);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#2d3748';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(gameState.hintWidth, gameState.hintHeight, gameState.gridSize * CELL_SIZE, gameState.gridSize * CELL_SIZE);
+    }
+
+    function drawCells() {
+      for (var i = 0; i < gameState.gridSize; i++) {
+        for (var j = 0; j < gameState.gridSize; j++) {
+          var x = gameState.hintWidth + j * CELL_SIZE;
+          var y = gameState.hintHeight + i * CELL_SIZE;
+
+          var state = gameState.grid[i][j];
+
+          if (state === 1) {
+            ctx.fillStyle = config.filled_color;
+            ctx.fillRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+          } else if (state === 2) {
+            ctx.fillStyle = config.empty_color;
+            ctx.fillRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+            ctx.strokeStyle = '#cbd5e0';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + 8, y + 8);
+            ctx.lineTo(x + CELL_SIZE - 8, y + CELL_SIZE - 8);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x + CELL_SIZE - 8, y + 8);
+            ctx.lineTo(x + 8, y + CELL_SIZE - 8);
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    function drawHints() {
+      ctx.fillStyle = '#2d3748';
+      ctx.font = 'bold 13px Arial';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+
+      for (var i = 0; i < gameState.gridSize; i++) {
+        var hints = gameState.rowHints[i];
+        var y = gameState.hintHeight + i * CELL_SIZE + CELL_SIZE / 2;
+        var text = hints.join(' ');
+
+        if (gameState.rowComplete[i]) {
+          ctx.fillStyle = '#48bb78';
+        } else {
+          ctx.fillStyle = '#2d3748';
+        }
+
+        ctx.fillText(text, gameState.hintWidth - 8, y);
+      }
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (var j = 0; j < gameState.gridSize; j++) {
+        var hints = gameState.colHints[j];
+        var x = gameState.hintWidth + j * CELL_SIZE + CELL_SIZE / 2;
+        var text = hints.join(' ');
+
+        if (gameState.colComplete[j]) {
+          ctx.fillStyle = '#48bb78';
+        } else {
+          ctx.fillStyle = '#2d3748';
+        }
+
+        var hintY = gameState.hintHeight - 16;
+        ctx.fillText(text, x, hintY);
+      }
+    }
+
+    function updateProgress() {
+      var completed = 0;
+      for (var i = 0; i < gameState.gridSize; i++) {
+        if (gameState.rowComplete[i]) completed++;
+        if (gameState.colComplete[i]) completed++;
+      }
+      var total = gameState.gridSize * 2;
+      var percentage = (completed / total) * 100;
+      document.getElementById('progressFill').style.width = percentage + '%';
+    }
+
+    function checkCompletion() {
+      for (var i = 0; i < gameState.gridSize; i++) {
+        var rowEncoding = getRunLengthEncoding(gameState.grid[i]);
+        var correctEncoding = getRunLengthEncoding(gameState.correctPattern[i]);
+        gameState.rowComplete[i] = JSON.stringify(rowEncoding) === JSON.stringify(correctEncoding);
+      }
+
+      for (var j = 0; j < gameState.gridSize; j++) {
+        var col = [];
+        var correctCol = [];
+        for (var i = 0; i < gameState.gridSize; i++) {
+          col.push(gameState.grid[i][j]);
+          correctCol.push(gameState.correctPattern[i][j]);
+        }
+        var colEncoding = getRunLengthEncoding(col);
+        var correctColEncoding = getRunLengthEncoding(correctCol);
+        gameState.colComplete[j] = JSON.stringify(colEncoding) === JSON.stringify(correctColEncoding);
+      }
+
+      updateProgress();
+
+      var allComplete = true;
+      for (var i = 0; i < gameState.gridSize; i++) {
+        if (!gameState.rowComplete[i] || !gameState.colComplete[i]) {
+          allComplete = false;
+          break;
+        }
+      }
+
+      return allComplete;
+    }
+
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      drawGrid();
+      drawCells();
+      drawHints();
+    }
+
+    function handleClick(e) {
+      if (!gameState.running) return;
+
+      var rect = canvas.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
+
+      var col = Math.floor((x - gameState.hintWidth) / CELL_SIZE);
+      var row = Math.floor((y - gameState.hintHeight) / CELL_SIZE);
+
+      if (row >= 0 && row < gameState.gridSize && col >= 0 && col < gameState.gridSize) {
+        gameState.grid[row][col] = 1;
+        gameLoop();
+      }
+    }
+
+    function handleRightClick(e) {
+      e.preventDefault();
+      if (!gameState.running) return;
+
+      var rect = canvas.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
+
+      var col = Math.floor((x - gameState.hintWidth) / CELL_SIZE);
+      var row = Math.floor((y - gameState.hintHeight) / CELL_SIZE);
+
+      if (row >= 0 && row < gameState.gridSize && col >= 0 && col < gameState.gridSize) {
+        gameState.grid[row][col] = gameState.grid[row][col] === 2 ? 0 : 2;
+        gameLoop();
+      }
+    }
+
+    function startGame() {
+      gameState.running = true;
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'block';
+      document.getElementById('clearScreen').style.display = 'none';
+      initGame();
+      gameLoop();
+    }
+
+    function retryGame() {
+      gameState.running = false;
+      startGame();
+    }
+
+    function showClear() {
+      gameState.running = false;
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'block';
+
+      var silhouetteCanvas = document.createElement('canvas');
+      silhouetteCanvas.width = 280;
+      silhouetteCanvas.height = 280;
+      var sCtx = silhouetteCanvas.getContext('2d');
+
+      sCtx.fillStyle = '#f8f9fa';
+      sCtx.fillRect(0, 0, silhouetteCanvas.width, silhouetteCanvas.height);
+
+      var cellSize = 40;
+      sCtx.fillStyle = '#2d3748';
+      for (var i = 0; i < gameState.gridSize; i++) {
+        for (var j = 0; j < gameState.gridSize; j++) {
+          if (gameState.correctPattern[i][j] === 1) {
+            sCtx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+          }
+        }
+      }
+
+      sCtx.strokeStyle = '#cbd5e0';
+      sCtx.lineWidth = 1;
+      for (var i = 0; i <= gameState.gridSize; i++) {
+        sCtx.beginPath();
+        sCtx.moveTo(0, i * cellSize);
+        sCtx.lineTo(gameState.gridSize * cellSize, i * cellSize);
+        sCtx.stroke();
+        sCtx.beginPath();
+        sCtx.moveTo(i * cellSize, 0);
+        sCtx.lineTo(i * cellSize, gameState.gridSize * cellSize);
+        sCtx.stroke();
+      }
+
+      document.getElementById('silhouetteDisplay').innerHTML = '';
+      document.getElementById('silhouetteDisplay').appendChild(silhouetteCanvas);
+    }
+
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('contextmenu', handleRightClick);
+
+    document.getElementById('startScreen').addEventListener('click', function(e) {
+      if (e.target.className === 'btn' && !gameState.running) {
+        startGame();
+      }
+    });
+
+    document.getElementById('checkBtn').addEventListener('click', function() {
+      if (checkCompletion()) {
+        showClear();
+      }
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', function() {
+      retryGame();
+    });
+
+    document.getElementById('clearScreen').addEventListener('click', function(e) {
+      if (e.target.className === 'btn') {
+        startGame();
+      }
+    });
+
+    setInterval(gameLoop, 16);
+  </script>
+</body>
+</html>

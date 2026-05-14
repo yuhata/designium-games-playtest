@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOGIC GRID</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial', sans-serif;
+            background: #0a1628;
+        }
+        #gameContainer {
+            position: relative;
+            width: 480px;
+            height: 560px;
+        }
+        canvas {
+            display: block;
+            background: #0a1628;
+            border: 1px solid #1e3a5f;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 22, 40, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            gap: 20px;
+        }
+        #startScreen h1 {
+            color: #22c55e;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+        }
+        #startScreen p {
+            color: #cbd5e1;
+            font-size: 14px;
+            text-align: center;
+            max-width: 300px;
+        }
+        .btn {
+            background: #22c55e;
+            color: #0a1628;
+            border: none;
+            padding: 12px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #16a34a;
+            transform: scale(1.05);
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 22, 40, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            gap: 20px;
+        }
+        #clearScreen h1 {
+            color: #22c55e;
+            font-size: 56px;
+            font-weight: bold;
+            text-shadow: 0 0 40px rgba(34, 197, 94, 0.8);
+            animation: glow 1s ease-in-out infinite;
+        }
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+            50% { text-shadow: 0 0 40px rgba(34, 197, 94, 0.8); }
+        }
+        #errorMessage {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            color: #ef4444;
+            font-size: 12px;
+            text-align: center;
+            min-height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="480" height="560"></canvas>
+        <div id="startScreen">
+            <h1>LOGIC GRID</h1>
+            <p>4x4グリッドを論理推論で完成させよう。<br>各行・列・ブロックに1～4が1つずつ入る。</p>
+            <button class="btn">START</button>
+        </div>
+        <div id="clearScreen">
+            <h1>PERFECT!</h1>
+            <button class="btn">PLAY AGAIN</button>
+        </div>
+        <div id="errorMessage"></div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'LOGIC GRID',
+            bg_color: '#0a1628',
+            grid_color: '#1e3a5f',
+            correct_color: '#22c55e',
+            error_color: '#ef4444',
+            hint_color: '#f59e0b',
+            grid_size: 4
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const clearScreen = document.getElementById('clearScreen');
+        const errorMessage = document.getElementById('errorMessage');
+        const startButton = startScreen.querySelector('.btn');
+        const retryButton = clearScreen.querySelector('.btn');
+
+        var gameState = {
+            running: false,
+            grid: [],
+            solution: [],
+            selectedCell: null,
+            showPalette: false,
+            flashCell: null,
+            flashColor: '#22c55e',
+            flashTime: 0
+        };
+
+        function generateSudoku() {
+            let grid = Array(16).fill(0);
+            fillSudoku(grid, 0);
+            return grid.map(v => v);
+        }
+
+        function fillSudoku(grid, pos) {
+            if (pos === 16) return true;
+            
+            let row = Math.floor(pos / 4);
+            let col = pos % 4;
+            
+            let nums = [1, 2, 3, 4].sort(() => Math.random() - 0.5);
+            for (let num of nums) {
+                if (isValid(grid, row, col, num)) {
+                    grid[pos] = num;
+                    if (fillSudoku(grid, pos + 1)) return true;
+                    grid[pos] = 0;
+                }
+            }
+            return false;
+        }
+
+        function isValid(grid, row, col, num) {
+            // Check row
+            for (let c = 0; c < 4; c++) {
+                if (grid[row * 4 + c] === num) return false;
+            }
+            // Check column
+            for (let r = 0; r < 4; r++) {
+                if (grid[r * 4 + col] === num) return false;
+            }
+            // Check 2x2 block
+            let blockRow = Math.floor(row / 2) * 2;
+            let blockCol = Math.floor(col / 2) * 2;
+            for (let r = blockRow; r < blockRow + 2; r++) {
+                for (let c = blockCol; c < blockCol + 2; c++) {
+                    if (grid[r * 4 + c] === num) return false;
+                }
+            }
+            return true;
+        }
+
+        function initGame() {
+            gameState.solution = generateSudoku();
+            gameState.grid = [];
+            for (let i = 0; i < 16; i++) {
+                gameState.grid[i] = gameState.solution[i];
+            }
+            
+            // Remove 6-8 numbers for difficulty
+            let removed = 0;
+            let toRemove = 6 + Math.floor(Math.random() * 3);
+            while (removed < toRemove) {
+                let pos = Math.floor(Math.random() * 16);
+                if (gameState.grid[pos] !== 0) {
+                    gameState.grid[pos] = 0;
+                    removed++;
+                }
+            }
+            
+            gameState.selectedCell = null;
+            gameState.showPalette = false;
+            gameState.flashCell = null;
+            gameState.running = true;
+            errorMessage.textContent = '';
+        }
+
+        function drawGrid() {
+            const startX = 40;
+            const startY = 40;
+            const cellSize = 100;
+
+            // Draw cells
+            for (let i = 0; i < 16; i++) {
+                let row = Math.floor(i / 4);
+                let col = i % 4;
+                let x = startX + col * cellSize;
+                let y = startY + row * cellSize;
+
+                // Cell background
+                if (gameState.selectedCell === i) {
+                    ctx.fillStyle = '#2a5a8f';
+                } else {
+                    ctx.fillStyle = config.grid_color;
+                }
+                ctx.fillRect(x, y, cellSize, cellSize);
+
+                // Flash effect
+                if (gameState.flashCell === i && gameState.flashTime > 0) {
+                    ctx.fillStyle = gameState.flashColor + Math.floor((gameState.flashTime / 300) * 128).toString(16);
+                    ctx.fillRect(x, y, cellSize, cellSize);
+                }
+
+                // Number
+                let num = gameState.grid[i];
+                if (num !== 0) {
+                    ctx.font = 'bold 48px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    // Check if preset (from solution at start)
+                    let isPreset = false;
+                    for (let j = 0; j < 16; j++) {
+                        if (gameState.grid[j] === gameState.solution[j] && gameState.solution[j] !== 0) {
+                            if (j === i) isPreset = true;
+                        }
+                    }
+
+                    ctx.fillStyle = isPreset ? config.hint_color : '#ffffff';
+                    ctx.fillText(num, x + cellSize / 2, y + cellSize / 2);
+                }
+
+                // Border
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, cellSize, cellSize);
+            }
+
+            // Block borders (2x2)
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4;
+            for (let i = 0; i < 3; i++) {
+                let pos = startX + (i + 1) * (2 * cellSize);
+                ctx.beginPath();
+                ctx.moveTo(pos, startY);
+                ctx.lineTo(pos, startY + 4 * cellSize);
+                ctx.stroke();
+
+                pos = startY + (i + 1) * (2 * cellSize);
+                ctx.beginPath();
+                ctx.moveTo(startX, pos);
+                ctx.lineTo(startX + 4 * cellSize, pos);
+                ctx.stroke();
+            }
+        }
+
+        function drawPalette() {
+            if (!gameState.showPalette || gameState.selectedCell === null) return;
+
+            const paletteY = 440;
+            const paletteX = 40;
+            const btnSize = 50;
+            const gap = 20;
+
+            ctx.fillStyle = 'rgba(30, 58, 95, 0.8)';
+            ctx.fillRect(paletteX - 5, paletteY - 5, 4 * btnSize + 3 * gap + 10, btnSize + 10);
+
+            for (let i = 0; i < 4; i++) {
+                let x = paletteX + i * (btnSize + gap);
+                let y = paletteY;
+                ctx.fillStyle = '#2a5a8f';
+                ctx.fillRect(x, y, btnSize, btnSize);
+                ctx.strokeStyle = '#22c55e';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, btnSize, btnSize);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i + 1, x + btnSize / 2, y + btnSize / 2);
+            }
+        }
+
+        function gameLoop() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawGrid();
+            drawPalette();
+
+            if (gameState.flashCell !== null) {
+                gameState.flashTime -= 16;
+                if (gameState.flashTime <= 0) {
+                    gameState.flashCell = null;
+                }
+            }
+
+            if (gameState.running && !hasEmptyCells()) {
+                if (isGridValid()) {
+                    gameState.running = false;
+                    clearScreen.style.display = 'flex';
+                }
+            }
+        }
+
+        function hasEmptyCells() {
+            for (let i = 0; i < 16; i++) {
+                if (gameState.grid[i] === 0) return true;
+            }
+            return false;
+        }
+
+        function isGridValid() {
+            for (let i = 0; i < 16; i++) {
+                if (gameState.grid[i] !== gameState.solution[i]) return false;
+            }
+            return true;
+        }
+
+        function placeNumber(cellIndex, num) {
+            let row = Math.floor(cellIndex / 4);
+            let col = cellIndex % 4;
+
+            if (!isValid(gameState.grid, row, col, num)) {
+                gameState.flashCell = cellIndex;
+                gameState.flashColor = config.error_color;
+                gameState.flashTime = 300;
+                errorMessage.textContent = '行・列・ブロック内に重複があります';
+                return;
+            }
+
+            gameState.grid[cellIndex] = num;
+            gameState.flashCell = cellIndex;
+            gameState.flashColor = config.correct_color;
+            gameState.flashTime = 200;
+            errorMessage.textContent = '';
+            gameState.selectedCell = null;
+            gameState.showPalette = false;
+        }
+
+        function retryGame() {
+            gameState.running = false;
+            clearScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+            gameState.selectedCell = null;
+            gameState.showPalette = false;
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+
+            let rect = canvas.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+
+            const startX = 40, startY = 40, cellSize = 100;
+
+            // Grid click
+            if (x >= startX && x < startX + 400 && y >= startY && y < startY + 400) {
+                let col = Math.floor((x - startX) / cellSize);
+                let row = Math.floor((y - startY) / cellSize);
+                let cellIndex = row * 4 + col;
+
+                // Only select empty cells
+                if (gameState.grid[cellIndex] === 0) {
+                    gameState.selectedCell = cellIndex;
+                    gameState.showPalette = true;
+                }
+                return;
+            }
+
+            // Palette click
+            if (gameState.showPalette && gameState.selectedCell !== null) {
+                let paletteY = 440;
+                let paletteX = 40;
+                let btnSize = 50;
+                let gap = 20;
+
+                if (y >= paletteY && y < paletteY + btnSize) {
+                    for (let i = 0; i < 4; i++) {
+                        let x1 = paletteX + i * (btnSize + gap);
+                        if (x >= x1 && x < x1 + btnSize) {
+                            placeNumber(gameState.selectedCell, i + 1);
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+
+        startButton.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            initGame();
+        });
+
+        retryButton.addEventListener('click', () => {
+            retryGame();
+        });
+
+        setInterval(gameLoop, 16);
+    </script>
+</body>
+</html>

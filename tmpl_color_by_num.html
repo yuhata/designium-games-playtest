@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COLOR BY NUMBER</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #f0f0f0;
+        }
+        #gameContainer {
+            position: relative;
+            width: 440px;
+            height: 500px;
+        }
+        canvas {
+            display: block;
+            background: white;
+            border: 2px solid #333;
+            cursor: pointer;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #startScreen h1 {
+            color: white;
+            font-size: 48px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        #startScreen .btn {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #startScreen .btn:hover {
+            background: #2563eb;
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #clearScreen h1 {
+            color: #22c55e;
+            font-size: 48px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        #clearScreen .btn {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #22c55e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #clearScreen .btn:hover {
+            background: #16a34a;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="440" height="500"></canvas>
+        <div id="startScreen" style="display: none;">
+            <h1>COLOR BY NUMBER</h1>
+            <button class="btn">START</button>
+        </div>
+        <div id="clearScreen" style="display: none;">
+            <h1>COMPLETE!</h1>
+            <button class="btn">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'COLOR BY NUMBER',
+            bg_color: '#f8f9fa',
+            grid_cols: 10,
+            grid_rows: 10,
+            cell_size: 40,
+            palette: ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6']
+        };
+
+        const gameState = {
+            running: false,
+            selectedColorIndex: 0,
+            grid: [],
+            gridOffset: { x: 20, y: 80 },
+            paletteOffset: { y: 420 },
+            painted: 0,
+            totalCells: config.grid_cols * config.grid_rows,
+            flashCell: null,
+            flashTime: 0,
+            flashDuration: 300
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const clearScreen = document.getElementById('clearScreen');
+
+        function initializeGrid() {
+            gameState.grid = [];
+            gameState.painted = 0;
+            for (let row = 0; row < config.grid_rows; row++) {
+                gameState.grid[row] = [];
+                for (let col = 0; col < config.grid_cols; col++) {
+                    gameState.grid[row][col] = {
+                        number: Math.floor(Math.random() * 6) + 1,
+                        painted: false,
+                        color: null
+                    };
+                }
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText(`Progress: ${gameState.painted} / ${gameState.totalCells}`, 20, 35);
+        }
+
+        function drawGrid() {
+            for (let row = 0; row < config.grid_rows; row++) {
+                for (let col = 0; col < config.grid_cols; col++) {
+                    const x = gameState.gridOffset.x + col * config.cell_size;
+                    const y = gameState.gridOffset.y + row * config.cell_size;
+                    const cell = gameState.grid[row][col];
+
+                    if (cell.painted) {
+                        ctx.fillStyle = cell.color;
+                        ctx.fillRect(x, y, config.cell_size, config.cell_size);
+                    } else {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(x, y, config.cell_size, config.cell_size);
+                    }
+
+                    ctx.strokeStyle = '#ccc';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x, y, config.cell_size, config.cell_size);
+
+                    if (gameState.flashCell && gameState.flashCell.row === row && gameState.flashCell.col === col) {
+                        if (gameState.flashTime > gameState.flashDuration / 2) {
+                            ctx.fillStyle = 'rgba(239, 68, 68, 0.5)';
+                            ctx.fillRect(x, y, config.cell_size, config.cell_size);
+                        }
+                    }
+
+                    if (!cell.painted) {
+                        ctx.fillStyle = '#333';
+                        ctx.font = 'bold 18px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(cell.number, x + config.cell_size / 2, y + config.cell_size / 2);
+                    }
+                }
+            }
+        }
+
+        function drawPalette() {
+            const buttonWidth = (config.grid_cols * config.cell_size) / config.palette.length;
+            const buttonHeight = 40;
+            const startX = gameState.gridOffset.x;
+
+            for (let i = 0; i < config.palette.length; i++) {
+                const x = startX + i * buttonWidth;
+                const y = gameState.paletteOffset.y;
+
+                ctx.fillStyle = config.palette[i];
+                ctx.fillRect(x, y, buttonWidth, buttonHeight);
+
+                if (gameState.selectedColorIndex === i) {
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 4;
+                } else {
+                    ctx.strokeStyle = '#999';
+                    ctx.lineWidth = 2;
+                }
+                ctx.strokeRect(x, y, buttonWidth, buttonHeight);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i + 1, x + buttonWidth / 2, y + buttonHeight / 2);
+            }
+        }
+
+        function drawGame() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawScore();
+            drawGrid();
+            drawPalette();
+        }
+
+        function gameLoop() {
+            if (gameState.running) {
+                drawGame();
+
+                if (gameState.flashCell && gameState.flashTime > 0) {
+                    gameState.flashTime--;
+                } else if (gameState.flashCell) {
+                    gameState.flashCell = null;
+                }
+            }
+        }
+
+        function getCellAtMouse(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const gridX = mouseX - gameState.gridOffset.x;
+            const gridY = mouseY - gameState.gridOffset.y;
+
+            if (gridX >= 0 && gridY >= 0 && gridX < config.grid_cols * config.cell_size && gridY < config.grid_rows * config.cell_size) {
+                const col = Math.floor(gridX / config.cell_size);
+                const row = Math.floor(gridY / config.cell_size);
+                return { row, col };
+            }
+
+            return null;
+        }
+
+        function getPaletteButtonAtMouse(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const paletteY = gameState.paletteOffset.y;
+            const buttonHeight = 40;
+
+            if (mouseY >= paletteY && mouseY < paletteY + buttonHeight) {
+                const buttonWidth = (config.grid_cols * config.cell_size) / config.palette.length;
+                const relativeX = mouseX - gameState.gridOffset.x;
+
+                if (relativeX >= 0 && relativeX < config.grid_cols * config.cell_size) {
+                    const index = Math.floor(relativeX / buttonWidth);
+                    if (index >= 0 && index < config.palette.length) {
+                        return index;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        function paintCell(row, col) {
+            const cell = gameState.grid[row][col];
+
+            if (cell.painted) return;
+
+            if (cell.number === gameState.selectedColorIndex + 1) {
+                cell.painted = true;
+                cell.color = config.palette[gameState.selectedColorIndex];
+                gameState.painted++;
+
+                if (gameState.painted === gameState.totalCells) {
+                    gameState.running = false;
+                    clearScreen.style.display = 'flex';
+                }
+            } else {
+                gameState.flashCell = { row, col };
+                gameState.flashTime = gameState.flashDuration;
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+
+            const paletteIndex = getPaletteButtonAtMouse(e);
+            if (paletteIndex !== null) {
+                gameState.selectedColorIndex = paletteIndex;
+                return;
+            }
+
+            const cell = getCellAtMouse(e);
+            if (cell) {
+                paintCell(cell.row, cell.col);
+            }
+        });
+
+        const startBtn = startScreen.querySelector('.btn');
+        startBtn.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            initializeGrid();
+            gameState.running = true;
+            gameState.selectedColorIndex = 0;
+        });
+
+        const clearBtn = clearScreen.querySelector('.btn');
+        clearBtn.addEventListener('click', () => {
+            clearScreen.style.display = 'none';
+            initializeGrid();
+            gameState.running = true;
+            gameState.selectedColorIndex = 0;
+        });
+
+        function retryGame() {
+            gameState.running = false;
+            clearScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+        }
+
+        startScreen.style.display = 'flex';
+        setInterval(gameLoop, 16);
+    </script>
+</body>
+</html>

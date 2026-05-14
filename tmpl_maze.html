@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAZE EXPLORER</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0a0e27;
+            font-family: 'Courier New', monospace;
+        }
+        #container {
+            position: relative;
+            width: 480px;
+            height: 480px;
+        }
+        canvas {
+            display: block;
+            background: #0d1117;
+            border: 2px solid #30363d;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 14px;
+            color: #58a6ff;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #timer {
+            font-weight: bold;
+            color: #3fb950;
+        }
+        #timer.warning {
+            color: #f85149;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 17, 23, 0.98);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 17, 23, 0.98);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 17, 23, 0.98);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .screenContent {
+            text-align: center;
+        }
+        .screenContent h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #3fb950;
+            text-shadow: 0 0 20px #3fb950;
+        }
+        .screenContent p {
+            font-size: 14px;
+            margin: 10px 0;
+            color: #8b949e;
+        }
+        .btn {
+            margin-top: 30px;
+            padding: 12px 32px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            background: #238636;
+            color: #ffffff;
+            border: 2px solid #3fb950;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: #2ea043;
+            box-shadow: 0 0 15px rgba(63, 185, 80, 0.5);
+        }
+        #clearScreen h1 {
+            color: #ffd700;
+            text-shadow: 0 0 20px #ffd700;
+        }
+        #gameOverScreen h1 {
+            color: #f85149;
+            text-shadow: 0 0 20px #f85149;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="startScreen">
+            <div class="screenContent">
+                <h1>MAZE EXPLORER</h1>
+                <p>Navigate through the fog and find the exit</p>
+                <p style="font-size: 12px; margin-top: 20px; opacity: 0.7;">180 seconds • Click arrows to move</p>
+                <button class="btn">START</button>
+            </div>
+        </div>
+        <div id="clearScreen">
+            <div class="screenContent">
+                <h1>FOUND IT!</h1>
+                <p id="clearStats"></p>
+                <p style="font-size: 12px; margin-top: 10px; opacity: 0.7;">Excellent explorer!</p>
+                <button class="btn">RETRY</button>
+            </div>
+        </div>
+        <div id="gameOverScreen">
+            <div class="screenContent">
+                <h1>TIME UP!</h1>
+                <p>The maze consumed you...</p>
+                <button class="btn">RETRY</button>
+            </div>
+        </div>
+        <div id="info">
+            <div>Steps: <span id="steps">0</span></div>
+            <div>Time: <span id="timer">180</span>s</div>
+        </div>
+        <canvas id="gameCanvas" width="480" height="480"></canvas>
+    </div>
+
+    <script>
+        const config = {
+            title: 'MAZE EXPLORER',
+            bg_color: '#0d1117',
+            wall_color: '#30363d',
+            path_color: '#1c2128',
+            player_color: '#58a6ff',
+            goal_color: '#3fb950',
+            fog_color: 'rgba(0,0,0,0.7)',
+            maze_cols: 15,
+            maze_rows: 15,
+            cell_size: 32
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        var gameState = {
+            running: false,
+            maze: null,
+            playerX: 1,
+            playerY: 1,
+            goalX: config.maze_cols - 2,
+            goalY: config.maze_rows - 2,
+            steps: 0,
+            timeLeft: 180,
+            visited: new Set(),
+            explored: new Set(),
+            flashCounter: 0,
+            gameStartTime: 0,
+            spotlightIntensity: 0
+        };
+
+        function generateMaze(cols, rows) {
+            const maze = [];
+            for (let y = 0; y < rows; y++) {
+                maze[y] = [];
+                for (let x = 0; x < cols; x++) {
+                    maze[y][x] = 1;
+                }
+            }
+
+            const stack = [];
+            const startX = 1, startY = 1;
+            maze[startY][startX] = 0;
+            stack.push({ x: startX, y: startY });
+
+            const directions = [
+                { dx: 0, dy: -2 },
+                { dx: 2, dy: 0 },
+                { dx: 0, dy: 2 },
+                { dx: -2, dy: 0 }
+            ];
+
+            while (stack.length > 0) {
+                const current = stack[stack.length - 1];
+                const neighbors = [];
+
+                for (let i = 0; i < directions.length; i++) {
+                    const dir = directions[i];
+                    const nx = current.x + dir.dx;
+                    const ny = current.y + dir.dy;
+                    if (nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 && maze[ny][nx] === 1) {
+                        neighbors.push({ x: nx, y: ny, dx: dir.dx, dy: dir.dy });
+                    }
+                }
+
+                if (neighbors.length > 0) {
+                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    maze[current.y + next.dy / 2][current.x + next.dx / 2] = 0;
+                    maze[next.y][next.x] = 0;
+                    stack.push(next);
+                } else {
+                    stack.pop();
+                }
+            }
+
+            return maze;
+        }
+
+        function movePlayer(dx, dy) {
+            if (!gameState.running) return;
+            const newX = gameState.playerX + dx;
+            const newY = gameState.playerY + dy;
+
+            if (newX >= 0 && newX < config.maze_cols && newY >= 0 && newY < config.maze_rows) {
+                if (gameState.maze[newY][newX] === 0) {
+                    gameState.playerX = newX;
+                    gameState.playerY = newY;
+                    gameState.steps++;
+                    gameState.visited.add(newX + ',' + newY);
+                    gameState.explored.add(newX + ',' + newY);
+
+                    if (gameState.playerX === gameState.goalX && gameState.playerY === gameState.goalY) {
+                        endGameClear();
+                    }
+                } else {
+                    gameState.flashCounter = 10;
+                }
+            }
+        }
+
+        function drawMaze() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let y = 0; y < config.maze_rows; y++) {
+                for (let x = 0; x < config.maze_cols; x++) {
+                    const px = x * config.cell_size;
+                    const py = y * config.cell_size;
+
+                    if (gameState.maze[y][x] === 1) {
+                        ctx.fillStyle = config.wall_color;
+                    } else {
+                        if (gameState.explored.has(x + ',' + y)) {
+                            ctx.fillStyle = '#161b22';
+                        } else {
+                            ctx.fillStyle = config.path_color;
+                        }
+                    }
+                    ctx.fillRect(px, py, config.cell_size, config.cell_size);
+                }
+            }
+
+            const visionRadius = 3;
+            for (let y = 0; y < config.maze_rows; y++) {
+                for (let x = 0; x < config.maze_cols; x++) {
+                    const dist = Math.max(Math.abs(x - gameState.playerX), Math.abs(y - gameState.playerY));
+                    if (dist > visionRadius) {
+                        ctx.fillStyle = config.fog_color;
+                        ctx.fillRect(x * config.cell_size, y * config.cell_size, config.cell_size, config.cell_size);
+                    }
+                }
+            }
+
+            const playerScreenX = gameState.playerX * config.cell_size + config.cell_size / 2;
+            const playerScreenY = gameState.playerY * config.cell_size + config.cell_size / 2;
+            ctx.fillStyle = gameState.flashCounter > 0 ? '#f85149' : config.player_color;
+            ctx.beginPath();
+            ctx.arc(playerScreenX, playerScreenY, config.cell_size / 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            const goalScreenX = gameState.goalX * config.cell_size + config.cell_size / 2;
+            const goalScreenY = gameState.goalY * config.cell_size + config.cell_size / 2;
+            const visionDist = Math.max(Math.abs(gameState.goalX - gameState.playerX), Math.abs(gameState.goalY - gameState.playerY));
+            
+            if (visionDist <= 3) {
+                if (gameState.spotlightIntensity > 0) {
+                    const gradient = ctx.createRadialGradient(goalScreenX, goalScreenY, 0, goalScreenX, goalScreenY, 40);
+                    gradient.addColorStop(0, 'rgba(255, 215, 0, ' + (gameState.spotlightIntensity * 0.3) + ')');
+                    gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(goalScreenX - 40, goalScreenY - 40, 80, 80);
+                }
+
+                ctx.fillStyle = config.goal_color;
+                ctx.beginPath();
+                ctx.moveTo(goalScreenX, goalScreenY - 8);
+                ctx.lineTo(goalScreenX + 8, goalScreenY + 8);
+                ctx.lineTo(goalScreenX - 8, goalScreenY + 8);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            drawArrowButtons();
+        }
+
+        function drawArrowButtons() {
+            const btnSize = 40;
+            const startX = canvas.width - 120;
+            const startY = canvas.height - 60;
+
+            ctx.fillStyle = '#30363d';
+            ctx.strokeStyle = '#58a6ff';
+            ctx.lineWidth = 2;
+
+            ctx.fillRect(startX + 40, startY, btnSize, btnSize);
+            ctx.strokeRect(startX + 40, startY, btnSize, btnSize);
+            drawArrowShape(ctx, startX + 60, startY + 20, 'up');
+
+            ctx.fillRect(startX + 40, startY + 80, btnSize, btnSize);
+            ctx.strokeRect(startX + 40, startY + 80, btnSize, btnSize);
+            drawArrowShape(ctx, startX + 60, startY + 100, 'down');
+
+            ctx.fillRect(startX, startY + 40, btnSize, btnSize);
+            ctx.strokeRect(startX, startY + 40, btnSize, btnSize);
+            drawArrowShape(ctx, startX + 20, startY + 60, 'left');
+
+            ctx.fillRect(startX + 80, startY + 40, btnSize, btnSize);
+            ctx.strokeRect(startX + 80, startY + 40, btnSize, btnSize);
+            drawArrowShape(ctx, startX + 100, startY + 60, 'right');
+        }
+
+        function drawArrowShape(ctx, x, y, dir) {
+            ctx.fillStyle = '#58a6ff';
+            ctx.beginPath();
+            const size = 12;
+            if (dir === 'up') {
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x - size, y + size);
+                ctx.lineTo(x + size, y + size);
+            } else if (dir === 'down') {
+                ctx.moveTo(x, y + size);
+                ctx.lineTo(x - size, y - size);
+                ctx.lineTo(x + size, y - size);
+            } else if (dir === 'left') {
+                ctx.moveTo(x - size, y);
+                ctx.lineTo(x + size, y - size);
+                ctx.lineTo(x + size, y + size);
+            } else if (dir === 'right') {
+                ctx.moveTo(x + size, y);
+                ctx.lineTo(x - size, y - size);
+                ctx.lineTo(x - size, y + size);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function gameLoop() {
+            if (gameState.running) {
+                gameState.flashCounter = Math.max(0, gameState.flashCounter - 1);
+                const elapsed = Math.floor((Date.now() - gameState.gameStartTime) / 1000);
+                gameState.timeLeft = Math.max(0, 180 - elapsed);
+
+                if (gameState.timeLeft <= 0) {
+                    endGameOver();
+                }
+            }
+
+            if (gameState.spotlightIntensity > 0) {
+                gameState.spotlightIntensity -= 0.05;
+            }
+
+            drawMaze();
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('steps').textContent = gameState.steps;
+            const timerEl = document.getElementById('timer');
+            timerEl.textContent = gameState.timeLeft;
+            if (gameState.timeLeft <= 30) {
+                timerEl.className = 'warning';
+            } else {
+                timerEl.className = '';
+            }
+        }
+
+        function endGameClear() {
+            gameState.running = false;
+            gameState.spotlightIntensity = 1.0;
+            const elapsed = Math.floor((Date.now() - gameState.gameStartTime) / 1000);
+            const clearScreen = document.getElementById('clearScreen');
+            const stats = document.getElementById('clearStats');
+            stats.textContent = 'Steps: ' + gameState.steps + ' | Time: ' + elapsed + 's';
+            clearScreen.style.display = 'flex';
+        }
+
+        function endGameOver() {
+            gameState.running = false;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+
+        function retryGame() {
+            gameState.running = false;
+            gameState.maze = generateMaze(config.maze_cols, config.maze_rows);
+            gameState.playerX = 1;
+            gameState.playerY = 1;
+            gameState.goalX = config.maze_cols - 2;
+            gameState.goalY = config.maze_rows - 2;
+            gameState.steps = 0;
+            gameState.timeLeft = 180;
+            gameState.visited = new Set();
+            gameState.explored = new Set();
+            gameState.visited.add('1,1');
+            gameState.explored.add('1,1');
+            gameState.flashCounter = 0;
+            gameState.spotlightIntensity = 0;
+
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+
+            gameState.running = true;
+            gameState.gameStartTime = Date.now();
+        }
+
+        canvas.addEventListener('click', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const btnSize = 40;
+            const startX = canvas.width - 120;
+            const startY = canvas.height - 60;
+
+            if (x >= startX + 40 && x < startX + 80 && y >= startY && y < startY + 40) {
+                movePlayer(0, -1);
+            }
+            else if (x >= startX + 40 && x < startX + 80 && y >= startY + 80 && y < startY + 120) {
+                movePlayer(0, 1);
+            }
+            else if (x >= startX && x < startX + 40 && y >= startY + 40 && y < startY + 80) {
+                movePlayer(-1, 0);
+            }
+            else if (x >= startX + 80 && x < startX + 120 && y >= startY + 40 && y < startY + 80) {
+                movePlayer(1, 0);
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('btn')) {
+                const screen = e.target.closest('#startScreen, #clearScreen, #gameOverScreen');
+                if (screen) {
+                    retryGame();
+                }
+            }
+        });
+
+        function init() {
+            gameState.maze = generateMaze(config.maze_cols, config.maze_rows);
+            gameState.visited.add('1,1');
+            gameState.explored.add('1,1');
+            document.getElementById('startScreen').style.display = 'flex';
+            setInterval(gameLoop, 16);
+        }
+
+        init();
+    </script>
+</body>
+</html>
