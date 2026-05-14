@@ -3,22 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horror Base Defense</title>
+    <title>HORROR BASE - Defense Strategy</title>
+    <!--
+        theme:              defense_horror
+        title:              HORROR BASE
+        bg_color:           #0a0a0a
+        day_color:          #2d3748
+        night_color:        #1a0000
+        survivor_color:     #68d391
+        zombie_color:       #48bb78
+        fort_color:         #8b4513
+        survivor_count:     3
+        win_days:           7
+        zombie_per_night:   5
+        init_wood:          20
+    -->
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: Arial, sans-serif;
-            background: #000;
         }
         
         #gameContainer {
+            border: 2px solid #666;
             position: relative;
-            border: 3px solid #888;
         }
         
         canvas {
@@ -26,76 +43,118 @@
         }
         
         .screen {
-            position: absolute;
+            display: none;
+            position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            display: none;
+            background: rgba(0, 0, 0, 0.95);
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: rgba(0, 0, 0, 0.95);
-            color: #fff;
-            z-index: 100;
+            z-index: 1000;
+            color: white;
+            text-align: center;
         }
         
-        .screen.active {
+        #startScreen {
             display: flex;
         }
         
         .screen h1 {
-            font-size: 3.5em;
-            margin: 0 0 20px 0;
+            font-size: 4rem;
+            margin-bottom: 30px;
+            color: #ff4444;
             text-shadow: 0 0 20px #ff0000;
-            color: #ff3333;
+        }
+        
+        .screen h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: #68d391;
         }
         
         .screen p {
-            font-size: 1.1em;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: #aaa;
+            max-width: 600px;
+        }
+        
+        .objectives {
+            background: rgba(20, 20, 20, 0.8);
+            padding: 20px;
+            border: 2px solid #666;
+            margin: 20px 0;
+            border-radius: 8px;
+            max-width: 500px;
+        }
+        
+        .objectives h3 {
+            color: #68d391;
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+        
+        .objectives li {
+            text-align: left;
             margin: 8px 0;
-            text-align: center;
-            line-height: 1.6;
-            max-width: 90%;
+            color: #ccc;
         }
         
-        .screen button {
-            padding: 12px 35px;
-            font-size: 1.1em;
+        button {
             background: #ff4444;
-            color: #fff;
+            color: white;
             border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
             cursor: pointer;
+            border-radius: 5px;
             margin-top: 20px;
+            transition: background 0.3s;
         }
         
-        .screen button:hover {
+        button:hover {
             background: #ff6666;
         }
     </style>
 </head>
 <body>
+    <div id="startScreen" class="screen">
+        <h1>HORROR BASE</h1>
+        <h2>Survive the Night</h2>
+        <div class="objectives">
+            <h3>Objective</h3>
+            <p id="winCondition"></p>
+            <h3>Game Rules</h3>
+            <ul>
+                <li id="ruleWood"></li>
+                <li id="ruleNight"></li>
+                <li id="ruleFort"></li>
+                <li id="ruleProtect"></li>
+                <li id="startSurvivors"></li>
+            </ul>
+        </div>
+        <button onclick="startGame()">START GAME</button>
+    </div>
+    
+    <div id="gameOverScreen" class="screen" style="display: none;">
+        <h1 style="color: #ff0000;">GAME OVER</h1>
+        <h2>Your base has been overrun...</h2>
+        <p id="gameOverStats"></p>
+        <button onclick="retryGame()">TRY AGAIN</button>
+    </div>
+    
+    <div id="clearScreen" class="screen" style="display: none;">
+        <h1 style="color: #00ff00;">CLEAR!</h1>
+        <h2>You survived!</h2>
+        <p id="clearStats"></p>
+        <button onclick="retryGame()">PLAY AGAIN</button>
+    </div>
+    
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        
-        <div id="startScreen" class="screen active">
-            <h1>HORROR BASE</h1>
-            <p>ゾンビの侵攻から拠点を守り抜け！</p>
-            <p id="startInstructions"></p>
-            <button onclick="startGame()">START</button>
-        </div>
-        
-        <div id="gameOverScreen" class="screen">
-            <h1>GAME OVER</h1>
-            <p>全ての生存者が倒れてしまった...</p>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
-        
-        <div id="clearScreen" class="screen">
-            <h1>VICTORY!</h1>
-            <p id="clearMessage"></p>
-            <button onclick="retryGame()">RETRY</button>
-        </div>
     </div>
 
     <script>
@@ -109,7 +168,8 @@
             fort_color: '#8b4513',
             survivor_count: 3,
             win_days: 7,
-            zombie_per_night: 5
+            zombie_per_night: 5,
+            init_wood: 20
         };
 
         const canvas = document.getElementById('gameCanvas');
@@ -117,290 +177,349 @@
         
         canvas.width = 480;
         canvas.height = 520;
+        
         document.getElementById('gameContainer').style.width = canvas.width + 'px';
         document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        
+        document.body.style.background = config.bg_color;
 
         const gameState = {
             running: false,
             phase: 'day',
-            phaseTime: 15,
-            maxPhaseTime: 15,
-            day: 0,
-            wood: 20,
+            day: 1,
+            wood: config.init_wood,
             survivors: [],
             zombies: [],
             forts: [],
-            resources: [],
-            selectedSurvivor: null,
-            buildingFort: false
+            selectedSurvivor: -1,
+            phaseTimer: 0,
+            phaseTime: 15,
+            resources: []
         };
 
-        class Survivor {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.hp = 30;
-                this.maxHp = 30;
-                this.atk = 3;
-                this.radius = 8;
-                this.selected = false;
-            }
+        document.getElementById('winCondition').textContent = 'Survive ' + config.win_days + ' nights!';
+        document.getElementById('ruleWood').textContent = 'Day Phase: Click survivors -> click resources to gather wood';
+        document.getElementById('ruleNight').textContent = 'Night Phase: Defend against zombies!';
+        document.getElementById('ruleFort').textContent = 'Build forts (10 wood) to block zombies';
+        document.getElementById('ruleProtect').textContent = 'Keep all survivors alive';
+        document.getElementById('startSurvivors').textContent = 'Starting survivors: ' + config.survivor_count;
 
-            update() {
-                for (let zombie of gameState.zombies) {
-                    const dx = this.x - zombie.x;
-                    const dy = this.y - zombie.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < this.radius + zombie.radius) {
-                        this.hp -= zombie.atk * 0.016;
-                        zombie.hp -= this.atk * 0.016;
-                    }
-                }
-                if (this.hp <= 0) this.hp = 0;
-            }
-
-            draw() {
-                ctx.fillStyle = config.survivor_color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fill();
-                
-                if (this.selected) {
-                    ctx.strokeStyle = '#ffff00';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.radius + 4, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
-
-                ctx.fillStyle = '#ff0000';
-                ctx.fillRect(this.x - 10, this.y - 18, 20 * (this.hp / this.maxHp), 2);
-                ctx.strokeStyle = '#fff';
-                ctx.strokeRect(this.x - 10, this.y - 18, 20, 2);
-            }
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            initializeGame();
+            gameState.running = true;
+            gameLoop();
         }
 
-        class Zombie {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.hp = 20;
-                this.maxHp = 20;
-                this.atk = 5;
-                this.radius = 7;
-                this.speed = 0.5;
-            }
-
-            update() {
-                const targetX = 240;
-                const targetY = 180;
-                const dx = targetX - this.x;
-                const dy = targetY - this.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 0) {
-                    this.x += (dx / dist) * this.speed;
-                    this.y += (dy / dist) * this.speed;
-                }
-
-                for (let fort of gameState.forts) {
-                    const fx = this.x - fort.x;
-                    const fy = this.y - fort.y;
-                    const fd = Math.sqrt(fx * fx + fy * fy);
-                    if (fd < this.radius + fort.radius) {
-                        fort.hp -= this.atk * 0.016;
-                        this.hp -= 1 * 0.016;
-                    }
-                }
-            }
-
-            draw() {
-                ctx.fillStyle = config.zombie_color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.fillStyle = '#ff0000';
-                ctx.fillRect(this.x - 10, this.y - 16, 20 * (this.hp / this.maxHp), 2);
-                ctx.strokeStyle = '#fff';
-                ctx.strokeRect(this.x - 10, this.y - 16, 20, 2);
-            }
-        }
-
-        class Fort {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.hp = 30;
-                this.maxHp = 30;
-                this.radius = 12;
-            }
-
-            draw() {
-                ctx.fillStyle = config.fort_color;
-                ctx.fillRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
-                ctx.strokeStyle = '#ffaa00';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
-
-                ctx.fillStyle = '#00aa00';
-                ctx.fillRect(this.x - 12, this.y - 24, 24 * (this.hp / this.maxHp), 2);
-                ctx.strokeStyle = '#fff';
-                ctx.strokeRect(this.x - 12, this.y - 24, 24, 2);
-            }
-        }
-
-        class Resource {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.radius = 6;
-            }
-
-            draw() {
-                ctx.fillStyle = '#8b6f47';
-                ctx.fillRect(this.x - 6, this.y - 6, 12, 12);
-                ctx.strokeStyle = '#d4af37';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(this.x - 6, this.y - 6, 12, 12);
-            }
-        }
-
-        function initGame() {
-            gameState.day = 0;
-            gameState.wood = 20;
+        function initializeGame() {
+            gameState.day = 1;
+            gameState.wood = config.init_wood;
             gameState.phase = 'day';
+            gameState.phaseTimer = 0;
             gameState.phaseTime = 15;
+            gameState.selectedSurvivor = -1;
             gameState.survivors = [];
             gameState.zombies = [];
             gameState.forts = [];
             gameState.resources = [];
-            gameState.selectedSurvivor = null;
-            gameState.buildingFort = false;
-            gameState.running = true;
 
             for (let i = 0; i < config.survivor_count; i++) {
-                gameState.survivors.push(new Survivor(240 + (i - 1) * 35, 180));
+                gameState.survivors.push({
+                    x: 240 + (i - 1) * 50,
+                    y: 200,
+                    hp: 20,
+                    maxHp: 20,
+                    gatheringResource: null,
+                    gatherTimer: 0
+                });
             }
 
-            gameState.resources = [
-                new Resource(80, 80),
-                new Resource(400, 80),
-                new Resource(80, 280),
-                new Resource(400, 280),
-                new Resource(240, 180)
-            ];
+            createResources();
         }
 
-        function startGame() {
-            document.getElementById('startScreen').style.display = 'none';
-            initGame();
-            gameLoop();
+        function createResources() {
+            const positions = [
+                { x: 80, y: 100 },
+                { x: 400, y: 100 },
+                { x: 80, y: 280 },
+                { x: 400, y: 280 },
+                { x: 240, y: 180 }
+            ];
+            gameState.resources = positions.map(pos => ({
+                x: pos.x,
+                y: pos.y
+            }));
         }
 
         function gameLoop() {
-            if (!gameState.running) return;
+            ctx.fillStyle = gameState.phase === 'day' ? config.day_color : config.night_color;
+            ctx.fillRect(0, 0, canvas.width, 360);
 
-            gameState.phaseTime -= 0.016;
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 360, canvas.width, 160);
 
-            if (gameState.phaseTime <= 0) {
+            gameState.phaseTimer += 1/60;
+
+            if (gameState.phaseTimer >= gameState.phaseTime) {
                 if (gameState.phase === 'day') {
                     gameState.phase = 'night';
-                    gameState.phaseTime = 15;
-                    for (let i = 0; i < config.zombie_per_night; i++) {
-                        const angle = (i / config.zombie_per_night) * Math.PI * 2;
-                        const x = 240 + Math.cos(angle) * 200;
-                        const y = 180 + Math.sin(angle) * 200;
-                        gameState.zombies.push(new Zombie(x, y));
-                    }
+                    gameState.phaseTimer = 0;
+                    spawnZombies();
                 } else {
                     gameState.phase = 'day';
-                    gameState.phaseTime = 15;
+                    gameState.phaseTimer = 0;
                     gameState.day++;
-                    gameState.zombies = [];
+                    createResources();
                 }
             }
 
-            gameState.survivors.forEach(s => s.update());
-            gameState.zombies = gameState.zombies.filter(z => {
-                z.update();
-                return z.hp > 0;
-            });
-            gameState.forts = gameState.forts.filter(f => f.hp > 0);
-
-            if (gameState.day > config.win_days && gameState.phase === 'day') {
-                gameState.running = false;
-                document.getElementById('clearMessage').textContent = 'Game Win - ' + gameState.day + ' days survived!';
-                document.getElementById('clearScreen').style.display = 'flex';
-                return;
+            if (gameState.phase === 'night') {
+                updateZombies();
+                checkZombieSurvivorCollisions();
             }
 
-            const aliveCount = gameState.survivors.filter(s => s.hp > 0).length;
-            if (aliveCount === 0) {
+            updateSurvivors();
+            updateForts();
+
+            drawResources();
+            drawForts();
+            drawSurvivors();
+            drawZombies();
+            drawHUD();
+
+            if (gameState.survivors.length === 0) {
                 gameState.running = false;
                 document.getElementById('gameOverScreen').style.display = 'flex';
+                document.getElementById('gameOverStats').textContent = 'Survived: ' + gameState.day + ' days. Better luck next time!';
                 return;
             }
 
-            const bgColor = gameState.phase === 'day' ? config.day_color : config.night_color;
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 480, 360);
-
-            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-            ctx.lineWidth = 0.5;
-            for (let x = 0; x < 480; x += 40) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, 360);
-                ctx.stroke();
-            }
-            for (let y = 0; y < 360; y += 40) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(480, y);
-                ctx.stroke();
+            if (gameState.day >= config.win_days) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                document.getElementById('clearStats').textContent = 'Days survived: ' + gameState.day + ' days!';
+                return;
             }
 
-            gameState.resources.forEach(r => r.draw());
-            gameState.forts.forEach(f => f.draw());
-            gameState.survivors.forEach(s => s.draw());
-            gameState.zombies.forEach(z => z.draw());
-
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(0, 360, 480, 160);
-            ctx.strokeStyle = '#666';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(0, 360, 480, 160);
-
-            ctx.fillStyle = '#fff';
-            ctx.font = '13px Arial';
-            const timeStr = gameState.phaseTime.toFixed(1);
-            ctx.fillText('Day: ' + gameState.day + ' / ' + config.win_days, 10, 378);
-            ctx.fillText('Survivors: ' + aliveCount + ' / ' + config.survivor_count, 10, 396);
-            ctx.fillText('Wood: ' + Math.floor(gameState.wood), 10, 414);
-            ctx.fillText('Phase: ' + (gameState.phase === 'day' ? 'DAY' : 'NIGHT') + ' (' + timeStr + 's)', 10, 432);
-            ctx.fillText('Zombies: ' + gameState.zombies.length, 10, 450);
-            ctx.fillText('[Click survivor] [Click resource] [Press FORT to build] Cost:10 Wood', 10, 482);
-            ctx.fillText('Defend ' + config.win_days + ' nights to win!', 10, 500);
-
-            if (gameState.phase === 'day' && gameState.buildingFort) {
-                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
-                ctx.font = 'bold 16px Arial';
-                ctx.fillText('Click map to place FORT', 150, 200);
-            }
-
-            if (gameState.phase === 'day') {
-                const canBuild = gameState.wood >= 10;
-                ctx.fillStyle = canBuild ? '#00aa00' : '#666666';
-                ctx.fillRect(340, 410, 130, 35);
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 13px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('FORT (10)', 405, 432);
-                ctx.textAlign = 'left';
-            }
-
-            requestAnimationFrame(gameLoop);
+            if (gameState.running) requestAnimationFrame(gameLoop);
         }
+
+        function updateSurvivors() {
+            for (let i = gameState.survivors.length - 1; i >= 0; i--) {
+                const survivor = gameState.survivors[i];
+                if (survivor.hp <= 0) {
+                    gameState.survivors.splice(i, 1);
+                    if (gameState.selectedSurvivor === i) {
+                        gameState.selectedSurvivor = -1;
+                    }
+                    continue;
+                }
+
+                if (survivor.gatheringResource !== null) {
+                    survivor.gatherTimer++;
+                    if (survivor.gatherTimer >= 180) {
+                        gameState.wood += 5;
+                        survivor.gatheringResource = null;
+                        survivor.gatherTimer = 0;
+                    }
+                }
+            }
+        }
+
+        function spawnZombies() {
+            const spawnPoints = [
+                { x: -20, y: 120 },
+                { x: 500, y: 120 },
+                { x: -20, y: 240 },
+                { x: 500, y: 240 }
+            ];
+            
+            for (let i = 0; i < config.zombie_per_night; i++) {
+                const point = spawnPoints[i % spawnPoints.length];
+                gameState.zombies.push({
+                    x: point.x,
+                    y: point.y,
+                    hp: 10,
+                    maxHp: 10,
+                    speed: 0.5
+                });
+            }
+        }
+
+        function updateZombies() {
+            for (let i = gameState.zombies.length - 1; i >= 0; i--) {
+                const zombie = gameState.zombies[i];
+                if (zombie.hp <= 0) {
+                    gameState.zombies.splice(i, 1);
+                    continue;
+                }
+
+                const dx = 240 - zombie.x;
+                const dy = 180 - zombie.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 0) {
+                    zombie.x += (dx / dist) * zombie.speed;
+                    zombie.y += (dy / dist) * zombie.speed;
+                }
+            }
+        }
+
+        function checkZombieSurvivorCollisions() {
+            gameState.survivors.forEach(survivor => {
+                gameState.zombies.forEach(zombie => {
+                    const dx = survivor.x - zombie.x;
+                    const dy = survivor.y - zombie.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 25) {
+                        survivor.hp -= 5 / 60;
+                        zombie.hp -= 3 / 60;
+                    }
+                });
+            });
+        }
+
+        function updateForts() {
+            for (let i = gameState.forts.length - 1; i >= 0; i--) {
+                const fort = gameState.forts[i];
+                gameState.zombies.forEach(zombie => {
+                    const dx = fort.x - zombie.x;
+                    const dy = fort.y - zombie.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 30) {
+                        fort.hp -= 2 / 60;
+                        zombie.hp -= 1 / 60;
+                    }
+                });
+                
+                if (fort.hp <= 0) {
+                    gameState.forts.splice(i, 1);
+                }
+            }
+        }
+
+        function drawResources() {
+            gameState.resources.forEach(res => {
+                ctx.fillStyle = '#DAA520';
+                ctx.fillRect(res.x - 12, res.y - 12, 24, 24);
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(res.x - 8, res.y - 8, 16, 16);
+            });
+        }
+
+        function drawForts() {
+            gameState.forts.forEach(fort => {
+                ctx.fillStyle = config.fort_color;
+                ctx.beginPath();
+                ctx.moveTo(fort.x, fort.y - 20);
+                ctx.lineTo(fort.x + 20, fort.y + 10);
+                ctx.lineTo(fort.x - 20, fort.y + 10);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(fort.x - 15, fort.y - 30, 30, 4);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(fort.x - 15, fort.y - 30, 30 * (fort.hp / 30), 4);
+            });
+        }
+
+        function drawSurvivors() {
+            gameState.survivors.forEach((survivor, index) => {
+                ctx.fillStyle = gameState.selectedSurvivor === index ? '#ffff00' : config.survivor_color;
+                ctx.beginPath();
+                ctx.arc(survivor.x, survivor.y, 12, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(survivor.x - 12, survivor.y - 20, 24, 3);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(survivor.x - 12, survivor.y - 20, 24 * (survivor.hp / survivor.maxHp), 3);
+            });
+        }
+
+        function drawZombies() {
+            gameState.zombies.forEach(zombie => {
+                ctx.fillStyle = config.zombie_color;
+                ctx.beginPath();
+                ctx.arc(zombie.x, zombie.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            
+            const hudY = 375;
+            ctx.fillText('Day: ' + gameState.day + ' / ' + config.win_days, 10, hudY);
+            ctx.fillText('Survivors: ' + gameState.survivors.length, 10, hudY + 20);
+            ctx.fillText('Wood: ' + Math.floor(gameState.wood), 10, hudY + 40);
+            ctx.fillText('Phase: ' + gameState.phase.toUpperCase() + ' (' + Math.ceil(gameState.phaseTime - gameState.phaseTimer) + 's)', 200, hudY);
+            
+            ctx.font = '11px Arial';
+            ctx.fillText('Click survivor -> Click resource to gather (3 sec)', 10, hudY + 65);
+            
+            ctx.fillStyle = gameState.wood >= 10 ? '#68d391' : '#ff4444';
+            ctx.fillRect(200, hudY + 50, 120, 30);
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('BUILD FORT (10)', 260, hudY + 70);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (y > 360) {
+                if (x > 200 && x < 320 && y > 410 && y < 440) {
+                    if (gameState.wood >= 10) {
+                        gameState.wood -= 10;
+                        gameState.forts.push({
+                            x: 240,
+                            y: 180,
+                            hp: 30,
+                            maxHp: 30
+                        });
+                    }
+                }
+                return;
+            }
+            
+            for (let i = 0; i < gameState.survivors.length; i++) {
+                const survivor = gameState.survivors[i];
+                const dx = x - survivor.x;
+                const dy = y - survivor.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 15) {
+                    gameState.selectedSurvivor = gameState.selectedSurvivor === i ? -1 : i;
+                    return;
+                }
+            }
+            
+            if (gameState.selectedSurvivor >= 0 && gameState.selectedSurvivor < gameState.survivors.length) {
+                for (let res of gameState.resources) {
+                    const dx = x - res.x;
+                    const dy = y - res.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 15) {
+                        const survivor = gameState.survivors[gameState.selectedSurvivor];
+                        survivor.gatheringResource = res;
+                        survivor.gatherTimer = 0;
+                        return;
+                    }
+                }
+            }
+        });
 
         function retryGame() {
             document.getElementById('gameOverScreen').style.display = 'none';
@@ -408,61 +527,6 @@
             document.getElementById('startScreen').style.display = 'flex';
             gameState.running = false;
         }
-
-        canvas.addEventListener('click', (e) => {
-            if (!gameState.running) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            if (y > 360) {
-                if (gameState.phase === 'day' && x > 340 && x < 470 && y > 410 && y < 445) {
-                    if (gameState.wood >= 10) {
-                        gameState.buildingFort = !gameState.buildingFort;
-                    }
-                }
-                return;
-            }
-
-            if (gameState.buildingFort) {
-                gameState.wood -= 10;
-                gameState.forts.push(new Fort(x, y));
-                gameState.buildingFort = false;
-                return;
-            }
-
-            let clicked = false;
-            for (let survivor of gameState.survivors) {
-                const dx = x - survivor.x;
-                const dy = y - survivor.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < survivor.radius + 6) {
-                    gameState.selectedSurvivor = gameState.selectedSurvivor === survivor ? null : survivor;
-                    gameState.survivors.forEach(s => s.selected = (s === gameState.selectedSurvivor));
-                    clicked = true;
-                    break;
-                }
-            }
-
-            if (!clicked && gameState.selectedSurvivor && gameState.phase === 'day') {
-                for (let resource of gameState.resources) {
-                    const dx = x - resource.x;
-                    const dy = y - resource.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < resource.radius + 8) {
-                        gameState.selectedSurvivor.x = resource.x;
-                        gameState.selectedSurvivor.y = resource.y;
-                        setTimeout(() => {
-                            gameState.wood += 5;
-                        }, 3000);
-                        break;
-                    }
-                }
-            }
-        });
-
-        document.getElementById('startInstructions').textContent = 'Select survivors, gather wood during DAY\nDefend against zombies at NIGHT\nSurvive ' + config.win_days + ' nights to win!';
     </script>
 </body>
 </html>
