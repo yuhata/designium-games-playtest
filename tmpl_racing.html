@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRAFFIC RUN</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameContainer {
+            position: relative;
+            border: 2px solid #666;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            z-index: 10;
+            font-size: 24px;
+            text-align: center;
+            gap: 30px;
+        }
+
+        #startScreen h1, #gameOverScreen h1, #clearScreen h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        #startScreen p, #gameOverScreen p, #clearScreen p {
+            font-size: 20px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        button {
+            padding: 12px 40px;
+            font-size: 18px;
+            background: #00d4ff;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            color: #000;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #00a8cc;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 16px;
+            z-index: 5;
+            font-weight: bold;
+            line-height: 1.5;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="startScreen">
+            <h1>TRAFFIC RUN</h1>
+            <p id="startMessage"></p>
+            <button onclick="startGame()">START</button>
+        </div>
+
+        <div id="gameOverScreen" style="display: none;">
+            <h1>GAME OVER</h1>
+            <p>走行距離: <span id="finalDistance">0</span> m</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+
+        <div id="clearScreen" style="display: none;">
+            <h1>CLEAR!</h1>
+            <p>クリアおめでとう！</p>
+            <button onclick="retryGame()">AGAIN</button>
+        </div>
+
+        <div id="ui">
+            <div id="lives"></div>
+            <div id="distance"></div>
+        </div>
+
+        <div id="controls">
+            ← → or A / D : 車線変更
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            title: 'TRAFFIC RUN',
+            bg_color: '#1a1a2e',
+            road_color: '#2c2c3e',
+            line_color: '#f1c40f',
+            player_color: '#00d4ff',
+            obstacle_color: '#e74c3c',
+            lane_count: 3,
+            car_speed: 5,
+            spawn_interval: 90,
+            win_distance: 500,
+            lives: 3
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 400;
+        canvas.height = 600;
+
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+        document.body.style.background = config.bg_color;
+
+        const gameState = {
+            running: false,
+            playerLane: Math.floor(config.lane_count / 2),
+            distance: 0,
+            lives: config.lives,
+            spawnCounter: 0,
+            obstacles: [],
+            scrollOffset: 0
+        };
+
+        const input = {
+            left: false,
+            right: false
+        };
+
+        const laneWidth = canvas.width / config.lane_count;
+        const playerWidth = laneWidth * 0.75;
+        const playerHeight = 45;
+        const playerY = canvas.height - 90;
+        const obstacleWidth = laneWidth * 0.75;
+        const obstacleHeight = 45;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') input.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') input.right = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') input.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') input.right = false;
+        });
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.distance = 0;
+            gameState.lives = config.lives;
+            gameState.playerLane = Math.floor(config.lane_count / 2);
+            gameState.obstacles = [];
+            gameState.scrollOffset = 0;
+            gameState.spawnCounter = 0;
+            gameLoop();
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        function updateGame() {
+            if (!gameState.running) return;
+
+            if (input.left && gameState.playerLane > 0) {
+                gameState.playerLane--;
+                input.left = false;
+            }
+            if (input.right && gameState.playerLane < config.lane_count - 1) {
+                gameState.playerLane++;
+                input.right = false;
+            }
+
+            gameState.distance += config.car_speed * 0.1;
+
+            gameState.spawnCounter++;
+            if (gameState.spawnCounter >= config.spawn_interval) {
+                const randomLane = Math.floor(Math.random() * config.lane_count);
+                gameState.obstacles.push({
+                    lane: randomLane,
+                    y: -obstacleHeight
+                });
+                gameState.spawnCounter = 0;
+            }
+
+            for (let i = gameState.obstacles.length - 1; i >= 0; i--) {
+                gameState.obstacles[i].y += config.car_speed;
+
+                const obsX = gameState.obstacles[i].lane * laneWidth + (laneWidth - obstacleWidth) / 2;
+                const obsY = gameState.obstacles[i].y;
+                const playerX = gameState.playerLane * laneWidth + (laneWidth - playerWidth) / 2;
+
+                if (
+                    playerX < obsX + obstacleWidth &&
+                    playerX + playerWidth > obsX &&
+                    playerY < obsY + obstacleHeight &&
+                    playerY + playerHeight > obsY
+                ) {
+                    gameState.lives--;
+                    gameState.obstacles.splice(i, 1);
+                    continue;
+                }
+
+                if (gameState.obstacles[i].y > canvas.height) {
+                    gameState.obstacles.splice(i, 1);
+                }
+            }
+
+            gameState.scrollOffset += config.car_speed;
+            if (gameState.scrollOffset >= 40) {
+                gameState.scrollOffset -= 40;
+            }
+
+            document.getElementById('lives').textContent = '♥: ' + '♥'.repeat(Math.max(0, gameState.lives));
+            document.getElementById('distance').textContent = '走行: ' + Math.floor(gameState.distance) + ' / ' + config.win_distance + ' m';
+        }
+
+        function drawGame() {
+            ctx.fillStyle = config.road_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = config.line_color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([20, 20]);
+            ctx.lineDashOffset = -gameState.scrollOffset;
+
+            for (let i = 1; i < config.lane_count; i++) {
+                const x = i * laneWidth;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+
+            ctx.setLineDash([]);
+
+            const playerX = gameState.playerLane * laneWidth + (laneWidth - playerWidth) / 2;
+            ctx.fillStyle = config.player_color;
+            ctx.fillRect(playerX, playerY, playerWidth, playerHeight);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(playerX, playerY, playerWidth, playerHeight);
+
+            ctx.fillStyle = config.obstacle_color;
+            for (const obstacle of gameState.obstacles) {
+                const obsX = obstacle.lane * laneWidth + (laneWidth - obstacleWidth) / 2;
+                ctx.fillRect(obsX, obstacle.y, obstacleWidth, obstacleHeight);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(obsX, obstacle.y, obstacleWidth, obstacleHeight);
+            }
+        }
+
+        function gameLoop() {
+            updateGame();
+
+            if (gameState.lives <= 0) {
+                gameState.running = false;
+                document.getElementById('finalDistance').textContent = Math.floor(gameState.distance);
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+
+            if (gameState.distance >= config.win_distance) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+
+            drawGame();
+
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        document.getElementById('startMessage').textContent = config.win_distance + 'm を走りきれ！\n← → で車線変更';
+
+        ctx.fillStyle = config.road_color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    </script>
+</body>
+</html>
