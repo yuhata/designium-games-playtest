@@ -12,41 +12,75 @@
         }
 
         body {
-            font-family: Arial, sans-serif;
-            background-color: #333;
+            font-family: 'Arial', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
 
-        .game-container {
+        .container {
             display: flex;
-            background-color: #fff;
+            gap: 20px;
+            background: white;
+            padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
         }
 
-        .canvas-wrapper {
+        .game-wrapper {
             position: relative;
         }
 
         canvas {
             display: block;
+            border: 3px solid #333;
+            background: #f0e6d2;
             cursor: crosshair;
-            background-color: #f0e6d2;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+
+        .timer {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #d32f2f;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+
+        .timer.warning {
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
 
         .right-panel {
-            width: 200px;
+            width: 160px;
+            background: #f9f9f9;
             padding: 20px;
-            background-color: #fff8dc;
-            border-left: 2px solid #ddd;
+            border: 2px solid #ddd;
+            border-radius: 8px;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
         }
 
         .panel-title {
@@ -54,392 +88,439 @@
             font-weight: bold;
             margin-bottom: 15px;
             color: #333;
-        }
-
-        .timer {
-            font-size: 24px;
-            font-weight: bold;
-            color: #d32f2f;
-            margin-bottom: 20px;
             text-align: center;
         }
 
-        .timer.warning {
-            animation: blink 0.5s infinite;
-        }
-
-        @keyframes blink {
-            0%, 50% {
-                opacity: 1;
-            }
-            51%, 100% {
-                opacity: 0.3;
-            }
-        }
-
         .items-list {
-            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-grow: 1;
         }
 
-        .item {
+        .item-entry {
             padding: 8px;
-            margin-bottom: 8px;
-            background-color: #fff;
-            border: 2px solid #999;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
             font-size: 13px;
-            color: #333;
+            transition: all 0.3s;
         }
 
-        .item:hover {
-            background-color: #ffd700;
-            border-color: #ff9800;
-        }
-
-        .item.found {
-            background-color: #4caf50;
-            color: #fff;
-            border-color: #388e3c;
+        .item-entry.found {
+            background: #e8f5e9;
+            border-color: #4caf50;
+            color: #4caf50;
             text-decoration: line-through;
         }
 
-        .item::before {
-            content: '☐ ';
-            margin-right: 5px;
+        .item-entry.notfound {
+            color: #999;
         }
 
-        .item.found::before {
-            content: '☑ ';
+        .checkmark {
+            margin-right: 5px;
+            display: none;
+        }
+
+        .item-entry.found .checkmark {
+            display: inline;
         }
 
         .screen {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
-            display: flex;
+            display: none;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
             z-index: 1000;
-            flex-direction: column;
         }
 
-        .screen.hidden {
-            display: none;
+        .screen.active {
+            display: flex;
         }
 
-        .screen-content {
-            background-color: #fff;
-            padding: 40px;
-            border-radius: 10px;
+        .screen h1 {
+            font-size: 48px;
+            margin-bottom: 30px;
             text-align: center;
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
-            max-width: 400px;
         }
 
-        .screen-content h1 {
-            font-size: 36px;
-            margin-bottom: 20px;
-            color: #333;
-        }
-
-        .screen-content p {
+        .screen p {
             font-size: 18px;
-            margin-bottom: 20px;
-            color: #666;
+            margin-bottom: 40px;
+            text-align: center;
         }
 
-        .screen-content button {
-            padding: 12px 40px;
-            font-size: 16px;
-            font-weight: bold;
+        .screen button {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #ffd700;
+            color: #333;
             border: none;
             border-radius: 5px;
-            background-color: #ffd700;
-            color: #333;
             cursor: pointer;
+            font-weight: bold;
             transition: all 0.3s;
-            margin-top: 20px;
         }
 
-        .screen-content button:hover {
-            background-color: #ffed4e;
+        .screen button:hover {
+            background: #ffed4e;
             transform: scale(1.05);
         }
 
-        .feedback {
-            position: fixed;
-            font-size: 24px;
-            font-weight: bold;
+        .flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.3);
             pointer-events: none;
-            animation: fadeOut 1s ease-out forwards;
-            z-index: 999;
+            display: none;
         }
 
-        .feedback.correct {
+        .flash.active {
+            display: block;
+            animation: flashEffect 0.3s;
+        }
+
+        @keyframes flashEffect {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .found-animation {
+            position: absolute;
+            font-size: 20px;
+            font-weight: bold;
             color: #4caf50;
+            pointer-events: none;
+            animation: foundFloat 1s ease-out forwards;
         }
 
-        .feedback.wrong {
-            color: #d32f2f;
-        }
-
-        @keyframes fadeOut {
+        @keyframes foundFloat {
             0% {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0) scale(1);
             }
             100% {
                 opacity: 0;
-                transform: translateY(-50px);
+                transform: translateY(-50px) scale(0.8);
             }
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="game-wrapper">
+            <canvas id="gameCanvas" width="500" height="400"></canvas>
+            <div class="ui-overlay" id="scoreDisplay">スコア: 0/6</div>
+            <div class="timer" id="timerDisplay">60</div>
+            <div class="flash" id="flashEffect"></div>
 
-<!-- {{GAME_CONFIG}} -->
-<script>
-const config = {
-    title: 'HIDDEN OBJECTS',
-    bg_color: '#f0e6d2',
-    highlight_color: '#ffd700',
-    time_limit: 60,
-    target_count: 6,
-    miss_penalty: 5
-};
-</script>
+            <div class="screen" id="startScreen">
+                <h1>HIDDEN OBJECTS</h1>
+                <p>6つの隠れたアイテムを見つけよう！<br>60秒以内に全てを発見できるか？</p>
+                <button onclick="startGame()">START</button>
+            </div>
 
-<div id="startScreen" class="screen">
-    <div class="screen-content">
-        <h1>🔍 HIDDEN OBJECTS</h1>
-        <p>隠されたアイテムを見つけよう！</p>
-        <p>制限時間: 60秒</p>
-        <p>全6つのアイテムを探してください</p>
-        <button onclick="startGame()">START</button>
+            <div class="screen" id="gameOverScreen">
+                <h1>GAME OVER</h1>
+                <p id="gameOverMessage">時間切れ！</p>
+                <button onclick="resetGame()">RETRY</button>
+            </div>
+
+            <div class="screen" id="clearScreen">
+                <h1>CLEAR!</h1>
+                <p id="clearMessage">全てのアイテムを見つけました！</p>
+                <button onclick="resetGame()">PLAY AGAIN</button>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="panel-title">探すもの</div>
+            <div class="items-list" id="itemsList"></div>
+        </div>
     </div>
-</div>
 
-<div id="gameOverScreen" class="screen hidden">
-    <div class="screen-content">
-        <h1>⏰ GAME OVER</h1>
-        <p>時間切れです！</p>
-        <p id="gameOverStats"></p>
-        <button onclick="retryGame()">RETRY</button>
-    </div>
-</div>
+    <script>
+        // {{GAME_CONFIG}}
+        const config = {
+            title: 'HIDDEN OBJECTS',
+            bg_color: '#f0e6d2',
+            highlight_color: '#ffd700',
+            time_limit: 60,
+            target_count: 6,
+            miss_penalty: 5
+        };
 
-<div id="clearScreen" class="screen hidden">
-    <div class="screen-content">
-        <h1>🎉 CLEAR!</h1>
-        <p>全てのアイテムを見つけました！</p>
-        <p id="clearStats"></p>
-        <button onclick="retryGame()">PLAY AGAIN</button>
-    </div>
-</div>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-<div class="game-container" id="gameContainer" style="display: none;">
-    <div class="canvas-wrapper">
-        <canvas id="gameCanvas" width="500" height="400"></canvas>
-    </div>
-    <div class="right-panel">
-        <div class="panel-title">探すもの</div>
-        <div class="timer" id="timer">60</div>
-        <div class="items-list" id="itemsList"></div>
-    </div>
-</div>
+        const items = [
+            { name: '🔑 鍵',   x: 120, y: 180, radius: 18, found: false },
+            { name: '📕 本',   x: 280, y: 95,  radius: 20, found: false },
+            { name: '🕐 時計', x: 400, y: 140, radius: 22, found: false },
+            { name: '🔔 鈴',   x: 80,  y: 290, radius: 16, found: false },
+            { name: '🎀 リボン',x: 360, y: 310, radius: 18, found: false },
+            { name: '💎 宝石', x: 460, y: 220, radius: 15, found: false }
+        ];
 
-<script>
-const gameState = {
-    running: false,
-    timeRemaining: config.time_limit,
-    foundCount: 0,
-    missCount: 0,
-    startTime: 0
-};
+        const gameState = {
+            running: false,
+            timeLeft: config.time_limit,
+            foundCount: 0,
+            startTime: 0,
+            gameActive: false
+        };
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+        function drawComplexScene() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-const items = [
-    { name: '🐱 猫', found: false, x: 80, y: 120, radius: 25 },
-    { name: '🌳 木', found: false, x: 200, y: 80, radius: 30 },
-    { name: '🏠 家', found: false, x: 400, y: 200, radius: 35 },
-    { name: '🚗 車', found: false, x: 350, y: 320, radius: 28 },
-    { name: '☀️ 太陽', found: false, x: 460, y: 60, radius: 22 },
-    { name: '🌸 花', found: false, x: 120, y: 280, radius: 20 }
-];
+            // 壁と床
+            ctx.fillStyle = '#d4c5b0';
+            ctx.fillRect(0, 0, canvas.width, 100);
+            ctx.fillStyle = '#c9b89f';
+            ctx.fillRect(0, 100, canvas.width, canvas.height);
 
-function startGame() {
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameContainer').style.display = 'flex';
-    
-    gameState.running = true;
-    gameState.timeRemaining = config.time_limit;
-    gameState.foundCount = 0;
-    gameState.missCount = 0;
-    gameState.startTime = Date.now();
-    
-    items.forEach(item => item.found = false);
-    
-    renderItemsList();
-    gameLoop();
-}
+            // 木製の棚パターン
+            ctx.strokeStyle = '#8b7355';
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 4; i++) {
+                ctx.strokeRect(20 + i * 115, 50 + i * 20, 100, 40);
+            }
 
-function gameLoop() {
-    if (!gameState.running) return;
-    
-    // タイマー更新
-    const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
-    gameState.timeRemaining = Math.max(0, config.time_limit - elapsed);
-    
-    // 表示更新
-    document.getElementById('timer').textContent = gameState.timeRemaining;
-    if (gameState.timeRemaining <= 10) {
-        document.getElementById('timer').classList.add('warning');
-    }
-    
-    // 時間切れチェック
-    if (gameState.timeRemaining <= 0) {
-        endGame(false);
-        return;
-    }
-    
-    // クリア判定
-    if (gameState.foundCount === config.target_count) {
-        endGame(true);
-        return;
-    }
-    
-    drawScene();
-    requestAnimationFrame(gameLoop);
-}
+            // テクスチャー: 斜線パターン
+            ctx.strokeStyle = '#baa88f';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 50; i++) {
+                ctx.beginPath();
+                ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+                ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+                ctx.stroke();
+            }
 
-function drawScene() {
-    // 背景
-    ctx.fillStyle = config.bg_color;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // 空
-    ctx.fillStyle = '#87ceeb';
-    ctx.fillRect(0, 0, canvas.width, 150);
-    
-    // 地面
-    ctx.fillStyle = '#90ee90';
-    ctx.fillRect(0, 150, canvas.width, 250);
-    
-    // アイテム描画
-    items.forEach(item => {
-        const x = item.x;
-        const y = item.y;
-        
-        // ハイライト（発見済み）
-        if (item.found) {
-            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-            ctx.beginPath();
-            ctx.arc(x, y, item.radius + 5, 0, Math.PI * 2);
-            ctx.fill();
+            // 装飾的な円と矩形
+            ctx.fillStyle = '#e0d5c7';
+            for (let i = 0; i < 15; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const size = Math.random() * 20 + 5;
+                ctx.fillRect(x, y, size, size);
+            }
+
+            ctx.strokeStyle = '#a89a88';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 10; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const r = Math.random() * 15 + 5;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 家具の影
+            ctx.fillStyle = 'rgba(139, 115, 85, 0.15)';
+            ctx.fillRect(30, 120, 440, 8);
+            ctx.fillRect(10, 200, 480, 8);
+            ctx.fillRect(50, 280, 400, 8);
+
+            // 枠線
+            ctx.strokeStyle = '#996633';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(15, 60, 90, 70);
+            ctx.strokeRect(140, 40, 100, 90);
+            ctx.strokeRect(280, 70, 110, 80);
+            ctx.strokeRect(420, 100, 60, 60);
+            ctx.strokeRect(30, 220, 120, 100);
+            ctx.strokeRect(200, 250, 150, 80);
+            ctx.strokeRect(380, 260, 100, 90);
+
+            // ノイズを追加（より複雑にする）
+            ctx.fillStyle = 'rgba(100, 100, 100, 0.1)';
+            for (let i = 0; i < 100; i++) {
+                ctx.fillRect(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height,
+                    Math.random() * 3,
+                    Math.random() * 3
+                );
+            }
         }
-        
-        // アイテム本体
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = item.found ? config.highlight_color : '#666';
-        ctx.lineWidth = item.found ? 3 : 2;
-        ctx.beginPath();
-        ctx.arc(x, y, item.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        
-        // 絵文字
-        ctx.font = `${item.radius * 1.5}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const emoji = item.name.split(' ')[0];
-        ctx.fillText(emoji, x, y);
-    });
-}
 
-function renderItemsList() {
-    const listContainer = document.getElementById('itemsList');
-    listContainer.innerHTML = '';
-    
-    items.forEach((item, index) => {
-        const div = document.createElement('div');
-        div.className = 'item' + (item.found ? ' found' : '');
-        div.textContent = item.name;
-        listContainer.appendChild(div);
-    });
-}
+        function drawItems(highlight = false) {
+            items.forEach((item, index) => {
+                if (!item.found) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
 
-canvas.addEventListener('click', (e) => {
-    if (!gameState.running) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    let found = false;
-    
-    for (let item of items) {
-        if (item.found) continue;
-        
-        const dist = Math.sqrt((x - item.x) ** 2 + (y - item.y) ** 2);
-        
-        if (dist <= item.radius) {
-            item.found = true;
-            gameState.foundCount++;
-            showFeedback(x, y, true);
-            found = true;
-            renderItemsList();
-            break;
+                    if (highlight) {
+                        ctx.fillStyle = config.highlight_color;
+                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = '#ffb300';
+                    } else {
+                        ctx.fillStyle = '#f5deb3';
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = '#d4a574';
+                    }
+
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // アイテムのテキストを描画
+                    ctx.fillStyle = '#333';
+                    ctx.font = `bold ${item.radius}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(item.name.split(' ')[0], item.x, item.y);
+
+                    ctx.restore();
+                }
+            });
         }
-    }
-    
-    if (!found && gameState.running) {
-        gameState.timeRemaining = Math.max(0, gameState.timeRemaining - config.miss_penalty);
-        gameState.missCount++;
-        showFeedback(x, y, false);
-    }
-});
 
-function showFeedback(x, y, isCorrect) {
-    const feedback = document.createElement('div');
-    feedback.className = 'feedback ' + (isCorrect ? 'correct' : 'wrong');
-    feedback.textContent = isCorrect ? '✓ GOOD!' : '✗ MISS!';
-    feedback.style.left = x + 'px';
-    feedback.style.top = y + 'px';
-    canvas.parentElement.appendChild(feedback);
-    
-    setTimeout(() => feedback.remove(), 1000);
-}
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+            gameState.timeLeft = Math.max(0, config.time_limit - elapsed);
 
-function endGame(isWin) {
-    gameState.running = false;
-    document.getElementById('gameContainer').style.display = 'none';
-    
-    if (isWin) {
-        document.getElementById('clearStats').textContent = 
-            `時間: ${config.time_limit - gameState.timeRemaining}秒 / ミス: ${gameState.missCount}回`;
-        document.getElementById('clearScreen').classList.remove('hidden');
-    } else {
-        document.getElementById('gameOverStats').textContent = 
-            `発見: ${gameState.foundCount}/${config.target_count} / ミス: ${gameState.missCount}回`;
-        document.getElementById('gameOverScreen').classList.remove('hidden');
-    }
-}
+            const timerDisplay = document.getElementById('timerDisplay');
+            timerDisplay.textContent = gameState.timeLeft;
 
-function retryGame() {
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('clearScreen').classList.add('hidden');
-    document.getElementById('timer').classList.remove('warning');
-    gameState.running = false;
-}
-</script>
+            if (gameState.timeLeft <= 10) {
+                timerDisplay.classList.add('warning');
+            } else {
+                timerDisplay.classList.remove('warning');
+            }
 
+            if (gameState.timeLeft <= 0) {
+                endGame(false);
+            }
+        }
+
+        function updateItemsList() {
+            const list = document.getElementById('itemsList');
+            list.innerHTML = '';
+            items.forEach((item, index) => {
+                const entry = document.createElement('div');
+                entry.className = `item-entry ${item.found ? 'found' : 'notfound'}`;
+                entry.innerHTML = `<span class="checkmark">✓</span>${item.name}`;
+                list.appendChild(entry);
+            });
+        }
+
+        function onCanvasClick(e) {
+            if (!gameState.running || !gameState.gameActive) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            let found = false;
+
+            for (let item of items) {
+                if (!item.found) {
+                    const distance = Math.sqrt((clickX - item.x) ** 2 + (clickY - item.y) ** 2);
+                    if (distance <= item.radius) {
+                        item.found = true;
+                        gameState.foundCount++;
+                        found = true;
+                        updateItemsList();
+                        document.getElementById('scoreDisplay').textContent = `スコア: ${gameState.foundCount}/${config.target_count}`;
+
+                        // Found animation
+                        const animation = document.createElement('div');
+                        animation.className = 'found-animation';
+                        animation.textContent = '✓ FOUND!';
+                        animation.style.left = (clickX + rect.left) + 'px';
+                        animation.style.top = (clickY + rect.top - 50) + 'px';
+                        document.body.appendChild(animation);
+                        setTimeout(() => animation.remove(), 1000);
+
+                        if (gameState.foundCount === config.target_count) {
+                            endGame(true);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!found) {
+                // ペナルティ
+                gameState.timeLeft = Math.max(0, gameState.timeLeft - config.miss_penalty);
+                
+                // フラッシュ
+                const flash = document.getElementById('flashEffect');
+                flash.classList.remove('active');
+                void flash.offsetWidth; // reflow
+                flash.classList.add('active');
+            }
+        }
+
+        function gameLoop() {
+            if (!gameState.running) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            updateTimer();
+            drawComplexScene();
+            drawItems();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').classList.remove('active');
+            gameState.running = true;
+            gameState.gameActive = true;
+            gameState.timeLeft = config.time_limit;
+            gameState.foundCount = 0;
+            gameState.startTime = Date.now();
+
+            // Reset items
+            items.forEach(item => item.found = false);
+            updateItemsList();
+            document.getElementById('scoreDisplay').textContent = `スコア: 0/${config.target_count}`;
+            document.getElementById('timerDisplay').textContent = config.time_limit;
+
+            gameLoop();
+        }
+
+        function endGame(cleared) {
+            gameState.running = false;
+            gameState.gameActive = false;
+
+            if (cleared) {
+                document.getElementById('clearMessage').textContent = `${gameState.timeLeft}秒で全アイテムを発見！`;
+                document.getElementById('clearScreen').classList.add('active');
+            } else {
+                document.getElementById('gameOverMessage').textContent = `${gameState.foundCount}/${config.target_count}個を発見`;
+                document.getElementById('gameOverScreen').classList.add('active');
+            }
+        }
+
+        function resetGame() {
+            document.getElementById('clearScreen').classList.remove('active');
+            document.getElementById('gameOverScreen').classList.remove('active');
+            document.getElementById('startScreen').classList.add('active');
+            document.getElementById('timerDisplay').classList.remove('warning');
+        }
+
+        canvas.addEventListener('click', onCanvasClick);
+
+        // Initial screen
+        document.getElementById('startScreen').classList.add('active');
+        updateItemsList();
+    </script>
 </body>
 </html>

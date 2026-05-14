@@ -13,25 +13,24 @@
 
         body {
             font-family: 'Arial', sans-serif;
+            background-color: #1a202c;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            background-color: #1a202c;
+            height: 100vh;
         }
 
-        #gameContainer {
+        .container {
             position: relative;
-            width: 640px;
+            width: 840px;
             height: 480px;
             background-color: #2d3748;
-            border: 3px solid #4a5568;
             border-radius: 8px;
-            overflow: hidden;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
         }
 
-        #gameCanvas {
+        canvas {
             display: block;
             background-color: #2d3748;
         }
@@ -42,12 +41,54 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            background: rgba(0, 0, 0, 0.9);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 100;
+        }
+
+        .start-content {
+            text-align: center;
+            color: white;
+        }
+
+        .start-content h1 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #4299e1;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .instructions {
+            font-size: 16px;
+            margin-bottom: 40px;
+            line-height: 1.8;
+            color: #cbd5e0;
+        }
+
+        .start-btn, .again-btn {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);
+        }
+
+        .start-btn:hover, .again-btn:hover {
+            background: linear-gradient(135deg, #3182ce, #2c5282);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(66, 153, 225, 0.6);
+        }
+
+        .start-btn:active, .again-btn:active {
+            transform: translateY(0);
         }
 
         #clearScreen {
@@ -56,84 +97,103 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 101;
+            z-index: 100;
         }
 
-        .screen-content {
+        .clear-content {
             text-align: center;
             color: white;
         }
 
-        .screen-content h1 {
-            font-size: 4em;
+        .clear-content h2 {
+            font-size: 48px;
             margin-bottom: 20px;
-            color: #63b3ed;
+            color: #48bb78;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
         }
 
-        .screen-content p {
-            font-size: 1.2em;
-            margin-bottom: 30px;
+        .clear-content p {
+            font-size: 18px;
+            margin-bottom: 40px;
             color: #cbd5e0;
         }
 
-        button {
-            padding: 15px 40px;
-            font-size: 1.2em;
-            background-color: #63b3ed;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: bold;
-        }
-
-        button:hover {
-            background-color: #4299e1;
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(99, 179, 237, 0.4);
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        #progress {
+        #progressBar {
             position: absolute;
             top: 10px;
             right: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: #63b3ed;
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-size: 0.9em;
+            font-size: 14px;
+            color: #4299e1;
             font-weight: bold;
-            display: none;
+            z-index: 50;
+        }
+
+        .progress-text {
+            color: #a0aec0;
+        }
+
+        .preview-container {
+            position: absolute;
+            top: 10px;
+            left: 650px;
+            width: 180px;
+            height: 180px;
+            border: 2px solid #4299e1;
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 5px;
+            z-index: 30;
+        }
+
+        .preview-title {
+            color: #4299e1;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 3px;
+            text-align: center;
+        }
+
+        #previewCanvas {
+            border: 1px solid #2d3748;
+            border-radius: 2px;
+            background-color: #1a202c;
         }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
+    <div class="container">
         <canvas id="gameCanvas" width="640" height="480"></canvas>
-        <div id="progress">0/16</div>
+        <div id="progressBar">
+            <span id="progress">0</span><span class="progress-text">/16</span>
+        </div>
+        <div class="preview-container">
+            <div class="preview-title">正解位置</div>
+            <canvas id="previewCanvas" width="170" height="160"></canvas>
+        </div>
+
         <div id="startScreen">
-            <div class="screen-content">
+            <div class="start-content">
                 <h1>JIGSAW</h1>
-                <p>Drag and drop puzzle pieces to their correct positions</p>
-                <button onclick="startGame()">START</button>
+                <div class="instructions">
+                    <p>4×4 のピースをドラッグして</p>
+                    <p>正しい位置に置いてください</p>
+                    <br>
+                    <p style="font-size: 14px;">右の枠が正解位置のヒントです</p>
+                </div>
+                <button class="start-btn">START</button>
             </div>
         </div>
+
         <div id="clearScreen">
-            <div class="screen-content">
-                <h1>CLEAR!</h1>
-                <p>Congratulations! You completed the puzzle!</p>
-                <button onclick="retryGame()">PLAY AGAIN</button>
+            <div class="clear-content">
+                <h2>🎉 CLEAR! 🎉</h2>
+                <p>全てのピースを正しく配置しました！</p>
+                <button class="again-btn">PLAY AGAIN</button>
             </div>
         </div>
     </div>
@@ -144,192 +204,215 @@
             title: 'JIGSAW',
             bg_color: '#2d3748',
             piece_border: '#ffffff',
-            snap_distance: 20,
+            snap_distance: 40,
             grid_cols: 4,
             grid_rows: 4
         };
 
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        
+        // Game State
         const gameState = {
             running: false,
             pieces: [],
-            selectedPiece: null,
-            offsetX: 0,
-            offsetY: 0,
-            isSnapped: []
+            snappedPieces: new Set(),
+            draggedPiece: null,
+            dragOffsetX: 0,
+            dragOffsetY: 0,
+            image: null,
+            pieceSize: 0
         };
 
-        const pieceWidth = canvas.width / config.grid_cols;
-        const pieceHeight = canvas.height / config.grid_rows;
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const previewCtx = previewCanvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const clearScreen = document.getElementById('clearScreen');
+        const progressDisplay = document.getElementById('progress');
+        const startBtn = document.querySelector('.start-btn');
+        const againBtn = document.querySelector('.again-btn');
 
-        function generateGeometricPattern() {
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = canvas.width;
-            offscreenCanvas.height = canvas.height;
-            const offCtx = offscreenCanvas.getContext('2d');
+        // Generate colorful geometric pattern image
+        function generateImage() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = config.grid_cols * 100;
+            tempCanvas.height = config.grid_rows * 100;
+            const tempCtx = tempCanvas.getContext('2d');
 
-            offCtx.fillStyle = '#e2e8f0';
-            offCtx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-
-            for (let i = 0; i < config.grid_rows; i++) {
-                for (let j = 0; j < config.grid_cols; j++) {
-                    const x = j * pieceWidth;
-                    const y = i * pieceHeight;
-                    const hue = (i * config.grid_cols + j) * 22.5;
-                    
-                    offCtx.fillStyle = `hsl(${hue}, 70%, 60%)`;
-                    offCtx.fillRect(x, y, pieceWidth, pieceHeight);
-
-                    offCtx.strokeStyle = '#2d3748';
-                    offCtx.lineWidth = 2;
-                    offCtx.strokeRect(x, y, pieceWidth, pieceHeight);
-
-                    const cx = x + pieceWidth / 2;
-                    const cy = y + pieceHeight / 2;
-                    offCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                    offCtx.beginPath();
-                    offCtx.arc(cx, cy, pieceWidth / 3, 0, Math.PI * 2);
-                    offCtx.fill();
-                }
-            }
-
-            return offscreenCanvas;
-        }
-
-        function createPieces() {
-            gameState.pieces = [];
-            gameState.isSnapped = [];
-            const patternCanvas = generateGeometricPattern();
+            // Draw colorful grid pattern
+            const colors = [
+                '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
+                '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
+                '#F8B88B', '#AED6F1', '#F5B7B1', '#D5F4E6',
+                '#FADBD8', '#D7BDE2', '#A9DFBF', '#FCF3CF'
+            ];
 
             for (let row = 0; row < config.grid_rows; row++) {
                 for (let col = 0; col < config.grid_cols; col++) {
-                    const sourceX = col * pieceWidth;
-                    const sourceY = row * pieceHeight;
-                    const correctX = sourceX;
-                    const correctY = sourceY;
+                    const colorIdx = row * config.grid_cols + col;
+                    tempCtx.fillStyle = colors[colorIdx];
+                    tempCtx.fillRect(col * 100, row * 100, 100, 100);
 
-                    let randomX, randomY;
-                    do {
-                        randomX = Math.random() * (canvas.width - pieceWidth);
-                        randomY = Math.random() * (canvas.height - pieceHeight);
-                    } while (Math.abs(randomX - correctX) < 100 && Math.abs(randomY - correctY) < 100);
+                    // Add geometric patterns
+                    tempCtx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+                    tempCtx.lineWidth = 2;
+                    tempCtx.strokeRect(col * 100, row * 100, 100, 100);
 
+                    // Add circles
+                    tempCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                    tempCtx.beginPath();
+                    tempCtx.arc(col * 100 + 50, row * 100 + 50, 25, 0, Math.PI * 2);
+                    tempCtx.fill();
+                }
+            }
+
+            const img = new Image();
+            img.src = tempCanvas.toDataURL();
+            return img;
+        }
+
+        // Initialize pieces
+        function initializePieces() {
+            gameState.pieces = [];
+            gameState.snappedPieces.clear();
+            gameState.draggedPiece = null;
+
+            const pieceWidth = 640 / config.grid_cols;
+            const pieceHeight = 480 / config.grid_rows;
+            gameState.pieceSize = Math.min(pieceWidth, pieceHeight);
+
+            for (let row = 0; row < config.grid_rows; row++) {
+                for (let col = 0; col < config.grid_cols; col++) {
                     const piece = {
                         id: row * config.grid_cols + col,
-                        x: randomX,
-                        y: randomY,
-                        correctX: correctX,
-                        correctY: correctY,
-                        width: pieceWidth,
-                        height: pieceHeight,
-                        sourceX: sourceX,
-                        sourceY: sourceY,
-                        patternCanvas: patternCanvas,
+                        correctCol: col,
+                        correctRow: row,
+                        x: Math.random() * 400 + 50,
+                        y: Math.random() * 300 + 50,
+                        width: 100,
+                        height: 100,
+                        srcX: col * 100,
+                        srcY: row * 100,
                         snapped: false
                     };
-
                     gameState.pieces.push(piece);
-                    gameState.isSnapped.push(false);
                 }
             }
         }
 
-        function drawPiece(piece) {
-            ctx.save();
-            ctx.strokeStyle = config.piece_border;
-            ctx.lineWidth = 2;
-            
-            ctx.drawImage(
-                piece.patternCanvas,
-                piece.sourceX, piece.sourceY, piece.width, piece.height,
-                piece.x, piece.y, piece.width, piece.height
-            );
-
-            ctx.strokeRect(piece.x, piece.y, piece.width, piece.height);
-            
-            if (piece.snapped) {
-                ctx.fillStyle = 'rgba(76, 175, 80, 0.2)';
-                ctx.fillRect(piece.x, piece.y, piece.width, piece.height);
-            }
-
-            ctx.restore();
-        }
-
-        function drawGame() {
+        // Draw game
+        function draw() {
+            // Clear canvas
             ctx.fillStyle = config.bg_color;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // Draw grid guides for correct positions (left area)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let col = 0; col <= config.grid_cols; col++) {
+                ctx.beginPath();
+                ctx.moveTo(col * 100, 0);
+                ctx.lineTo(col * 100, 480);
+                ctx.stroke();
+            }
+            for (let row = 0; row <= config.grid_rows; row++) {
+                ctx.beginPath();
+                ctx.moveTo(0, row * 120);
+                ctx.lineTo(640, row * 120);
+                ctx.stroke();
+            }
+
+            // Draw pieces
             gameState.pieces.forEach(piece => {
-                drawPiece(piece);
+                if (gameState.image) {
+                    ctx.drawImage(
+                        gameState.image,
+                        piece.srcX,
+                        piece.srcY,
+                        piece.width,
+                        piece.height,
+                        piece.x,
+                        piece.y,
+                        piece.width,
+                        piece.height
+                    );
+                }
+
+                // Draw border
+                ctx.strokeStyle = piece.snapped ? '#48bb78' : config.piece_border;
+                ctx.lineWidth = piece.snapped ? 3 : 2;
+                ctx.strokeRect(piece.x, piece.y, piece.width, piece.height);
             });
         }
 
-        function getPieceAt(x, y) {
-            for (let i = gameState.pieces.length - 1; i >= 0; i--) {
-                const piece = gameState.pieces[i];
-                if (x >= piece.x && x <= piece.x + piece.width &&
-                    y >= piece.y && y <= piece.y + piece.height) {
-                    return i;
-                }
+        // Draw preview
+        function drawPreview() {
+            previewCtx.fillStyle = '#1a202c';
+            previewCtx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+            const cellWidth = previewCanvas.width / config.grid_cols;
+            const cellHeight = previewCanvas.height / config.grid_rows;
+
+            // Draw grid
+            previewCtx.strokeStyle = 'rgba(66, 153, 225, 0.3)';
+            previewCtx.lineWidth = 1;
+            for (let col = 0; col <= config.grid_cols; col++) {
+                previewCtx.beginPath();
+                previewCtx.moveTo(col * cellWidth, 0);
+                previewCtx.lineTo(col * cellWidth, previewCanvas.height);
+                previewCtx.stroke();
             }
-            return null;
+            for (let row = 0; row <= config.grid_rows; row++) {
+                previewCtx.beginPath();
+                previewCtx.moveTo(0, row * cellHeight);
+                previewCtx.lineTo(previewCanvas.width, row * cellHeight);
+                previewCtx.stroke();
+            }
+
+            // Highlight snapped pieces
+            gameState.pieces.forEach(piece => {
+                if (piece.snapped) {
+                    previewCtx.fillStyle = 'rgba(72, 187, 120, 0.4)';
+                    previewCtx.fillRect(
+                        piece.correctCol * cellWidth,
+                        piece.correctRow * cellHeight,
+                        cellWidth,
+                        cellHeight
+                    );
+                }
+            });
         }
 
+        // Check snap
         function checkSnap(piece) {
-            const dx = Math.abs(piece.x - piece.correctX);
-            const dy = Math.abs(piece.y - piece.correctY);
+            const correctX = piece.correctCol * 100;
+            const correctY = piece.correctRow * 100;
+
+            const dx = Math.abs(piece.x - correctX);
+            const dy = Math.abs(piece.y - correctY);
 
             if (dx < config.snap_distance && dy < config.snap_distance) {
-                piece.x = piece.correctX;
-                piece.y = piece.correctY;
+                piece.x = correctX;
+                piece.y = correctY;
                 piece.snapped = true;
-                gameState.isSnapped[piece.id] = true;
+                gameState.snappedPieces.add(piece.id);
+
+                // Update progress
+                progressDisplay.textContent = gameState.snappedPieces.size;
+
+                // Check clear
+                if (gameState.snappedPieces.size === config.grid_cols * config.grid_rows) {
+                    gameState.running = false;
+                    setTimeout(() => {
+                        clearScreen.style.display = 'flex';
+                    }, 300);
+                }
+
                 return true;
             }
             return false;
         }
 
-        function updateProgress() {
-            const snappedCount = gameState.isSnapped.filter(s => s).length;
-            document.getElementById('progress').textContent = snappedCount + '/' + (config.grid_cols * config.grid_rows);
-        }
-
-        function checkClear() {
-            return gameState.isSnapped.every(s => s);
-        }
-
-        function showClearScreen() {
-            gameState.running = false;
-            document.getElementById('clearScreen').style.display = 'flex';
-        }
-
-        function startGame() {
-            gameState.running = true;
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            document.getElementById('progress').style.display = 'block';
-            
-            createPieces();
-            updateProgress();
-            animate();
-        }
-
-        function retryGame() {
-            document.getElementById('startScreen').style.display = 'flex';
-            document.getElementById('clearScreen').style.display = 'none';
-            document.getElementById('progress').style.display = 'none';
-            gameState.running = false;
-        }
-
-        function animate() {
-            drawGame();
-            if (gameState.running) {
-                requestAnimationFrame(animate);
-            }
-        }
-
+        // Mouse events
         canvas.addEventListener('mousedown', (e) => {
             if (!gameState.running) return;
 
@@ -337,47 +420,76 @@
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            const pieceIndex = getPieceAt(x, y);
-            if (pieceIndex !== null) {
-                gameState.selectedPiece = pieceIndex;
-                const piece = gameState.pieces[pieceIndex];
-                gameState.offsetX = x - piece.x;
-                gameState.offsetY = y - piece.y;
+            // Find piece at click position (reverse order for top-most)
+            for (let i = gameState.pieces.length - 1; i >= 0; i--) {
+                const piece = gameState.pieces[i];
+                if (piece.snapped) continue;
 
-                gameState.pieces.push(gameState.pieces.splice(pieceIndex, 1)[0]);
+                if (x >= piece.x && x <= piece.x + piece.width &&
+                    y >= piece.y && y <= piece.y + piece.height) {
+                    gameState.draggedPiece = piece;
+                    gameState.dragOffsetX = x - piece.x;
+                    gameState.dragOffsetY = y - piece.y;
+                    break;
+                }
             }
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            if (!gameState.running || gameState.selectedPiece === null) return;
+            if (!gameState.running || !gameState.draggedPiece) return;
 
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            const piece = gameState.pieces[gameState.pieces.length - 1];
-            piece.x = x - gameState.offsetX;
-            piece.y = y - gameState.offsetY;
+            gameState.draggedPiece.x = x - gameState.dragOffsetX;
+            gameState.draggedPiece.y = y - gameState.dragOffsetY;
 
-            piece.x = Math.max(0, Math.min(piece.x, canvas.width - piece.width));
-            piece.y = Math.max(0, Math.min(piece.y, canvas.height - piece.height));
+            // Keep within bounds
+            gameState.draggedPiece.x = Math.max(0, Math.min(gameState.draggedPiece.x, canvas.width - gameState.draggedPiece.width));
+            gameState.draggedPiece.y = Math.max(0, Math.min(gameState.draggedPiece.y, canvas.height - gameState.draggedPiece.height));
         });
 
-        canvas.addEventListener('mouseup', () => {
-            if (!gameState.running || gameState.selectedPiece === null) return;
-
-            const piece = gameState.pieces[gameState.pieces.length - 1];
-            checkSnap(piece);
-            updateProgress();
-
-            if (checkClear()) {
-                showClearScreen();
+        canvas.addEventListener('mouseup', (e) => {
+            if (gameState.draggedPiece) {
+                checkSnap(gameState.draggedPiece);
+                gameState.draggedPiece = null;
             }
-
-            gameState.selectedPiece = null;
         });
 
-        document.getElementById('startScreen').style.display = 'flex';
+        // Start button
+        startBtn.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            gameState.running = true;
+            gameState.image = generateImage();
+            initializePieces();
+            progressDisplay.textContent = '0';
+            gameLoop();
+        });
+
+        // Again button
+        againBtn.addEventListener('click', () => {
+            clearScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+        });
+
+        // Game loop
+        function gameLoop() {
+            draw();
+            drawPreview();
+
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Initial draw
+        ctx.fillStyle = config.bg_color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#cbd5e0';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('START をクリック', canvas.width / 2, canvas.height / 2);
     </script>
 </body>
 </html>
