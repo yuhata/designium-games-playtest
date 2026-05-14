@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <style>
+    /* Parameter Schema:
+    {
+      "theme":             "string  // param生成への入力。HTMLには出ない",
+      "title":             "string  // {{title}}",
+      "bg_color":          "string  // {{bg_color}}",
+      "mole_color":        "string  // {{mole_color}}",
+      "hole_color":        "string  // {{hole_color}}",
+      "time_limit":        "int    // {{time_limit}} (秒)",
+      "win_score":         "int    // {{win_score}}",
+      "appear_interval":   "int    // {{appear_interval}} (フレーム)",
+      "visible_duration":  "int    // {{visible_duration}} (フレーム)"
+    }
+    Default: title="WHACK", bg_color="#1a2e1a", mole_color="#8b4513", hole_color="#2c1a0e",
+             time_limit=30, win_score=20, appear_interval=60, visible_duration=80
+    */
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: {{bg_color}};
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+
+    .container {
+      text-align: center;
+    }
+
+    #startScreen, #gameOverScreen, #clearScreen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 30px;
+    }
+
+    #startScreen.hidden, #gameOverScreen.hidden, #clearScreen.hidden {
+      display: none;
+    }
+
+    .screen-title {
+      font-size: 48px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+
+    .screen-message {
+      font-size: 20px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+      max-width: 600px;
+    }
+
+    .start-button, .retry-button {
+      padding: 15px 40px;
+      font-size: 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .start-button:hover, .retry-button:hover {
+      background-color: #45a049;
+    }
+
+    #gameScreen {
+      display: none;
+    }
+
+    #gameScreen.active {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .status-bar {
+      font-size: 18px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-around;
+      gap: 20px;
+    }
+
+    .status-item {
+      background-color: rgba(0, 0, 0, 0.3);
+      padding: 10px 20px;
+      border-radius: 5px;
+      min-width: 200px;
+    }
+
+    .instructions {
+      font-size: 14px;
+      color: #aaa;
+      margin-bottom: 10px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 15px;
+      margin: 0 auto;
+      background-color: rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      border-radius: 8px;
+    }
+
+    .hole {
+      background-color: {{hole_color}};
+      border-radius: 50%;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 0.1s;
+      border: 3px solid #1a1a1a;
+    }
+
+    .hole:hover {
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+
+    .mole {
+      width: 100%;
+      height: 100%;
+      background-color: {{mole_color}};
+      border-radius: 50%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: none;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    }
+
+    .hole.active .mole {
+      display: block;
+    }
+
+    .hole.active {
+      box-shadow: 0 0 10px rgba(255, 255, 0, 0.6) inset;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="startScreen">
+      <div class="screen-title">{{title}}</div>
+      <div class="screen-message">
+        <div>{{win_score}}点獲得でクリア！</div>
+        <div>モグラをクリックで叩け！</div>
+        <div>制限時間 {{time_limit}}秒</div>
+      </div>
+      <button class="start-button" onclick="startGame()">ゲーム開始</button>
+    </div>
+
+    <div id="gameScreen">
+      <div class="instructions">モグラが出たらクリック！</div>
+      <div class="status-bar">
+        <div class="status-item">スコア <span id="score">0</span> / {{win_score}}</div>
+        <div class="status-item">残り <span id="timer">{{time_limit}}</span>秒</div>
+      </div>
+      <div class="grid">
+        <div class="hole" data-index="0"><div class="mole"></div></div>
+        <div class="hole" data-index="1"><div class="mole"></div></div>
+        <div class="hole" data-index="2"><div class="mole"></div></div>
+        <div class="hole" data-index="3"><div class="mole"></div></div>
+        <div class="hole" data-index="4"><div class="mole"></div></div>
+        <div class="hole" data-index="5"><div class="mole"></div></div>
+        <div class="hole" data-index="6"><div class="mole"></div></div>
+        <div class="hole" data-index="7"><div class="mole"></div></div>
+        <div class="hole" data-index="8"><div class="mole"></div></div>
+      </div>
+    </div>
+
+    <div id="clearScreen" class="hidden">
+      <div class="screen-title">CLEAR!</div>
+      <div class="screen-message">
+        <div>スコア: <span id="finalScore">0</span> / {{win_score}}</div>
+        <div>制限時間内にクリアしました！</div>
+      </div>
+      <button class="retry-button" onclick="location.reload()">もう一度プレイ</button>
+    </div>
+
+    <div id="gameOverScreen" class="hidden">
+      <div class="screen-title">GAME OVER</div>
+      <div class="screen-message">
+        <div>スコア: <span id="finalScoreOver">0</span> / {{win_score}}</div>
+        <div>制限時間切れ。{{win_score}}点に到達できませんでした。</div>
+      </div>
+      <button class="retry-button" onclick="location.reload()">もう一度プレイ</button>
+    </div>
+  </div>
+
+  <script>
+    const PARAMS = {
+      title: '{{title}}',
+      bg_color: '{{bg_color}}',
+      mole_color: '{{mole_color}}',
+      hole_color: '{{hole_color}}',
+      time_limit: {{time_limit}},
+      win_score: {{win_score}},
+      appear_interval: {{appear_interval}},
+      visible_duration: {{visible_duration}}
+    };
+
+    let gameState = {
+      score: 0,
+      remainingTime: PARAMS.time_limit,
+      gameActive: false,
+      currentMole: null,
+      frameCount: 0,
+      lastMoleIndex: -1,
+      moleAppearFrame: -1
+    };
+
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').classList.add('active');
+      gameState.gameActive = true;
+      gameState.score = 0;
+      gameState.remainingTime = PARAMS.time_limit;
+      gameState.frameCount = 0;
+      gameState.currentMole = null;
+      gameState.lastMoleIndex = -1;
+      gameState.moleAppearFrame = -1;
+
+      document.getElementById('score').textContent = '0';
+      document.getElementById('timer').textContent = PARAMS.time_limit;
+
+      // タイマー開始（1秒ごと）
+      const timerInterval = setInterval(() => {
+        if (!gameState.gameActive) {
+          clearInterval(timerInterval);
+          return;
+        }
+        gameState.remainingTime--;
+        document.getElementById('timer').textContent = gameState.remainingTime;
+
+        if (gameState.remainingTime <= 0) {
+          clearInterval(timerInterval);
+          endGame();
+        }
+      }, 1000);
+
+      // ゲームループ（requestAnimationFrame）
+      function gameLoop() {
+        if (!gameState.gameActive) return;
+
+        gameState.frameCount++;
+
+        // モグラ出現タイミング判定
+        if (gameState.frameCount % PARAMS.appear_interval === 0) {
+          // 前回のモグラを消す
+          if (gameState.currentMole !== null) {
+            removeMole();
+          }
+
+          // 新しいモグラを出現させる
+          spawnMole();
+        }
+
+        // モグラが見えている時間をチェック
+        if (gameState.currentMole !== null) {
+          const elapsedFrames = gameState.frameCount - gameState.moleAppearFrame;
+          if (elapsedFrames >= PARAMS.visible_duration) {
+            removeMole();
+          }
+        }
+
+        requestAnimationFrame(gameLoop);
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function spawnMole() {
+      let randomIndex;
+      do {
+        randomIndex = Math.floor(Math.random() * 9);
+      } while (randomIndex === gameState.lastMoleIndex);
+
+      gameState.lastMoleIndex = randomIndex;
+      gameState.currentMole = randomIndex;
+      gameState.moleAppearFrame = gameState.frameCount;
+
+      const holes = document.querySelectorAll('.hole');
+      holes[randomIndex].classList.add('active');
+    }
+
+    function removeMole() {
+      if (gameState.currentMole !== null) {
+        const holes = document.querySelectorAll('.hole');
+        holes[gameState.currentMole].classList.remove('active');
+        gameState.currentMole = null;
+      }
+    }
+
+    function endGame() {
+      gameState.gameActive = false;
+
+      document.getElementById('gameScreen').classList.remove('active');
+      document.querySelectorAll('.hole').forEach(hole => {
+        hole.classList.remove('active');
+      });
+
+      if (gameState.score >= PARAMS.win_score) {
+        document.getElementById('finalScore').textContent = gameState.score;
+        document.getElementById('clearScreen').classList.remove('hidden');
+      } else {
+        document.getElementById('finalScoreOver').textContent = gameState.score;
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+      }
+    }
+
+    // クリックハンドラ
+    document.querySelectorAll('.hole').forEach(hole => {
+      hole.addEventListener('click', () => {
+        if (!gameState.gameActive) return;
+
+        const holeIndex = parseInt(hole.getAttribute('data-index'));
+        if (gameState.currentMole === holeIndex) {
+          gameState.score++;
+          document.getElementById('score').textContent = gameState.score;
+          removeMole();
+
+          if (gameState.score >= PARAMS.win_score) {
+            gameState.gameActive = false;
+            endGame();
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

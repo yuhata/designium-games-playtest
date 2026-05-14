@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: {{bg_color}};
+            color: #ffffff;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+        
+        #startScreen {
+            text-align: center;
+            padding: 40px;
+            border: 2px solid {{tile_color}};
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        #startScreen h2 {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+        
+        #startScreen p {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        
+        #startScreen .rules {
+            background: rgba(0, 212, 255, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        #startScreen .rules li {
+            margin-left: 20px;
+            margin-bottom: 8px;
+        }
+        
+        #startButton {
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background-color: {{tile_color}};
+            color: {{bg_color}};
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        
+        #startButton:hover {
+            background-color: #00ffff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+        }
+        
+        #gameContainer {
+            display: none;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h2 {
+            font-size: 1.8em;
+            margin-bottom: 15px;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 20px;
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid {{tile_color}};
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #aaaaaa;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: {{tile_color}};
+        }
+        
+        .instructions {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            font-size: 0.95em;
+            color: #cccccc;
+        }
+        
+        #grid {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            border: 2px solid {{tile_color}};
+        }
+        
+        .tile {
+            aspect-ratio: 1;
+            background-color: {{tile_color}};
+            color: {{bg_color}};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.2s;
+            user-select: none;
+            border: 2px solid transparent;
+        }
+        
+        .tile:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.6);
+        }
+        
+        .tile.empty {
+            background-color: {{empty_color}};
+            color: {{empty_color}};
+            cursor: default;
+        }
+        
+        .tile.empty:hover {
+            transform: scale(1);
+            box-shadow: none;
+        }
+        
+        #resultScreen {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            border: 2px solid {{tile_color}};
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        #resultScreen h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+        
+        #resultScreen p {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+        }
+        
+        #retryButton {
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background-color: {{tile_color}};
+            color: {{bg_color}};
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        
+        #retryButton:hover {
+            background-color: #00ffff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+        }
+        
+        .clear {
+            color: #00ff00;
+        }
+        
+        .gameover {
+            color: #ff6666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{{title}}</h1>
+        
+        <div id="startScreen">
+            <h2>スライドパズル</h2>
+            <p class="clear">{{moves_limit}}手以内に数字を並べろ！</p>
+            <div class="rules">
+                <ul>
+                    <li>タイルをクリックして空きマスにスライド</li>
+                    <li>数字を1から順に、左上から右下に並べる</li>
+                    <li>{{moves_limit}}手以内にクリアできるかな？</li>
+                </ul>
+            </div>
+            <button id="startButton">ゲーム開始</button>
+        </div>
+        
+        <div id="gameContainer">
+            <div class="header">
+                <h2>{{title}}</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">使用手数</div>
+                        <div class="stat-value" id="moveCount">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">残り手数</div>
+                        <div class="stat-value" id="remaining">{{moves_limit}}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                タイルをクリックして、空きマスにスライドさせる
+            </div>
+            
+            <div id="grid"></div>
+        </div>
+        
+        <div id="resultScreen">
+            <h2 id="resultTitle"></h2>
+            <p id="resultMessage"></p>
+            <button id="retryButton">もう一度プレイ</button>
+        </div>
+    </div>
+    
+    <script>
+        // Parameters
+        const PARAMS = {
+            title: '{{title}}',
+            bg_color: '{{bg_color}}',
+            tile_color: '{{tile_color}}',
+            empty_color: '{{empty_color}}',
+            grid_size: {{grid_size}},
+            shuffle_depth: {{shuffle_depth}},
+            moves_limit: {{moves_limit}}
+        };
+        
+        let gameState = {
+            board: [],
+            moves: 0,
+            gameActive: false
+        };
+        
+        function createSolvedBoard() {
+            const size = PARAMS.grid_size;
+            const board = [];
+            for (let i = 1; i < size * size; i++) {
+                board.push(i);
+            }
+            board.push(0); // 0 represents empty
+            return board;
+        }
+        
+        function getEmptyIndex(board) {
+            return board.indexOf(0);
+        }
+        
+        function getEmptyPos(board) {
+            const idx = getEmptyIndex(board);
+            const size = PARAMS.grid_size;
+            return { row: Math.floor(idx / size), col: idx % size };
+        }
+        
+        function getPosIndex(row, col) {
+            return row * PARAMS.grid_size + col;
+        }
+        
+        function isAdjacent(idx1, idx2) {
+            const size = PARAMS.grid_size;
+            const row1 = Math.floor(idx1 / size);
+            const col1 = idx1 % size;
+            const row2 = Math.floor(idx2 / size);
+            const col2 = idx2 % size;
+            
+            return (Math.abs(row1 - row2) + Math.abs(col1 - col2)) === 1;
+        }
+        
+        function shuffleBoard(board, depth) {
+            const newBoard = [...board];
+            let emptyIdx = getEmptyIndex(newBoard);
+            
+            for (let i = 0; i < depth; i++) {
+                const size = PARAMS.grid_size;
+                const row = Math.floor(emptyIdx / size);
+                const col = emptyIdx % size;
+                
+                const neighbors = [];
+                if (row > 0) neighbors.push(emptyIdx - size);
+                if (row < size - 1) neighbors.push(emptyIdx + size);
+                if (col > 0) neighbors.push(emptyIdx - 1);
+                if (col < size - 1) neighbors.push(emptyIdx + 1);
+                
+                const randomIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
+                [newBoard[emptyIdx], newBoard[randomIdx]] = [newBoard[randomIdx], newBoard[emptyIdx]];
+                emptyIdx = randomIdx;
+            }
+            
+            return newBoard;
+        }
+        
+        function isSolved(board) {
+            const size = PARAMS.grid_size;
+            for (let i = 0; i < size * size - 1; i++) {
+                if (board[i] !== i + 1) return false;
+            }
+            return board[size * size - 1] === 0;
+        }
+        
+        function slideBoard(tileIndex) {
+            const emptyIdx = getEmptyIndex(gameState.board);
+            
+            if (isAdjacent(tileIndex, emptyIdx)) {
+                [gameState.board[tileIndex], gameState.board[emptyIdx]] = 
+                [gameState.board[emptyIdx], gameState.board[tileIndex]];
+                gameState.moves++;
+                renderBoard();
+                updateStats();
+                
+                if (isSolved(gameState.board)) {
+                    endGame(true);
+                } else if (gameState.moves >= PARAMS.moves_limit) {
+                    endGame(false);
+                }
+            }
+        }
+        
+        function renderBoard() {
+            const grid = document.getElementById('grid');
+            const size = PARAMS.grid_size;
+            grid.innerHTML = '';
+            grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            
+            gameState.board.forEach((tile, idx) => {
+                const tileEl = document.createElement('div');
+                tileEl.className = 'tile' + (tile === 0 ? ' empty' : '');
+                if (tile !== 0) {
+                    tileEl.textContent = tile;
+                    tileEl.addEventListener('click', () => slideBoard(idx));
+                }
+                grid.appendChild(tileEl);
+            });
+        }
+        
+        function updateStats() {
+            document.getElementById('moveCount').textContent = gameState.moves;
+            document.getElementById('remaining').textContent = 
+                Math.max(0, PARAMS.moves_limit - gameState.moves);
+        }
+        
+        function initGame() {
+            gameState.board = createSolvedBoard();
+            gameState.board = shuffleBoard(gameState.board, PARAMS.shuffle_depth);
+            gameState.moves = 0;
+            gameState.gameActive = true;
+            
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            document.getElementById('resultScreen').style.display = 'none';
+            
+            renderBoard();
+            updateStats();
+        }
+        
+        function endGame(won) {
+            gameState.gameActive = false;
+            const resultScreen = document.getElementById('resultScreen');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultMessage = document.getElementById('resultMessage');
+            
+            if (won) {
+                resultTitle.className = 'clear';
+                resultTitle.textContent = 'クリア！';
+                resultMessage.textContent = `${gameState.moves}手でクリアしました！`;
+            } else {
+                resultTitle.className = 'gameover';
+                resultTitle.textContent = 'ゲームオーバー';
+                resultMessage.textContent = `手数超過。もう一度挑戦！`;
+            }
+            
+            resultScreen.style.display = 'block';
+        }
+        
+        document.getElementById('startButton').addEventListener('click', initGame);
+        document.getElementById('retryButton').addEventListener('click', () => {
+            document.getElementById('resultScreen').style.display = 'none';
+            initGame();
+        });
+    </script>
+</body>
+</html>

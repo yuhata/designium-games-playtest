@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: {{bg_color}};
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    #startScreen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 30px;
+      text-align: center;
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    #startScreen h1 {
+      font-size: 3em;
+      margin-bottom: 20px;
+    }
+
+    #startScreen p {
+      font-size: 1.3em;
+      line-height: 1.6;
+      max-width: 500px;
+      opacity: 0.9;
+    }
+
+    #startScreen button {
+      padding: 15px 40px;
+      font-size: 1.2em;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    #startScreen button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+    }
+
+    #startScreen button:active {
+      transform: translateY(0);
+    }
+
+    #gameContainer {
+      display: none;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    #gameContainer.active {
+      display: flex;
+    }
+
+    #gameStats {
+      display: flex;
+      justify-content: space-around;
+      width: 100%;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      font-size: 1.2em;
+    }
+
+    #gameStats div {
+      text-align: center;
+    }
+
+    #gameStats .label {
+      font-size: 0.9em;
+      opacity: 0.8;
+      margin-bottom: 5px;
+    }
+
+    #gameStats .value {
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+
+    #instructions {
+      font-size: 1em;
+      opacity: 0.8;
+      text-align: center;
+      padding: 10px;
+    }
+
+    #cardGrid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      width: 100%;
+      perspective: 1000px;
+    }
+
+    .card {
+      aspect-ratio: 1;
+      background-color: {{card_color}};
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 3em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      position: relative;
+      user-select: none;
+      transform-style: preserve-3d;
+    }
+
+    .card:hover:not(.matched) {
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: scale(1.05);
+    }
+
+    .card.flipped {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.8);
+    }
+
+    .card.matched {
+      background-color: {{match_color}};
+      cursor: default;
+      opacity: 0.7;
+      border-color: {{match_color}};
+    }
+
+    .card.matched:hover {
+      transform: scale(1);
+    }
+
+    #clearScreen {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 30px;
+      text-align: center;
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    #clearScreen.active {
+      display: flex;
+    }
+
+    #clearScreen h1 {
+      font-size: 4em;
+      margin-bottom: 20px;
+      color: {{match_color}};
+      text-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
+    }
+
+    #clearScreen p {
+      font-size: 1.3em;
+      opacity: 0.9;
+      margin-bottom: 10px;
+    }
+
+    #clearScreen button {
+      padding: 15px 40px;
+      font-size: 1.2em;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    #clearScreen button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @media (max-width: 480px) {
+      #cardGrid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+
+      .card {
+        font-size: 2em;
+      }
+
+      #startScreen h1 {
+        font-size: 2em;
+      }
+
+      #startScreen p {
+        font-size: 1.1em;
+      }
+
+      #gameStats {
+        font-size: 1em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h1>{{title}}</h1>
+    <p>{{pair_count}}ペアを全て揃えろ！<br>カードをクリックでめくる</p>
+    <button onclick="startGame()">ゲーム開始</button>
+  </div>
+
+  <div id="gameContainer">
+    <div id="gameStats">
+      <div>
+        <div class="label">試行</div>
+        <div class="value"><span id="attempts">0</span>回</div>
+      </div>
+      <div>
+        <div class="label">揃い</div>
+        <div class="value"><span id="matched">0</span>/{{pair_count}}</div>
+      </div>
+    </div>
+    <div id="instructions">カードをクリックでめくる</div>
+    <div id="cardGrid"></div>
+  </div>
+
+  <div id="clearScreen">
+    <h1>CLEAR!</h1>
+    <p id="clearMessage"></p>
+    <button onclick="location.reload()">リトライ</button>
+  </div>
+
+  <script>
+    const EMOJIS = ['🍎','🍌','🍇','🍓','🍊','🍋','🍍','🥝','🍑','🍒','🍈','🍐','🥭','🍏','🍆','🫐'];
+    
+    let gameState = {
+      cards: [],
+      flipped: [],
+      matched: 0,
+      attempts: 0,
+      isChecking: false,
+      pairCount: {{pair_count}},
+      flipDelay: {{flip_delay}}
+    };
+
+    function initGame() {
+      const pairCount = gameState.pairCount;
+      const pairs = EMOJIS.slice(0, pairCount);
+      gameState.cards = [...pairs, ...pairs].sort(() => Math.random() - 0.5);
+      gameState.flipped = [];
+      gameState.matched = 0;
+      gameState.attempts = 0;
+      gameState.isChecking = false;
+      
+      renderCards();
+      updateStats();
+    }
+
+    function renderCards() {
+      const grid = document.getElementById('cardGrid');
+      grid.innerHTML = '';
+      
+      gameState.cards.forEach((emoji, index) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.index = index;
+        card.dataset.emoji = emoji;
+        
+        card.addEventListener('click', () => flipCard(index));
+        grid.appendChild(card);
+      });
+    }
+
+    function flipCard(index) {
+      if (gameState.isChecking) return;
+      if (gameState.flipped.includes(index)) return;
+      
+      const card = document.querySelector(`[data-index="${index}"]`);
+      if (card.classList.contains('matched')) return;
+      
+      gameState.flipped.push(index);
+      card.classList.add('flipped');
+      card.textContent = gameState.cards[index];
+      
+      if (gameState.flipped.length === 2) {
+        gameState.isChecking = true;
+        gameState.attempts++;
+        checkMatch();
+      }
+    }
+
+    function checkMatch() {
+      const [idx1, idx2] = gameState.flipped;
+      const match = gameState.cards[idx1] === gameState.cards[idx2];
+      
+      if (match) {
+        document.querySelector(`[data-index="${idx1}"]`).classList.add('matched');
+        document.querySelector(`[data-index="${idx2}"]`).classList.add('matched');
+        gameState.matched++;
+        gameState.flipped = [];
+        gameState.isChecking = false;
+        updateStats();
+        
+        if (gameState.matched === gameState.pairCount) {
+          showClear();
+        }
+      } else {
+        setTimeout(() => {
+          document.querySelector(`[data-index="${idx1}"]`).classList.remove('flipped');
+          document.querySelector(`[data-index="${idx2}"]`).classList.remove('flipped');
+          document.querySelector(`[data-index="${idx1}"]`).textContent = '';
+          document.querySelector(`[data-index="${idx2}"]`).textContent = '';
+          gameState.flipped = [];
+          gameState.isChecking = false;
+        }, gameState.flipDelay);
+      }
+      
+      updateStats();
+    }
+
+    function updateStats() {
+      document.getElementById('attempts').textContent = gameState.attempts;
+      document.getElementById('matched').textContent = gameState.matched;
+    }
+
+    function showClear() {
+      document.getElementById('gameContainer').classList.remove('active');
+      document.getElementById('clearScreen').classList.add('active');
+      document.getElementById('clearMessage').textContent = `${gameState.attempts}回の試行でクリア！`;
+    }
+
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameContainer').classList.add('active');
+      initGame();
+    }
+  </script>
+</body>
+</html>
