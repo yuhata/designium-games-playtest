@@ -61,7 +61,7 @@
     </div>
 </div>
 <script>
-const W = 640, H = 480;
+const W = 460, H = 480;
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = W; canvas.height = H;
@@ -313,9 +313,9 @@ function update() {
     draw();
 }
 
-const TILE_W = 38, TILE_H = 52;
+const TILE_W = 28, TILE_H = 40;
 function tileX(i, total, startX) {
-    return startX + i * (TILE_W + 3);
+    return startX + i * (TILE_W + 2);
 }
 
 canvas.addEventListener('click', function(e) {
@@ -329,10 +329,10 @@ canvas.addEventListener('click', function(e) {
         }
     } else if (gameState.phase === 'discard') {
         const handY = H - 80;
-        const handStartX = (W - (14 * (TILE_W + 3) - 3)) / 2;
+        const handStartX = (W - (gameState.hand.length * (TILE_W + 2) - 2)) / 2;
         // Check hand tiles
         for (let i = 0; i < gameState.hand.length; i++) {
-            const tx = handStartX + i * (TILE_W + 3);
+            const tx = handStartX + i * (TILE_W + 2);
             if (mx >= tx && mx <= tx + TILE_W && my >= handY && my <= handY + TILE_H) {
                 discardTile(i, false);
                 return;
@@ -340,7 +340,7 @@ canvas.addEventListener('click', function(e) {
         }
         // Check tsumo tile (after gap)
         if (gameState.tsumoTile) {
-            const tsumoX = handStartX + gameState.hand.length * (TILE_W + 3) + 10;
+            const tsumoX = handStartX + gameState.hand.length * (TILE_W + 2) + 4;
             if (mx >= tsumoX && mx <= tsumoX + TILE_W && my >= handY && my <= handY + TILE_H) {
                 discardTile(-1, true);
             }
@@ -393,15 +393,15 @@ function draw() {
 
     // Hand tiles
     const handY = H - 80;
-    const handStartX = (W - (gameState.hand.length * (TILE_W + 3) - 3)) / 2;
+    const handStartX = (W - (gameState.hand.length * (TILE_W + 2) - 2)) / 2;
     for (let i = 0; i < gameState.hand.length; i++) {
-        const tx = handStartX + i * (TILE_W + 3);
+        const tx = handStartX + i * (TILE_W + 2);
         drawTile(gameState.hand[i], tx, handY, false, false);
     }
 
     // Tsumo tile
     if (gameState.tsumoTile) {
-        const tsumoX = handStartX + gameState.hand.length * (TILE_W + 3) + 10;
+        const tsumoX = handStartX + gameState.hand.length * (TILE_W + 2) + 4;
         const flash = gameState.tsumoFlash > 0 && Math.floor(gameState.tsumoFlash / 5) % 2 === 0;
         drawTile(gameState.tsumoTile, tsumoX, handY, true, flash);
         ctx.fillStyle = '#f6e05e';

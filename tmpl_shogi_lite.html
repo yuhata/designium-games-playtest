@@ -361,6 +361,13 @@ function draw() {
     ctx.fillText('CPU (上)', BOARD_X, BOARD_Y + 2);
     ctx.textBaseline = 'bottom';
     ctx.fillText('あなた (下)', BOARD_X, BOARD_Y + ROWS * SQ - 2);
+
+    // Operation hint
+    ctx.fillStyle = '#718096';
+    ctx.font = '11px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('駒をクリックで選択 → 移動先をクリック', W / 2, H - 2);
 }
 </script>
 </body>

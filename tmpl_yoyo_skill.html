@@ -230,12 +230,16 @@ function draw() {
     const barX = cx - barW / 2;
     ctx.fillStyle = '#1a1a3e';
     ctx.fillRect(barX, barY, barW, barH);
-    const zoneStart = barW * (ZONE_MIN / Math.PI) * 0.5;
-    const zoneEnd = barW * (ZONE_MAX / Math.PI) * 0.5;
+    // Sin-based oscillation: indicator bounces left↔right matching pendulum swing
+    const sinVal = Math.sin(gameState.yoyoAngle);
+    const normAngle = (sinVal + 1) / 2;
+    const markerX = barX + normAngle * barW;
+    // Green zone is the rightmost ~12% where sin >= sin(ZONE_MIN)
+    const sinThresh = Math.sin(ZONE_MIN);
+    const zoneStart = barW * (sinThresh + 1) / 2;
+    const zoneEnd = barW;
     ctx.fillStyle = 'rgba(56,161,105,0.5)';
     ctx.fillRect(barX + zoneStart, barY, zoneEnd - zoneStart, barH);
-    const normAngle = (gameState.yoyoAngle % (Math.PI * 2)) / (Math.PI * 2);
-    const markerX = barX + normAngle * barW;
     ctx.fillStyle = inZone ? '#68d391' : '#fc8181';
     ctx.fillRect(markerX - 3, barY - 4, 6, barH + 8);
     ctx.strokeStyle = '#4a5568';
