@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VERTICAL SHOOTER</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #000010;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 480px;
+      height: 640px;
+    }
+    #gameCanvas {
+      display: block;
+      border: 2px solid #333;
+      background-color: #000010;
+    }
+    #startScreen,
+    #gameOverScreen,
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen {
+      background: rgba(0, 0, 16, 0.95);
+    }
+    #gameOverScreen,
+    #clearScreen {
+      background: rgba(0, 0, 16, 0.95);
+    }
+    #startScreen h1 {
+      color: #00d4ff;
+      font-size: 36px;
+      margin-bottom: 30px;
+      letter-spacing: 4px;
+      text-shadow: 0 0 12px #00d4ff;
+    }
+    #startScreen .goal {
+      color: #f1c40f;
+      font-size: 22px;
+      margin-bottom: 40px;
+      font-weight: bold;
+    }
+    #startScreen .instructions {
+      color: #cccccc;
+      font-size: 16px;
+      text-align: center;
+      line-height: 2.0;
+      margin-bottom: 50px;
+    }
+    #startBtn {
+      padding: 14px 48px;
+      font-size: 18px;
+      background-color: #00d4ff;
+      color: #000010;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    #startBtn:hover {
+      background-color: #33dfff;
+    }
+    #gameOverScreen h1 {
+      color: #e74c3c;
+      font-size: 52px;
+      margin-bottom: 30px;
+      text-shadow: 0 0 12px #e74c3c;
+    }
+    #clearScreen h1 {
+      color: #2ecc71;
+      font-size: 52px;
+      margin-bottom: 30px;
+      text-shadow: 0 0 12px #2ecc71;
+    }
+    .endgameText {
+      color: #ffffff;
+      font-size: 20px;
+      margin-bottom: 40px;
+      text-align: center;
+      line-height: 1.8;
+    }
+    .retryBtn {
+      padding: 14px 48px;
+      font-size: 18px;
+      background-color: #00d4ff;
+      color: #000010;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    .retryBtn:hover {
+      background-color: #33dfff;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: bold;
+      z-index: 50;
+      pointer-events: none;
+    }
+    #killCount {
+      margin-bottom: 6px;
+      color: #f1c40f;
+    }
+    #lifeCount {
+      color: #e74c3c;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+
+    <div id="startScreen">
+      <h1>VERTICAL SHOOTER</h1>
+      <div class="goal">敵30体を撃破せよ！</div>
+      <div class="instructions">
+        <p>← → キー（またはA/D）で移動</p>
+        <p>自動射撃（0.3秒ごと）</p>
+        <p>30体倒すとクリア！</p>
+      </div>
+      <button id="startBtn">START</button>
+    </div>
+
+    <div id="gameScreen" style="display: none;">
+      <div id="hud">
+        <div id="killCount">KILL: 0 / 30</div>
+        <div id="lifeCount">LIFE: 3</div>
+      </div>
+    </div>
+
+    <div id="gameOverScreen" style="display: none;">
+      <h1>GAME OVER</h1>
+      <div class="endgameText" id="gameOverText"></div>
+      <button class="retryBtn" id="retryBtn1">RETRY</button>
+    </div>
+
+    <div id="clearScreen" style="display: none;">
+      <h1>CLEAR!</h1>
+      <div class="endgameText" id="clearText"></div>
+      <button class="retryBtn" id="retryBtn2">RETRY</button>
+    </div>
+  </div>
+
+  <script>
+    var canvas = document.getElementById('gameCanvas');
+    var ctx = canvas.getContext('2d');
+
+    var CANVAS_W = 480;
+    var CANVAS_H = 640;
+    var WIN_KILLS = 30;
+    var INIT_LIVES = 3;
+    var MAX_ENEMIES = 10;
+    var PLAYER_SPEED = 5;
+    var BULLET_SPEED = 10;
+    var ENEMY_SPEED = 2;
+    var ENEMY_SPAWN_MS = 2000;
+    var AUTO_SHOOT_MS = 300;
+    var STAR_COUNT = 60;
+
+    var gameState = {
+      running: false,
+      kills: 0,
+      lives: INIT_LIVES,
+      bullets: [],
+      enemies: [],
+      stars: [],
+      startTime: 0
+    };
+
+    var player = {
+      x: CANVAS_W / 2 - 20,
+      y: CANVAS_H - 70,
+      w: 40,
+      h: 36
+    };
+
+    var keys = {};
+
+    var autoShootInterval = null;
+    var enemySpawnInterval = null;
+    var gameLoopInterval = null;
+    var starScrollInterval = null;
+
+    document.addEventListener('keydown', function(e) {
+      keys[e.key] = true;
+    });
+
+    document.addEventListener('keyup', function(e) {
+      keys[e.key] = false;
+    });
+
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('retryBtn1').addEventListener('click', retryGame);
+    document.getElementById('retryBtn2').addEventListener('click', retryGame);
+
+    function initStars() {
+      gameState.stars = [];
+      for (var i = 0; i < STAR_COUNT; i++) {
+        gameState.stars.push({
+          x: Math.random() * CANVAS_W,
+          y: Math.random() * CANVAS_H,
+          r: Math.random() * 1.5 + 0.5,
+          speed: Math.random() * 1.5 + 0.5,
+          bright: Math.random() * 0.6 + 0.4
+        });
+      }
+    }
+
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'block';
+
+      gameState.kills = 0;
+      gameState.lives = INIT_LIVES;
+      gameState.bullets = [];
+      gameState.enemies = [];
+      gameState.startTime = Date.now();
+      gameState.running = true;
+
+      player.x = CANVAS_W / 2 - 20;
+      player.y = CANVAS_H - 70;
+
+      initStars();
+      updateHUD();
+
+      autoShootInterval = setInterval(autoShoot, AUTO_SHOOT_MS);
+      enemySpawnInterval = setInterval(spawnEnemy, ENEMY_SPAWN_MS);
+      gameLoopInterval = setInterval(gameLoop, 16);
+    }
+
+    function retryGame() {
+      gameState.running = false;
+
+      if (autoShootInterval !== null) {
+        clearInterval(autoShootInterval);
+        autoShootInterval = null;
+      }
+      if (enemySpawnInterval !== null) {
+        clearInterval(enemySpawnInterval);
+        enemySpawnInterval = null;
+      }
+      if (gameLoopInterval !== null) {
+        clearInterval(gameLoopInterval);
+        gameLoopInterval = null;
+      }
+      if (starScrollInterval !== null) {
+        clearInterval(starScrollInterval);
+        starScrollInterval = null;
+      }
+
+      gameState.kills = 0;
+      gameState.lives = INIT_LIVES;
+      gameState.bullets = [];
+      gameState.enemies = [];
+      gameState.stars = [];
+
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('startScreen').style.display = 'flex';
+    }
+
+    function autoShoot() {
+      if (!gameState.running) return;
+      gameState.bullets.push({
+        x: player.x + player.w / 2 - 3,
+        y: player.y - 4,
+        w: 6,
+        h: 14
+      });
+    }
+
+    function spawnEnemy() {
+      if (!gameState.running) return;
+      if (gameState.enemies.length >= MAX_ENEMIES) return;
+      var ew = 32;
+      var maxX = CANVAS_W - ew;
+      var rawX = Math.random() * maxX;
+      var ex = Math.max(0, Math.min(rawX, maxX));
+      gameState.enemies.push({
+        x: ex,
+        y: -36,
+        w: ew,
+        h: 28
+      });
+    }
+
+    function rectHit(a, b) {
+      return !(a.x + a.w < b.x ||
+               b.x + b.w < a.x ||
+               a.y + a.h < b.y ||
+               b.y + b.h < a.y);
+    }
+
+    function playerRect() {
+      return { x: player.x + 6, y: player.y, w: player.w - 12, h: player.h };
+    }
+
+    function updateHUD() {
+      document.getElementById('killCount').textContent = 'KILL: ' + gameState.kills + ' / ' + WIN_KILLS;
+      document.getElementById('lifeCount').textContent = 'LIFE: ' + gameState.lives;
+    }
+
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      // --- player movement ---
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+        player.x -= PLAYER_SPEED;
+        if (player.x < 0) player.x = 0;
+      }
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+        player.x += PLAYER_SPEED;
+        if (player.x + player.w > CANVAS_W) player.x = CANVAS_W - player.w;
+      }
+
+      // --- scroll stars ---
+      for (var s = 0; s < gameState.stars.length; s++) {
+        gameState.stars[s].y += gameState.stars[s].speed;
+        if (gameState.stars[s].y > CANVAS_H) {
+          gameState.stars[s].y = 0;
+          gameState.stars[s].x = Math.random() * CANVAS_W;
+        }
+      }
+
+      // --- move bullets (up) ---
+      for (var bi = gameState.bullets.length - 1; bi >= 0; bi--) {
+        gameState.bullets[bi].y -= BULLET_SPEED;
+        if (gameState.bullets[bi].y + gameState.bullets[bi].h < 0) {
+          gameState.bullets.splice(bi, 1);
+        }
+      }
+
+      // --- move enemies + collision ---
+      var pr = playerRect();
+      for (var ei = gameState.enemies.length - 1; ei >= 0; ei--) {
+        var en = gameState.enemies[ei];
+        en.y += ENEMY_SPEED;
+
+        // enemy passed bottom edge
+        if (en.y > CANVAS_H) {
+          gameState.enemies.splice(ei, 1);
+          continue;
+        }
+
+        // enemy hits player
+        if (rectHit(en, pr)) {
+          gameState.enemies.splice(ei, 1);
+          gameState.lives -= 1;
+          updateHUD();
+          if (gameState.lives <= 0) {
+            triggerGameOver();
+            return;
+          }
+          continue;
+        }
+
+        // bullet hits enemy (reverse loop)
+        var hit = false;
+        for (var bj = gameState.bullets.length - 1; bj >= 0; bj--) {
+          if (rectHit(gameState.bullets[bj], en)) {
+            gameState.bullets.splice(bj, 1);
+            gameState.enemies.splice(ei, 1);
+            gameState.kills += 1;
+            updateHUD();
+            hit = true;
+            if (gameState.kills >= WIN_KILLS) {
+              triggerClear();
+              return;
+            }
+            break;
+          }
+        }
+        if (hit) continue;
+      }
+
+      // --- draw ---
+      draw();
+    }
+
+    function draw() {
+      // background
+      ctx.fillStyle = '#000010';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      // stars
+      for (var s = 0; s < gameState.stars.length; s++) {
+        var st = gameState.stars[s];
+        ctx.globalAlpha = st.bright;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0;
+
+      // bullets
+      ctx.fillStyle = '#f1c40f';
+      for (var bi = 0; bi < gameState.bullets.length; bi++) {
+        var bl = gameState.bullets[bi];
+        ctx.fillRect(bl.x, bl.y, bl.w, bl.h);
+      }
+
+      // enemies (square with inner cross)
+      for (var ei = 0; ei < gameState.enemies.length; ei++) {
+        var en = gameState.enemies[ei];
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(en.x, en.y, en.w, en.h);
+        ctx.fillStyle = '#ff8888';
+        ctx.fillRect(en.x + en.w / 2 - 2, en.y + 4, 4, en.h - 8);
+        ctx.fillRect(en.x + 4, en.y + en.h / 2 - 2, en.w - 8, 4);
+      }
+
+      // player (triangle ship)
+      ctx.fillStyle = '#00d4ff';
+      ctx.strokeStyle = '#33dfff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(player.x + player.w / 2, player.y);
+      ctx.lineTo(player.x + player.w, player.y + player.h);
+      ctx.lineTo(player.x + player.w * 0.65, player.y + player.h * 0.72);
+      ctx.lineTo(player.x + player.w / 2, player.y + player.h * 0.85);
+      ctx.lineTo(player.x + player.w * 0.35, player.y + player.h * 0.72);
+      ctx.lineTo(player.x, player.y + player.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // engine glow
+      ctx.fillStyle = '#ff6600';
+      ctx.globalAlpha = 0.7 + Math.random() * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(player.x + player.w * 0.38, player.y + player.h * 0.78);
+      ctx.lineTo(player.x + player.w * 0.62, player.y + player.h * 0.78);
+      ctx.lineTo(player.x + player.w / 2, player.y + player.h + 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // HUD overlay (kill + life drawn on canvas as well)
+      ctx.fillStyle = 'rgba(0,0,0,0.0)';
+    }
+
+    function triggerGameOver() {
+      gameState.running = false;
+
+      if (autoShootInterval !== null) { clearInterval(autoShootInterval); autoShootInterval = null; }
+      if (enemySpawnInterval !== null) { clearInterval(enemySpawnInterval); enemySpawnInterval = null; }
+      if (gameLoopInterval !== null) { clearInterval(gameLoopInterval); gameLoopInterval = null; }
+
+      var elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+      document.getElementById('gameOverText').textContent =
+        '撃破数: ' + gameState.kills + '\n生き残り: ' + elapsed + '秒';
+      document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+
+    function triggerClear() {
+      gameState.running = false;
+
+      if (autoShootInterval !== null) { clearInterval(autoShootInterval); autoShootInterval = null; }
+      if (enemySpawnInterval !== null) { clearInterval(enemySpawnInterval); enemySpawnInterval = null; }
+      if (gameLoopInterval !== null) { clearInterval(gameLoopInterval); gameLoopInterval = null; }
+
+      document.getElementById('clearText').textContent =
+        '撃破数: ' + gameState.kills + '\n全30体を撃破！';
+      document.getElementById('clearScreen').style.display = 'flex';
+    }
+
+    // initial draw (title screen background)
+    (function drawInitial() {
+      ctx.fillStyle = '#000010';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      for (var i = 0; i < 60; i++) {
+        var sx = Math.random() * CANVAS_W;
+        var sy = Math.random() * CANVAS_H;
+        var sr = Math.random() * 1.5 + 0.3;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    })();
+  </script>
+</body>
+</html>

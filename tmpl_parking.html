@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PARKING</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a202c;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 16px;
+            font-size: 2.5em;
+            color: #f6e05e;
+            letter-spacing: 4px;
+        }
+
+        /* --- HUD --- */
+        .hud {
+            font-size: 1.1em;
+            margin-bottom: 16px;
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+        }
+        .hud-label {
+            color: #cbd5e0;
+            font-size: 0.85em;
+            margin-bottom: 2px;
+        }
+        .hud-value {
+            color: #f6e05e;
+            font-weight: bold;
+            font-size: 1.4em;
+        }
+
+        /* --- Game area wrapper --- */
+        .game-area {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        /* --- Queue panel (left) --- */
+        .queue-panel {
+            background: #2d3748;
+            border: 2px solid #4a5568;
+            border-radius: 8px;
+            padding: 12px;
+            width: 90px;
+            min-height: 300px;
+        }
+        .queue-title {
+            font-size: 0.7em;
+            color: #a0aec0;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .queue-slot {
+            width: 60px;
+            height: 32px;
+            margin: 6px auto;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65em;
+            font-weight: bold;
+            color: #1a202c;
+            position: relative;
+            transition: transform 0.15s;
+        }
+        .queue-slot.head {
+            outline: 3px solid #f6e05e;
+            outline-offset: 2px;
+        }
+
+        /* --- Grid --- */
+        .grid-wrapper {
+            display: inline-block;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 72px);
+            grid-template-rows: repeat(5, 72px);
+            gap: 4px;
+            background: #2d3748;
+            border: 2px solid #4a5568;
+            border-radius: 8px;
+            padding: 8px;
+        }
+        .cell {
+            width: 72px;
+            height: 72px;
+            background: #374151;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75em;
+            color: #9ca3af;
+            border: 2px solid #4b5563;
+            position: relative;
+            cursor: default;
+            transition: background 0.1s, border-color 0.1s;
+        }
+
+        /* Parking spot */
+        .cell.parking {
+            background: #1e3a5f;
+            border: 2px dashed #3b82f6;
+            cursor: pointer;
+        }
+        .cell.parking:hover {
+            background: #1e4080;
+            border-color: #60a5fa;
+        }
+        .cell.parking .p-label {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #60a5fa;
+            opacity: 0.7;
+        }
+
+        /* Occupied parking spot */
+        .cell.occupied {
+            cursor: default;
+            background: #1a2e1a;
+            border: 2px solid #38a169;
+        }
+        .cell.occupied:hover {
+            background: #1a2e1a;
+            border-color: #38a169;
+        }
+
+        /* Car in cell */
+        .car-block {
+            width: 52px;
+            height: 30px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6em;
+            font-weight: bold;
+            color: #1a202c;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+
+        /* Moving car overlay */
+        .moving-car {
+            position: fixed;
+            width: 52px;
+            height: 30px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6em;
+            font-weight: bold;
+            color: #1a202c;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 500;
+            transition: top 0.5s ease, left 0.5s ease;
+        }
+
+        /* --- Overlay screens --- */
+        .screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.88);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .screen-content {
+            text-align: center;
+            background: #2d3748;
+            padding: 50px 60px;
+            border-radius: 12px;
+            border: 3px solid #f6e05e;
+            max-width: 420px;
+        }
+        .screen-content h2 {
+            font-size: 3em;
+            margin-bottom: 24px;
+            color: #f6e05e;
+            letter-spacing: 4px;
+        }
+        .screen-content p {
+            font-size: 1.1em;
+            margin-bottom: 12px;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        button {
+            margin-top: 20px;
+            padding: 14px 40px;
+            font-size: 1.2em;
+            background: #f6e05e;
+            color: #1a202c;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #ecc94b;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>PARKING</h1>
+    <div class="hud">
+        <div>
+            <div class="hud-label">PARKED</div>
+            <div class="hud-value" id="parkedCount">0 / 6</div>
+        </div>
+        <div>
+            <div class="hud-label">QUEUE</div>
+            <div class="hud-value" id="queueCount">6</div>
+        </div>
+    </div>
+
+    <div class="game-area">
+        <div class="queue-panel">
+            <div class="queue-title">QUEUE</div>
+            <div id="queueList"></div>
+        </div>
+
+        <div class="grid-wrapper">
+            <div class="grid" id="gameGrid"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Start Screen -->
+<div id="startScreen" class="screen">
+    <div class="screen-content">
+        <h2>PARKING</h2>
+        <p>6台の車を全て駐車スペースに収めよう！</p>
+        <p>空いている駐車スポット（青枠）をクリックすると、キュー先頭の車が移動します。</p>
+        <p>全6台を収納したらCLEAR！</p>
+        <button onclick="startGame()">START</button>
+    </div>
+</div>
+
+<!-- Game Screen (already in DOM, just hidden behind overlays) -->
+
+<!-- Clear Screen -->
+<div id="clearScreen" class="screen" style="display: none;">
+    <div class="screen-content">
+        <h2>CLEAR!</h2>
+        <p>全6台の駐車完了！</p>
+        <button onclick="retryGame()">RETRY</button>
+    </div>
+</div>
+
+<!-- Game Over Screen (unused but required by spec) -->
+<div id="gameOverScreen" class="screen" style="display: none;">
+    <div class="screen-content">
+        <h2>GAME OVER</h2>
+        <p id="gameOverMessage">ゲームオーバー</p>
+        <button onclick="retryGame()">RETRY</button>
+    </div>
+</div>
+
+<script>
+    // -----------------------------------------------------------------------
+    // Config
+    // -----------------------------------------------------------------------
+    var CAR_COLORS = ['#f6e05e','#fc8181','#68d391','#63b3ed','#b794f4','#f687b3'];
+    var CAR_LABELS = ['A','B','C','D','E','F'];
+
+    // Parking spot positions on the 5x5 grid (row, col) — 0-indexed
+    var PARKING_SPOTS = [
+        {row:0, col:1},
+        {row:0, col:3},
+        {row:2, col:0},
+        {row:2, col:4},
+        {row:4, col:1},
+        {row:4, col:3}
+    ];
+
+    // -----------------------------------------------------------------------
+    // Global gameState (no class syntax)
+    // -----------------------------------------------------------------------
+    var gameState = {
+        running: false,
+        parked: 0,
+        queue: [],           // array of car objects {id, color, label}
+        spotStatus: [],      // array of {row,col,occupied,carId}
+        animating: false
+    };
+
+    var loopInterval = null;
+
+    // -----------------------------------------------------------------------
+    // Build grid DOM
+    // -----------------------------------------------------------------------
+    function buildGrid() {
+        var grid = document.getElementById('gameGrid');
+        grid.innerHTML = '';
+
+        for (var r = 0; r < 5; r++) {
+            for (var c = 0; c < 5; c++) {
+                var cell = document.createElement('div');
+                cell.id = 'cell_' + r + '_' + c;
+                cell.className = 'cell';
+
+                // Check if parking spot
+                var spotIdx = getSpotIndex(r, c);
+                if (spotIdx !== -1) {
+                    cell.className = 'cell parking';
+                    var pLabel = document.createElement('span');
+                    pLabel.className = 'p-label';
+                    pLabel.textContent = 'P';
+                    cell.appendChild(pLabel);
+
+                    // Closure for row/col
+                    (function(row, col) {
+                        cell.addEventListener('click', function() {
+                            onSpotClick(row, col);
+                        });
+                    })(r, c);
+                }
+
+                grid.appendChild(cell);
+            }
+        }
+    }
+
+    function getSpotIndex(row, col) {
+        for (var i = 0; i < PARKING_SPOTS.length; i++) {
+            if (PARKING_SPOTS[i].row === row && PARKING_SPOTS[i].col === col) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // -----------------------------------------------------------------------
+    // Init game data
+    // -----------------------------------------------------------------------
+    function initGameState() {
+        gameState.running = false;
+        gameState.parked = 0;
+        gameState.animating = false;
+
+        // Build car queue
+        gameState.queue = [];
+        for (var i = 0; i < 6; i++) {
+            gameState.queue.push({
+                id: i,
+                color: CAR_COLORS[i],
+                label: CAR_LABELS[i]
+            });
+        }
+
+        // Build spot status
+        gameState.spotStatus = [];
+        for (var j = 0; j < PARKING_SPOTS.length; j++) {
+            gameState.spotStatus.push({
+                row: PARKING_SPOTS[j].row,
+                col: PARKING_SPOTS[j].col,
+                occupied: false,
+                carId: -1
+            });
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Render
+    // -----------------------------------------------------------------------
+    function render() {
+        renderQueue();
+        renderGrid();
+        renderHUD();
+    }
+
+    function renderQueue() {
+        var list = document.getElementById('queueList');
+        list.innerHTML = '';
+        for (var i = 0; i < gameState.queue.length; i++) {
+            var car = gameState.queue[i];
+            var slot = document.createElement('div');
+            slot.className = 'queue-slot' + (i === 0 ? ' head' : '');
+            slot.id = 'queueSlot_' + car.id;
+            slot.style.background = car.color;
+            slot.textContent = car.label;
+            list.appendChild(slot);
+        }
+    }
+
+    function renderGrid() {
+        // Reset all cells to base state first
+        for (var r = 0; r < 5; r++) {
+            for (var c = 0; c < 5; c++) {
+                var cell = document.getElementById('cell_' + r + '_' + c);
+                var spotIdx = getSpotIndex(r, c);
+                if (spotIdx !== -1) {
+                    var spot = gameState.spotStatus[spotIdx];
+                    // Remove existing car block if any
+                    var existing = cell.querySelector('.car-block');
+                    if (existing) existing.parentNode.removeChild(existing);
+
+                    if (spot.occupied) {
+                        cell.className = 'cell occupied';
+                        cell.style.cursor = 'default';
+                        // Draw parked car
+                        var carObj = null;
+                        // Find car by id in original color map
+                        var carBlock = document.createElement('div');
+                        carBlock.className = 'car-block';
+                        carBlock.style.background = CAR_COLORS[spot.carId];
+                        carBlock.textContent = CAR_LABELS[spot.carId];
+                        cell.appendChild(carBlock);
+                    } else {
+                        cell.className = 'cell parking';
+                        // Re-add P label if missing
+                        if (!cell.querySelector('.p-label')) {
+                            var pLabel = document.createElement('span');
+                            pLabel.className = 'p-label';
+                            pLabel.textContent = 'P';
+                            cell.appendChild(pLabel);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    function renderHUD() {
+        document.getElementById('parkedCount').textContent = gameState.parked + ' / 6';
+        document.getElementById('queueCount').textContent = gameState.queue.length;
+    }
+
+    // -----------------------------------------------------------------------
+    // Spot click handler
+    // -----------------------------------------------------------------------
+    function onSpotClick(row, col) {
+        if (!gameState.running) return;
+        if (gameState.animating) return;
+        if (gameState.queue.length === 0) return;
+
+        var spotIdx = getSpotIndex(row, col);
+        if (spotIdx === -1) return;
+        if (gameState.spotStatus[spotIdx].occupied) return;
+
+        // Get head car
+        var car = gameState.queue[0];
+
+        // Animate car from queue to spot
+        animateCar(car, row, col, spotIdx);
+    }
+
+    // -----------------------------------------------------------------------
+    // Animation
+    // -----------------------------------------------------------------------
+    function animateCar(car, targetRow, targetCol, spotIdx) {
+        gameState.animating = true;
+
+        // Get source position (queue head slot)
+        var sourceEl = document.getElementById('queueSlot_' + car.id);
+        var targetEl = document.getElementById('cell_' + targetRow + '_' + targetCol);
+
+        if (!sourceEl || !targetEl) {
+            // Fallback: skip animation
+            finishPark(car, spotIdx);
+            return;
+        }
+
+        var srcRect = sourceEl.getBoundingClientRect();
+        var dstRect = targetEl.getBoundingClientRect();
+
+        // Create moving car element
+        var mover = document.createElement('div');
+        mover.className = 'moving-car';
+        mover.style.background = car.color;
+        mover.textContent = car.label;
+        mover.style.top = srcRect.top + (srcRect.height / 2) - 15 + 'px';
+        mover.style.left = srcRect.left + (srcRect.width / 2) - 26 + 'px';
+        document.body.appendChild(mover);
+
+        // Hide original queue slot
+        sourceEl.style.opacity = '0';
+
+        // Trigger transition: move to target
+        setTimeout(function() {
+            mover.style.top = dstRect.top + (dstRect.height / 2) - 15 + 'px';
+            mover.style.left = dstRect.left + (dstRect.width / 2) - 26 + 'px';
+        }, 20);
+
+        // After animation ends (~550ms), finalize
+        var animTimer = setTimeout(function() {
+            document.body.removeChild(mover);
+            finishPark(car, spotIdx);
+        }, 560);
+    }
+
+    function finishPark(car, spotIdx) {
+        // Mark spot occupied
+        gameState.spotStatus[spotIdx].occupied = true;
+        gameState.spotStatus[spotIdx].carId = car.id;
+
+        // Remove from queue
+        gameState.queue.shift();
+
+        gameState.parked++;
+        gameState.animating = false;
+
+        render();
+
+        // Check clear condition
+        if (gameState.parked >= 6) {
+            gameState.running = false;
+            setTimeout(function() {
+                document.getElementById('clearScreen').style.display = 'flex';
+            }, 200);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Game loop (setInterval, 16ms)
+    // -----------------------------------------------------------------------
+    function gameLoop() {
+        if (!gameState.running) return;
+        // No continuous simulation needed for this puzzle game.
+        // The loop is kept as required by spec, but state changes
+        // are event-driven (click). We just ensure HUD stays fresh.
+        renderHUD();
+    }
+
+    // -----------------------------------------------------------------------
+    // Start / Retry
+    // -----------------------------------------------------------------------
+    function startGame() {
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('clearScreen').style.display = 'none';
+        document.getElementById('gameOverScreen').style.display = 'none';
+
+        initGameState();
+        buildGrid();
+        render();
+
+        gameState.running = true;
+
+        if (loopInterval) clearInterval(loopInterval);
+        loopInterval = setInterval(gameLoop, 16);
+    }
+
+    function retryGame() {
+        gameState.running = false;
+
+        if (loopInterval) {
+            clearInterval(loopInterval);
+            loopInterval = null;
+        }
+
+        // Reset state
+        initGameState();
+
+        // Show start screen
+        document.getElementById('startScreen').style.display = 'flex';
+        document.getElementById('clearScreen').style.display = 'none';
+        document.getElementById('gameOverScreen').style.display = 'none';
+
+        // Reset grid to initial visual
+        buildGrid();
+        render();
+    }
+
+    // -----------------------------------------------------------------------
+    // Initial setup on load
+    // -----------------------------------------------------------------------
+    initGameState();
+    buildGrid();
+    render();
+</script>
+</body>
+</html>

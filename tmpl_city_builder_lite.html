@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CITY BUILDER</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ===== OVERLAY SCREENS ===== */
+        #startScreen,
+        #clearScreen,
+        #gameOverScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            z-index: 200;
+        }
+        #startScreen   { background: rgba(10, 10, 30, 0.95); }
+        #clearScreen   { background: rgba(10, 60, 10, 0.95); display: none; }
+        #gameOverScreen { background: rgba(60, 10, 10, 0.95); display: none; }
+
+        .screenTitle {
+            font-size: 52px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            color: #f6c90e;
+            text-shadow: 0 0 20px #f6c90e88;
+        }
+        .screenSub {
+            font-size: 16px;
+            color: #aaa;
+            text-align: center;
+            line-height: 1.8;
+            max-width: 440px;
+        }
+        .screenSub strong { color: #f6c90e; }
+        .screenBtn {
+            margin-top: 12px;
+            padding: 14px 48px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #f6c90e;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            letter-spacing: 2px;
+        }
+        .screenBtn:hover { background: #ffe043; }
+
+        #clearMsg {
+            font-size: 22px;
+            color: #7fffaa;
+            text-align: center;
+        }
+
+        /* ===== GAME SCREEN ===== */
+        #gameScreen {
+            display: none;
+            gap: 24px;
+            align-items: flex-start;
+        }
+        #gameScreen.flex { display: flex; }
+
+        /* ===== GRID ===== */
+        #gridArea {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        #gridTitle {
+            font-size: 13px;
+            color: #888;
+            letter-spacing: 1px;
+        }
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            gap: 3px;
+            background: #16213e;
+            padding: 6px;
+            border: 2px solid #2a4a8a;
+            border-radius: 8px;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            background: #0f3460;
+            border: 1px solid #1a3d6b;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 28px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.1s;
+        }
+        .cell:hover { background: #1e4a82; }
+        .cell.occupied { cursor: default; background: #0a2a50; }
+        .cell.occupied:hover { background: #0a2a50; }
+        /* park-bonus highlight */
+        .cell.parkBonus { background: #1a3d2a; border-color: #2a6a3a; }
+        .cell.parkBonus:hover { background: #1f4730; }
+
+        /* ===== RIGHT PANEL ===== */
+        #panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 200px;
+        }
+
+        /* status box */
+        #statusBox {
+            background: #16213e;
+            border: 2px solid #2a4a8a;
+            border-radius: 8px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .statRow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 15px;
+        }
+        .statLabel { color: #888; }
+        .statVal   { font-weight: bold; color: #f6c90e; font-size: 17px; }
+        .statVal.pop  { color: #7fffaa; }
+        .statVal.rev  { color: #87ceeb; }
+
+        /* progress bar */
+        #progressWrap {
+            margin-top: 2px;
+        }
+        #progressLabel {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        #progressBar {
+            height: 10px;
+            background: #0f3460;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        #progressFill {
+            height: 100%;
+            background: linear-gradient(90deg, #7fffaa, #00c853);
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* palette */
+        #paletteBox {
+            background: #16213e;
+            border: 2px solid #2a4a8a;
+            border-radius: 8px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #paletteTitle {
+            font-size: 13px;
+            color: #888;
+            letter-spacing: 1px;
+            margin-bottom: 2px;
+        }
+        .buildingBtn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #0f3460;
+            border: 2px solid #1a4080;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            text-align: left;
+            width: 100%;
+        }
+        .buildingBtn:hover { background: #1a3d6b; }
+        .buildingBtn.selected {
+            border-color: #f6c90e;
+            background: #1e3a5f;
+            box-shadow: 0 0 8px #f6c90e44;
+        }
+        .buildingBtn.cannotAfford {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .btnEmoji { font-size: 24px; line-height: 1; }
+        .btnInfo { display: flex; flex-direction: column; gap: 2px; }
+        .btnName { font-size: 13px; font-weight: bold; color: #eee; }
+        .btnCost { font-size: 12px; color: #f6c90e; }
+        .btnEffect { font-size: 11px; color: #aaa; }
+
+        /* hint */
+        #hintBox {
+            font-size: 12px;
+            color: #556;
+            line-height: 1.6;
+            padding: 8px 12px;
+            background: #12192e;
+            border-radius: 6px;
+            border: 1px solid #1a2a4a;
+        }
+
+        /* revenue flash */
+        #revenueFlash {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 28px;
+            font-weight: bold;
+            color: #f6c90e;
+            pointer-events: none;
+            display: none;
+            text-shadow: 0 0 10px #f6c90e;
+            z-index: 300;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===== START SCREEN ===== -->
+<div id="startScreen">
+    <div class="screenTitle">CITY BUILDER</div>
+    <div class="screenSub">
+        8x8グリッドに建物を配置して都市を育てよう。<br>
+        <strong>家🏠</strong>: 20G → +15人口<br>
+        <strong>商店🏪</strong>: 50G → 収益+10G/3秒<br>
+        <strong>公園🌳</strong>: 30G → +5人口（隣接する家にボーナス）<br><br>
+        目標: <strong>人口200人</strong>を達成せよ！
+    </div>
+    <button class="screenBtn" onclick="startGame()">START</button>
+</div>
+
+<!-- ===== GAME SCREEN ===== -->
+<div id="gameScreen">
+    <div id="gridArea">
+        <div id="gridTitle">CITY MAP — 8×8</div>
+        <div id="grid"></div>
+    </div>
+
+    <div id="panel">
+        <!-- ステータス -->
+        <div id="statusBox">
+            <div class="statRow">
+                <span class="statLabel">所持金</span>
+                <span class="statVal" id="goldDisplay">100G</span>
+            </div>
+            <div class="statRow">
+                <span class="statLabel">人口</span>
+                <span class="statVal pop" id="popDisplay">0人</span>
+            </div>
+            <div class="statRow">
+                <span class="statLabel">収益/tick</span>
+                <span class="statVal rev" id="revDisplay">+0G</span>
+            </div>
+            <div id="progressWrap">
+                <div id="progressLabel">目標まで: 200人</div>
+                <div id="progressBar"><div id="progressFill"></div></div>
+            </div>
+        </div>
+
+        <!-- 建物パレット -->
+        <div id="paletteBox">
+            <div id="paletteTitle">BUILD</div>
+            <button class="buildingBtn selected" id="btnHouse" onclick="selectBuilding('house')">
+                <span class="btnEmoji">🏠</span>
+                <div class="btnInfo">
+                    <span class="btnName">家</span>
+                    <span class="btnCost">20G</span>
+                    <span class="btnEffect">+15人口</span>
+                </div>
+            </button>
+            <button class="buildingBtn" id="btnShop" onclick="selectBuilding('shop')">
+                <span class="btnEmoji">🏪</span>
+                <div class="btnInfo">
+                    <span class="btnName">商店</span>
+                    <span class="btnCost">50G</span>
+                    <span class="btnEffect">+10G/tick</span>
+                </div>
+            </button>
+            <button class="buildingBtn" id="btnPark" onclick="selectBuilding('park')">
+                <span class="btnEmoji">🌳</span>
+                <div class="btnInfo">
+                    <span class="btnName">公園</span>
+                    <span class="btnCost">30G</span>
+                    <span class="btnEffect">+5人口+隣家ボーナス</span>
+                </div>
+            </button>
+        </div>
+
+        <!-- ヒント -->
+        <div id="hintBox" id="hintBox">
+            公園の隣の家は<br>追加+5人口のボーナス。<br>商店で資金を稼ぎ<br>家と公園を増やそう。
+        </div>
+    </div>
+</div>
+
+<!-- ===== CLEAR SCREEN ===== -->
+<div id="clearScreen">
+    <div class="screenTitle">CLEAR! 🎉</div>
+    <div id="clearMsg">人口200人達成！</div>
+    <button class="screenBtn" onclick="retryGame()">RETRY</button>
+</div>
+
+<!-- ===== GAME OVER SCREEN (構造として存在、display:none固定) ===== -->
+<div id="gameOverScreen">
+    <div class="screenTitle">GAME OVER</div>
+    <button class="screenBtn" onclick="retryGame()">RETRY</button>
+</div>
+
+<!-- ===== REVENUE FLASH ===== -->
+<div id="revenueFlash"></div>
+
+<script>
+// ============================================================
+//  GAME STATE
+// ============================================================
+var gameState = {
+    running: false,
+    gold: 100,
+    population: 0,
+    revenuePerTick: 0,
+    selectedBuilding: 'house',
+    grid: [],          // 8x8 array of null | 'house' | 'shop' | 'park'
+    shopCount: 0,
+    revenueIntervalId: null,
+    loopIntervalId: null
+};
+
+var GRID_SIZE = 8;
+
+var BUILDINGS = {
+    house: { emoji: '🏠', cost: 20, population: 15, revenue: 0 },
+    shop:  { emoji: '🏪', cost: 50, population: 0,  revenue: 10 },
+    park:  { emoji: '🌳', cost: 30, population: 5,  revenue: 0 }
+};
+
+var CLEAR_POPULATION = 200;
+
+// ============================================================
+//  INIT GRID DATA
+// ============================================================
+function initGridData() {
+    gameState.grid = [];
+    for (var r = 0; r < GRID_SIZE; r++) {
+        gameState.grid.push([]);
+        for (var c = 0; c < GRID_SIZE; c++) {
+            gameState.grid[r].push(null);
+        }
+    }
+}
+
+// ============================================================
+//  BUILD GRID DOM
+// ============================================================
+function buildGridDOM() {
+    var gridEl = document.getElementById('grid');
+    gridEl.innerHTML = '';
+    for (var r = 0; r < GRID_SIZE; r++) {
+        for (var c = 0; c < GRID_SIZE; c++) {
+            var cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.id = 'cell_' + r + '_' + c;
+            cell.setAttribute('data-r', r);
+            cell.setAttribute('data-c', c);
+            cell.addEventListener('click', onCellClick);
+            gridEl.appendChild(cell);
+        }
+    }
+}
+
+// ============================================================
+//  CELL CLICK
+// ============================================================
+function onCellClick(e) {
+    if (!gameState.running) return;
+    var r = parseInt(e.currentTarget.getAttribute('data-r'));
+    var c = parseInt(e.currentTarget.getAttribute('data-c'));
+    if (gameState.grid[r][c] !== null) return;  // already occupied
+
+    var b = BUILDINGS[gameState.selectedBuilding];
+    if (gameState.gold < b.cost) return;  // cannot afford
+
+    // place building
+    gameState.gold -= b.cost;
+    gameState.grid[r][c] = gameState.selectedBuilding;
+
+    if (gameState.selectedBuilding === 'shop') {
+        gameState.shopCount++;
+        gameState.revenuePerTick = gameState.shopCount * 10;
+    }
+
+    // recalculate population
+    recalcPopulation();
+
+    // update cell visual
+    renderCell(r, c);
+
+    // re-render park-bonus highlights around parks
+    renderParkBonusHighlights();
+
+    // update UI
+    renderStatus();
+    renderPaletteAffordability();
+
+    // check clear
+    if (gameState.population >= CLEAR_POPULATION) {
+        triggerClear();
+    }
+}
+
+// ============================================================
+//  POPULATION CALC
+// ============================================================
+function recalcPopulation() {
+    var pop = 0;
+    for (var r = 0; r < GRID_SIZE; r++) {
+        for (var c = 0; c < GRID_SIZE; c++) {
+            var type = gameState.grid[r][c];
+            if (type === null) continue;
+            if (type === 'house') {
+                pop += 15;
+                // park bonus: +5 for each adjacent park
+                var parkAdj = countAdjacentType(r, c, 'park');
+                pop += parkAdj * 5;
+            } else if (type === 'park') {
+                pop += 5;
+            }
+            // shop: no population contribution
+        }
+    }
+    gameState.population = pop;
+}
+
+function countAdjacentType(r, c, type) {
+    var dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+    var cnt = 0;
+    for (var i = 0; i < dirs.length; i++) {
+        var nr = r + dirs[i][0];
+        var nc = c + dirs[i][1];
+        if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+            if (gameState.grid[nr][nc] === type) cnt++;
+        }
+    }
+    return cnt;
+}
+
+// ============================================================
+//  RENDER CELL
+// ============================================================
+function renderCell(r, c) {
+    var cell = document.getElementById('cell_' + r + '_' + c);
+    if (!cell) return;
+    var type = gameState.grid[r][c];
+    if (type === null) {
+        cell.textContent = '';
+        cell.className = 'cell';
+    } else {
+        cell.textContent = BUILDINGS[type].emoji;
+        cell.className = 'cell occupied';
+    }
+}
+
+function renderAllCells() {
+    for (var r = 0; r < GRID_SIZE; r++) {
+        for (var c = 0; c < GRID_SIZE; c++) {
+            renderCell(r, c);
+        }
+    }
+}
+
+// Park bonus highlight: mark empty cells adjacent to parks
+function renderParkBonusHighlights() {
+    for (var r = 0; r < GRID_SIZE; r++) {
+        for (var c = 0; c < GRID_SIZE; c++) {
+            var cell = document.getElementById('cell_' + r + '_' + c);
+            if (!cell) continue;
+            if (gameState.grid[r][c] !== null) continue;
+            var adjParks = countAdjacentType(r, c, 'park');
+            if (adjParks > 0) {
+                cell.className = 'cell parkBonus';
+            } else {
+                cell.className = 'cell';
+            }
+        }
+    }
+}
+
+// ============================================================
+//  RENDER STATUS
+// ============================================================
+function renderStatus() {
+    document.getElementById('goldDisplay').textContent = gameState.gold + 'G';
+    document.getElementById('popDisplay').textContent = gameState.population + '人';
+    document.getElementById('revDisplay').textContent = '+' + gameState.revenuePerTick + 'G';
+
+    var pct = Math.min((gameState.population / CLEAR_POPULATION) * 100, 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    var remaining = Math.max(CLEAR_POPULATION - gameState.population, 0);
+    document.getElementById('progressLabel').textContent = '目標まで: ' + remaining + '人';
+}
+
+// ============================================================
+//  RENDER PALETTE AFFORDABILITY
+// ============================================================
+function renderPaletteAffordability() {
+    var types = ['house', 'shop', 'park'];
+    var ids   = ['btnHouse', 'btnShop', 'btnPark'];
+    for (var i = 0; i < types.length; i++) {
+        var btn = document.getElementById(ids[i]);
+        var base = 'buildingBtn';
+        if (types[i] === gameState.selectedBuilding) base += ' selected';
+        if (gameState.gold < BUILDINGS[types[i]].cost) base += ' cannotAfford';
+        btn.className = base;
+    }
+}
+
+// ============================================================
+//  SELECT BUILDING
+// ============================================================
+function selectBuilding(type) {
+    gameState.selectedBuilding = type;
+    renderPaletteAffordability();
+}
+
+// ============================================================
+//  REVENUE TICK
+// ============================================================
+function revenueTick() {
+    if (!gameState.running) return;
+    if (gameState.revenuePerTick <= 0) return;
+    gameState.gold += gameState.revenuePerTick;
+    renderStatus();
+    renderPaletteAffordability();
+
+    // flash
+    var flash = document.getElementById('revenueFlash');
+    flash.textContent = '+' + gameState.revenuePerTick + 'G';
+    flash.style.display = 'block';
+    setTimeout(function() { flash.style.display = 'none'; }, 600);
+}
+
+// ============================================================
+//  GAME LOOP (16ms — logic tick)
+// ============================================================
+function gameLoop() {
+    if (!gameState.running) return;
+    // Currently UI is event-driven; loop is reserved for future juice/animation
+}
+
+// ============================================================
+//  START GAME
+// ============================================================
+function startGame() {
+    // hide start screen
+    document.getElementById('startScreen').style.display = 'none';
+
+    // init state
+    gameState.running = true;
+    gameState.gold = 100;
+    gameState.population = 0;
+    gameState.revenuePerTick = 0;
+    gameState.selectedBuilding = 'house';
+    gameState.shopCount = 0;
+
+    initGridData();
+    buildGridDOM();
+    renderAllCells();
+    renderStatus();
+    renderPaletteAffordability();
+
+    // show game screen
+    document.getElementById('gameScreen').style.display = 'flex';
+
+    // intervals
+    gameState.loopIntervalId = setInterval(gameLoop, 16);
+    gameState.revenueIntervalId = setInterval(revenueTick, 3000);
+}
+
+// ============================================================
+//  CLEAR
+// ============================================================
+function triggerClear() {
+    gameState.running = false;
+    clearInterval(gameState.revenueIntervalId);
+    clearInterval(gameState.loopIntervalId);
+    gameState.revenueIntervalId = null;
+    gameState.loopIntervalId = null;
+
+    var msg = '人口 ' + gameState.population + '人 / 所持金 ' + gameState.gold + 'G';
+    document.getElementById('clearMsg').textContent = msg;
+    document.getElementById('clearScreen').style.display = 'flex';
+}
+
+// ============================================================
+//  RETRY
+// ============================================================
+function retryGame() {
+    gameState.running = false;
+
+    if (gameState.revenueIntervalId) {
+        clearInterval(gameState.revenueIntervalId);
+        gameState.revenueIntervalId = null;
+    }
+    if (gameState.loopIntervalId) {
+        clearInterval(gameState.loopIntervalId);
+        gameState.loopIntervalId = null;
+    }
+
+    // reset state
+    gameState.gold = 100;
+    gameState.population = 0;
+    gameState.revenuePerTick = 0;
+    gameState.selectedBuilding = 'house';
+    gameState.shopCount = 0;
+
+    // hide all overlay screens
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'none';
+
+    // show start screen
+    document.getElementById('startScreen').style.display = 'flex';
+}
+</script>
+</body>
+</html>

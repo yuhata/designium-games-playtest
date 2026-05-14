@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GATE RUNNER</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        .screen {
+            width: 400px;
+            position: relative;
+        }
+        #startScreen {
+            width: 400px;
+            height: 600px;
+            background: #1a1a2e;
+            border: 2px solid #444;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            gap: 20px;
+        }
+        #startScreen h1 {
+            font-size: 42px;
+            color: #00d4ff;
+            text-shadow: 0 0 20px #00d4ff;
+            letter-spacing: 4px;
+        }
+        #startScreen .subtitle {
+            font-size: 16px;
+            color: #aaa;
+            text-align: center;
+            line-height: 1.8;
+        }
+        #startScreen .controls {
+            font-size: 14px;
+            color: #888;
+            text-align: center;
+            line-height: 2;
+            border: 1px solid #333;
+            padding: 12px 24px;
+            border-radius: 8px;
+        }
+        #startScreen button {
+            margin-top: 10px;
+            padding: 14px 48px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #00d4ff;
+            color: #111;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            letter-spacing: 2px;
+        }
+        #startScreen button:hover {
+            background: #33ddff;
+        }
+        #gameScreen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+        }
+        #gameScreen canvas {
+            display: block;
+            border: 2px solid #444;
+        }
+        #gameHud {
+            width: 400px;
+            background: #0d0d1a;
+            border: 2px solid #444;
+            border-top: none;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            font-size: 15px;
+        }
+        #gameHud .miss-display {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+        #gameHud .gate-display {
+            color: #4ecdc4;
+            font-weight: bold;
+        }
+        #clearScreen {
+            width: 400px;
+            height: 640px;
+            background: #0d2018;
+            border: 2px solid #4ecdc4;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            gap: 20px;
+        }
+        #clearScreen h2 {
+            font-size: 56px;
+            color: #4ecdc4;
+            text-shadow: 0 0 30px #4ecdc4;
+            letter-spacing: 4px;
+        }
+        #clearScreen .result-text {
+            font-size: 18px;
+            color: #aaa;
+            text-align: center;
+        }
+        #clearScreen button {
+            margin-top: 10px;
+            padding: 14px 48px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #4ecdc4;
+            color: #111;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            letter-spacing: 2px;
+        }
+        #clearScreen button:hover {
+            background: #6ee8e0;
+        }
+        #gameOverScreen {
+            width: 400px;
+            height: 640px;
+            background: #1a0d0d;
+            border: 2px solid #ff6b6b;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            gap: 20px;
+        }
+        #gameOverScreen h2 {
+            font-size: 48px;
+            color: #ff6b6b;
+            text-shadow: 0 0 30px #ff6b6b;
+            letter-spacing: 3px;
+        }
+        #gameOverScreen .result-text {
+            font-size: 18px;
+            color: #aaa;
+            text-align: center;
+        }
+        #gameOverScreen button {
+            margin-top: 10px;
+            padding: 14px 48px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #ff6b6b;
+            color: #111;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            letter-spacing: 2px;
+        }
+        #gameOverScreen button:hover {
+            background: #ff8888;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- スタート画面 -->
+    <div id="startScreen" class="screen">
+        <h1>GATE RUNNER</h1>
+        <p class="subtitle">ゲートが迫る！<br>正解の側を通り抜けろ</p>
+        <div class="controls">
+            左クリック / 左矢印キー → 左へ移動<br>
+            右クリック / 右矢印キー → 右へ移動<br>
+            <br>
+            緑のゲートを通過しろ！<br>
+            ミス3回でGAME OVER<br>
+            20ゲート通過でCLEAR
+        </div>
+        <button id="startBtn">START</button>
+    </div>
+
+    <!-- ゲーム画面 -->
+    <div id="gameScreen" class="screen">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div id="gameHud">
+            <span class="miss-display" id="missDisplay">ミス: 0 / 3</span>
+            <span class="gate-display" id="gateDisplay">通過: 0 / 20</span>
+        </div>
+    </div>
+
+    <!-- クリア画面 -->
+    <div id="clearScreen" class="screen">
+        <h2>CLEAR!</h2>
+        <p class="result-text" id="clearResultText">20ゲート通過！</p>
+        <button id="clearRetryBtn">RETRY</button>
+    </div>
+
+    <!-- ゲームオーバー画面 -->
+    <div id="gameOverScreen" class="screen">
+        <h2>GAME OVER</h2>
+        <p class="result-text" id="gameOverResultText">ミスが3回に達した！</p>
+        <button id="gameOverRetryBtn">RETRY</button>
+    </div>
+
+    <script>
+        // ==========================================
+        // 定数
+        // ==========================================
+        var CANVAS_W = 400;
+        var CANVAS_H = 600;
+        var RUNNER_W = 36;
+        var RUNNER_H = 36;
+        var RUNNER_Y = CANVAS_H - 80;
+        var RUNNER_SPEED = 8;
+        var GATE_SPEED = 3;
+        var GATE_INTERVAL_FRAMES = 90;   // ゲートをspawnする間隔
+        var GATE_H = 20;
+        var GATE_OPENING = 100;          // 開口部の幅
+        var GATE_WALL_W = 100;           // 壁の幅（左右それぞれ）
+        var REVEAL_Y = RUNNER_Y - 80;    // このY座標を超えたら正解を開示
+        var MAX_MISSES = 3;
+        var WIN_GATES = 20;
+        var HIT_ZONE_TOP = RUNNER_Y - 8;
+        var HIT_ZONE_BOT = RUNNER_Y + RUNNER_H + 8;
+
+        // ==========================================
+        // ゲーム状態（グローバル変数）
+        // ==========================================
+        var gameState = {
+            running: false,
+            gates: [],
+            misses: 0,
+            passed: 0,
+            runnerX: CANVAS_W / 2 - RUNNER_W / 2,
+            frameCount: 0,
+            lastSpawnFrame: -999,
+            invincibleFrames: 0
+        };
+
+        // ==========================================
+        // Canvas & Context
+        // ==========================================
+        var canvas = document.getElementById('gameCanvas');
+        var ctx = canvas.getContext('2d');
+
+        // ==========================================
+        // 画面切替ヘルパー
+        // ==========================================
+        function showScreen(id) {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById(id).style.display = (id === 'gameScreen') ? 'flex' : 'flex';
+        }
+
+        // ==========================================
+        // ゲームリセット・スタート
+        // ==========================================
+        function startGame() {
+            gameState.running = true;
+            gameState.gates = [];
+            gameState.misses = 0;
+            gameState.passed = 0;
+            gameState.runnerX = CANVAS_W / 2 - RUNNER_W / 2;
+            gameState.frameCount = 0;
+            gameState.lastSpawnFrame = -999;
+            gameState.invincibleFrames = 0;
+            updateHud();
+            showScreen('gameScreen');
+        }
+
+        function retryGame() {
+            gameState.running = false;
+            gameState.gates = [];
+            gameState.misses = 0;
+            gameState.passed = 0;
+            gameState.runnerX = CANVAS_W / 2 - RUNNER_W / 2;
+            gameState.frameCount = 0;
+            gameState.lastSpawnFrame = -999;
+            gameState.invincibleFrames = 0;
+            showScreen('startScreen');
+        }
+
+        // ==========================================
+        // HUD 更新
+        // ==========================================
+        function updateHud() {
+            document.getElementById('missDisplay').textContent = 'ミス: ' + gameState.misses + ' / ' + MAX_MISSES;
+            document.getElementById('gateDisplay').textContent = '通過: ' + gameState.passed + ' / ' + WIN_GATES;
+        }
+
+        // ==========================================
+        // ゲートspawn
+        // ==========================================
+        function spawnGate() {
+            var correctSide = Math.random() < 0.5 ? 'left' : 'right';
+            gameState.gates.push({
+                y: -GATE_H - 10,
+                correctSide: correctSide,
+                revealed: false,
+                passed: false,
+                missed: false
+            });
+        }
+
+        // ==========================================
+        // ゲートの左壁・右壁・開口部を計算
+        // ==========================================
+        function getGateLayout(gate) {
+            // 左開口: 左端(0)～開口幅, 壁: 開口幅～CANVAS_W
+            // 右開口: 壁: 0～(CANVAS_W - 開口幅), 右端: (CANVAS_W - 開口幅)～CANVAS_W
+            if (gate.correctSide === 'left') {
+                return {
+                    openLeft: 0,
+                    openRight: GATE_OPENING,
+                    wallLeft: GATE_OPENING,
+                    wallRight: CANVAS_W
+                };
+            } else {
+                return {
+                    openLeft: CANVAS_W - GATE_OPENING,
+                    openRight: CANVAS_W,
+                    wallLeft: 0,
+                    wallRight: CANVAS_W - GATE_OPENING
+                };
+            }
+        }
+
+        // ==========================================
+        // 入力処理
+        // ==========================================
+        var keysDown = {};
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+            }
+            keysDown[e.key] = true;
+        });
+
+        document.addEventListener('keyup', function(e) {
+            keysDown[e.key] = false;
+        });
+
+        canvas.addEventListener('click', function(e) {
+            if (!gameState.running) return;
+            var rect = canvas.getBoundingClientRect();
+            var clickX = e.clientX - rect.left;
+            if (clickX < CANVAS_W / 2) {
+                moveRunner('left');
+            } else {
+                moveRunner('right');
+            }
+        });
+
+        canvas.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            if (!gameState.running) return;
+            moveRunner('right');
+        });
+
+        function moveRunner(dir) {
+            if (dir === 'left') {
+                gameState.runnerX -= RUNNER_SPEED * 4;
+            } else {
+                gameState.runnerX += RUNNER_SPEED * 4;
+            }
+            // 画面外クランプ
+            if (gameState.runnerX < 0) gameState.runnerX = 0;
+            if (gameState.runnerX + RUNNER_W > CANVAS_W) gameState.runnerX = CANVAS_W - RUNNER_W;
+        }
+
+        // ==========================================
+        // ゲームロジック更新
+        // ==========================================
+        function update() {
+            if (!gameState.running) return;
+
+            gameState.frameCount++;
+
+            // キー入力でランナー移動（毎フレーム）
+            if (keysDown['ArrowLeft']) {
+                gameState.runnerX -= RUNNER_SPEED;
+                if (gameState.runnerX < 0) gameState.runnerX = 0;
+            }
+            if (keysDown['ArrowRight']) {
+                gameState.runnerX += RUNNER_SPEED;
+                if (gameState.runnerX + RUNNER_W > CANVAS_W) gameState.runnerX = CANVAS_W - RUNNER_W;
+            }
+
+            // 無敵フレーム減少
+            if (gameState.invincibleFrames > 0) {
+                gameState.invincibleFrames--;
+            }
+
+            // ゲートspawn
+            if (gameState.frameCount - gameState.lastSpawnFrame >= GATE_INTERVAL_FRAMES) {
+                spawnGate();
+                gameState.lastSpawnFrame = gameState.frameCount;
+            }
+
+            // ゲート更新
+            for (var i = gameState.gates.length - 1; i >= 0; i--) {
+                var gate = gameState.gates[i];
+                gate.y += GATE_SPEED;
+
+                // reveal: ランナーY付近1秒前(約60px手前)で正解開示
+                if (!gate.revealed && gate.y >= REVEAL_Y - 60) {
+                    gate.revealed = true;
+                }
+
+                // 判定ゾーン: ゲートがランナーのY範囲を通過したとき
+                if (!gate.passed && !gate.missed && gate.y + GATE_H >= HIT_ZONE_TOP && gate.y <= HIT_ZONE_BOT) {
+                    var layout = getGateLayout(gate);
+                    var runnerCenterX = gameState.runnerX + RUNNER_W / 2;
+
+                    // ランナーが開口部にいるか壁にいるかを判定
+                    var inOpening = (runnerCenterX >= layout.openLeft && runnerCenterX <= layout.openRight);
+
+                    if (inOpening) {
+                        // 正解通過
+                        gate.passed = true;
+                        gameState.passed++;
+                        updateHud();
+
+                        // クリア判定
+                        if (gameState.passed >= WIN_GATES) {
+                            gameState.running = false;
+                            document.getElementById('clearResultText').textContent =
+                                WIN_GATES + 'ゲート通過！ ミス: ' + gameState.misses + '回';
+                            showScreen('clearScreen');
+                            return;
+                        }
+                    } else {
+                        // 壁に激突（無敵中は無視）
+                        if (gameState.invincibleFrames <= 0) {
+                            gate.missed = true;
+                            gameState.misses++;
+                            gameState.invincibleFrames = 60;
+                            updateHud();
+
+                            // ゲームオーバー判定
+                            if (gameState.misses >= MAX_MISSES) {
+                                gameState.running = false;
+                                document.getElementById('gameOverResultText').textContent =
+                                    'ミスが' + MAX_MISSES + '回に達した！  通過: ' + gameState.passed + 'ゲート';
+                                showScreen('gameOverScreen');
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // 画面外（下）に消えたゲートを削除
+                if (gate.y > CANVAS_H + 20) {
+                    gameState.gates.splice(i, 1);
+                }
+            }
+        }
+
+        // ==========================================
+        // 描画
+        // ==========================================
+        function draw() {
+            // 背景
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+            // スクロールライン（視覚演出）
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+            ctx.lineWidth = 1;
+            var lineOffset = (gameState.frameCount * GATE_SPEED) % 60;
+            for (var ly = -lineOffset; ly < CANVAS_H; ly += 60) {
+                ctx.beginPath();
+                ctx.moveTo(0, ly);
+                ctx.lineTo(CANVAS_W, ly);
+                ctx.stroke();
+            }
+
+            // ゲートを描画
+            for (var i = 0; i < gameState.gates.length; i++) {
+                var gate = gameState.gates[i];
+                var layout = getGateLayout(gate);
+
+                // 開口部の色（revealed前はグレー、revealed後は緑）
+                if (gate.revealed) {
+                    ctx.fillStyle = '#2ecc71';
+                } else {
+                    ctx.fillStyle = '#555555';
+                }
+                // 開口部（上下バー省略、視認性のため開口部にも薄く色を付ける）
+                ctx.globalAlpha = 0.18;
+                ctx.fillRect(layout.openLeft, gate.y - 4, layout.openRight - layout.openLeft, GATE_H + 8);
+                ctx.globalAlpha = 1.0;
+
+                // 壁（常に赤）
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillRect(layout.wallLeft, gate.y, layout.wallRight - layout.wallLeft, GATE_H);
+
+                // 開口部の枠線
+                if (gate.revealed) {
+                    ctx.strokeStyle = '#2ecc71';
+                } else {
+                    ctx.strokeStyle = '#777';
+                }
+                ctx.lineWidth = 2;
+                ctx.strokeRect(layout.openLeft, gate.y - 4, layout.openRight - layout.openLeft, GATE_H + 8);
+
+                // 通過済みエフェクト
+                if (gate.passed) {
+                    ctx.fillStyle = 'rgba(46, 204, 113, 0.3)';
+                    ctx.fillRect(0, gate.y - 20, CANVAS_W, GATE_H + 40);
+                }
+                // ミスエフェクト
+                if (gate.missed) {
+                    ctx.fillStyle = 'rgba(231, 76, 60, 0.25)';
+                    ctx.fillRect(0, gate.y - 20, CANVAS_W, GATE_H + 40);
+                }
+            }
+
+            // ランナー描画
+            var runnerVisible = true;
+            if (gameState.invincibleFrames > 0 && Math.floor(gameState.invincibleFrames / 5) % 2 === 0) {
+                runnerVisible = false;
+            }
+            if (runnerVisible) {
+                // ランナー本体
+                ctx.fillStyle = '#00d4ff';
+                ctx.fillRect(gameState.runnerX, RUNNER_Y, RUNNER_W, RUNNER_H);
+                // ランナー内の目
+                ctx.fillStyle = '#111';
+                ctx.fillRect(gameState.runnerX + 8, RUNNER_Y + 8, 6, 6);
+                ctx.fillRect(gameState.runnerX + RUNNER_W - 14, RUNNER_Y + 8, 6, 6);
+            }
+
+            // ランナー下の走行レーン表示
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, RUNNER_Y + RUNNER_H + 4);
+            ctx.lineTo(CANVAS_W, RUNNER_Y + RUNNER_H + 4);
+            ctx.stroke();
+
+            // ミスフラッシュ（画面端）
+            if (gameState.invincibleFrames > 45) {
+                ctx.strokeStyle = 'rgba(231, 76, 60, 0.8)';
+                ctx.lineWidth = 8;
+                ctx.strokeRect(4, 4, CANVAS_W - 8, CANVAS_H - 8);
+            }
+        }
+
+        // ==========================================
+        // ゲームループ（setInterval固定）
+        // ==========================================
+        var loopInterval = null;
+
+        function gameLoop() {
+            update();
+            draw();
+        }
+
+        function startLoop() {
+            if (loopInterval) clearInterval(loopInterval);
+            loopInterval = setInterval(gameLoop, 16);
+        }
+
+        // ==========================================
+        // ボタンイベント
+        // ==========================================
+        document.getElementById('startBtn').addEventListener('click', function() {
+            startGame();
+        });
+
+        document.getElementById('clearRetryBtn').addEventListener('click', function() {
+            retryGame();
+        });
+
+        document.getElementById('gameOverRetryBtn').addEventListener('click', function() {
+            retryGame();
+        });
+
+        // ==========================================
+        // 初期化
+        // ==========================================
+        startLoop();
+        showScreen('startScreen');
+    </script>
+</body>
+</html>

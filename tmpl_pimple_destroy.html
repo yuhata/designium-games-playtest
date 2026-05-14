@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIMPLE DESTROYER</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a0a0a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Arial Black', Arial, sans-serif;
+    overflow: hidden;
+  }
+  #gameWrapper {
+    position: relative;
+    width: 480px;
+    height: 640px;
+  }
+  .screen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 480px;
+    height: 640px;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  /* Start Screen */
+  #startScreen {
+    background: linear-gradient(160deg, #2d0a0a 0%, #1a0505 100%);
+    border: 3px solid #cc2200;
+    border-radius: 12px;
+  }
+  #startScreen .title {
+    font-size: 36px;
+    color: #ff4422;
+    text-shadow: 0 0 20px #ff2200, 0 0 40px #ff2200;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  #startScreen .subtitle {
+    font-size: 14px;
+    color: #cc7755;
+    margin-bottom: 32px;
+  }
+  .rules {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid #551100;
+    border-radius: 8px;
+    padding: 16px 24px;
+    margin-bottom: 32px;
+    text-align: left;
+    color: #ffaa88;
+    font-size: 13px;
+    line-height: 2;
+  }
+  .rules .rule-item { display: flex; align-items: center; gap: 8px; }
+  .rules .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .dot-normal { background: #cc2200; }
+  .dot-big { background: #880000; width: 16px !important; height: 16px !important; }
+  .dot-black { background: #222; border: 1px solid #666; width: 8px !important; height: 8px !important; }
+  .btn {
+    padding: 14px 48px;
+    font-size: 20px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-start {
+    background: linear-gradient(135deg, #ff4422, #cc1100);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(255,68,34,0.5);
+  }
+  .btn-start:hover { box-shadow: 0 6px 28px rgba(255,68,34,0.8); }
+  .btn-retry {
+    background: linear-gradient(135deg, #ff6644, #cc2200);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(255,68,34,0.5);
+    margin-top: 24px;
+  }
+  /* Game Screen */
+  #gameScreen {
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  #hud {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: #0d0000;
+    border-bottom: 2px solid #330000;
+    flex-shrink: 0;
+  }
+  #hudScore { color: #ff6644; font-size: 16px; font-weight: bold; }
+  #hudProgress { color: #ffaa44; font-size: 13px; }
+  #hudTime { color: #ff4422; font-size: 18px; font-weight: bold; }
+  #hudTime.urgent { color: #ff0000; text-shadow: 0 0 8px #ff0000; animation: pulse 0.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  #gameCanvas {
+    display: block;
+    cursor: crosshair;
+    background: #1a0505;
+  }
+  /* End screens */
+  #clearScreen {
+    background: linear-gradient(160deg, #0a1a0a 0%, #051005 100%);
+    border: 3px solid #44cc22;
+    border-radius: 12px;
+  }
+  #clearScreen .end-title {
+    font-size: 64px;
+    color: #44ff22;
+    text-shadow: 0 0 20px #44ff22, 0 0 60px #22cc00;
+    margin-bottom: 12px;
+    animation: clearPop 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes clearPop { 0%{transform:scale(0)} 100%{transform:scale(1)} }
+  #clearScreen .end-sub { color: #88dd66; font-size: 18px; margin-bottom: 8px; }
+  #clearScreen .end-score { color: #ccffaa; font-size: 28px; font-weight: bold; margin-bottom: 8px; }
+  #clearScreen .end-time { color: #aaddaa; font-size: 14px; margin-bottom: 24px; }
+  #gameOverScreen {
+    background: linear-gradient(160deg, #0a0505 0%, #050005 100%);
+    border: 3px solid #440022;
+    border-radius: 12px;
+  }
+  #gameOverScreen .end-title {
+    font-size: 52px;
+    color: #ff2244;
+    text-shadow: 0 0 20px #ff2244;
+    margin-bottom: 12px;
+  }
+  #gameOverScreen .end-sub { color: #cc6677; font-size: 18px; margin-bottom: 8px; }
+  #gameOverScreen .end-score { color: #ffaacc; font-size: 28px; font-weight: bold; margin-bottom: 8px; }
+  #gameOverScreen .end-time { color: #cc9999; font-size: 14px; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+<div id="gameWrapper">
+
+  <!-- START SCREEN -->
+  <div id="startScreen" class="screen">
+    <div class="title">PIMPLE</div>
+    <div class="title">DESTROYER</div>
+    <div class="subtitle">ニキビつぶしゲーム</div>
+    <div class="rules">
+      <div class="rule-item"><span class="dot dot-normal"></span> 通常ニキビ（赤）: 素早く出没</div>
+      <div class="rule-item"><span class="dot dot-big"></span> 大ニキビ（濃赤）: 大きくて見やすい</div>
+      <div class="rule-item"><span class="dot dot-black"></span> 黒ニキビ（黒）: 小さくて難しい</div>
+      <br>
+      <div class="rule-item">🎯 30個潰せばCLEAR！</div>
+      <div class="rule-item">⏱ 制限時間60秒</div>
+      <div class="rule-item">💨 3秒で消えたらミス</div>
+    </div>
+    <button class="btn btn-start" id="startBtn">S T A R T</button>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="gameScreen" class="screen">
+    <div id="hud">
+      <div id="hudScore">SCORE: 0</div>
+      <div id="hudProgress">0 / 30</div>
+      <div id="hudTime">60</div>
+    </div>
+    <canvas id="gameCanvas" width="480" height="592"></canvas>
+  </div>
+
+  <!-- CLEAR SCREEN -->
+  <div id="clearScreen" class="screen">
+    <div class="end-title">CLEAR!</div>
+    <div class="end-sub">30個のニキビを潰した！</div>
+    <div class="end-score" id="clearScore">SCORE: 0</div>
+    <div class="end-time" id="clearTime">残り時間: 0秒</div>
+    <button class="btn btn-retry" id="clearRetryBtn">RETRY</button>
+  </div>
+
+  <!-- GAME OVER SCREEN -->
+  <div id="gameOverScreen" class="screen">
+    <div class="end-title">TIME UP!</div>
+    <div class="end-sub">時間切れ…</div>
+    <div class="end-score" id="gameOverScore">SCORE: 0</div>
+    <div class="end-time" id="gameOverPopped">潰せたニキビ: 0個</div>
+    <button class="btn btn-retry" id="gameOverRetryBtn">RETRY</button>
+  </div>
+
+</div>
+
+<script>
+// ===== GLOBAL GAME STATE =====
+var gameState = {
+  running: false,
+  score: 0,
+  time: 60,
+  pimples: [],
+  totalPopped: 0,
+  particles: [],
+  spawnTimer: 0,
+  spawnInterval: 80,  // frames between spawn attempts
+  frameCount: 0
+};
+
+var gameLoopId = null;
+
+// ===== CANVAS =====
+var canvas = document.getElementById('gameCanvas');
+var ctx = canvas.getContext('2d');
+
+// ===== PIMPLE TYPES =====
+var PIMPLE_TYPES = [
+  { type: 'normal', radius: 25, color: '#cc2200', rimColor: '#ff5533', fill: '#dd3311', maxAge: 180 },
+  { type: 'big',    radius: 35, color: '#880000', rimColor: '#cc3322', fill: '#aa1100', maxAge: 210 },
+  { type: 'black',  radius: 15, color: '#1a1a1a', rimColor: '#444444', fill: '#2a2a2a', maxAge: 150 }
+];
+
+// Type weights for random selection
+var TYPE_WEIGHTS = [5, 2, 3]; // normal:big:black = 5:2:3
+
+function randomPimpleType() {
+  var total = TYPE_WEIGHTS.reduce(function(a, b) { return a + b; }, 0);
+  var r = Math.random() * total;
+  var acc = 0;
+  for (var i = 0; i < TYPE_WEIGHTS.length; i++) {
+    acc += TYPE_WEIGHTS[i];
+    if (r < acc) return PIMPLE_TYPES[i];
+  }
+  return PIMPLE_TYPES[0];
+}
+
+// ===== SPAWN PIMPLE =====
+function spawnPimple() {
+  if (gameState.pimples.length >= 5) return;
+  var def = randomPimpleType();
+  var margin = def.radius + 10;
+  var x = margin + Math.random() * (480 - margin * 2);
+  var y = margin + Math.random() * (592 - margin * 2);
+
+  // Avoid overlapping with existing pimples
+  for (var i = 0; i < gameState.pimples.length; i++) {
+    var p = gameState.pimples[i];
+    var dx = p.x - x;
+    var dy = p.y - y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < p.radius + def.radius + 15) return; // too close, skip
+  }
+
+  gameState.pimples.push({
+    x: x,
+    y: y,
+    radius: def.radius,
+    baseRadius: def.radius,
+    type: def.type,
+    color: def.color,
+    rimColor: def.rimColor,
+    fill: def.fill,
+    maxAge: def.maxAge,
+    age: 0,
+    popping: false,
+    popProgress: 0,
+    growProgress: 0  // 0 -> 1 grow-in animation
+  });
+}
+
+// ===== DRAW PIMPLE =====
+function drawPimple(p) {
+  var r = p.radius;
+  if (r <= 0) return;
+
+  ctx.save();
+
+  // Grow-in scale
+  var scale = Math.min(1, p.growProgress);
+  ctx.translate(p.x, p.y);
+  ctx.scale(scale, scale);
+  ctx.translate(-0, -0);
+
+  // Outer shadow glow
+  ctx.shadowColor = p.color;
+  ctx.shadowBlur = 10;
+
+  // Base circle
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  var grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.05, 0, 0, r);
+  grad.addColorStop(0, p.rimColor);
+  grad.addColorStop(0.5, p.fill);
+  grad.addColorStop(1, p.color);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Rim highlight
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.arc(-r * 0.25, -r * 0.3, r * 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fill();
+
+  // Age warning: flash when near expiry (last 30 frames)
+  var remaining = p.maxAge - p.age;
+  if (!p.popping && remaining < 40) {
+    var alpha = 0.3 + 0.4 * Math.sin(p.age * 0.5);
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,200,0,' + alpha + ')';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// ===== PARTICLES =====
+function spawnParticles(x, y, color) {
+  var count = 10 + Math.floor(Math.random() * 8);
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 2 + Math.random() * 5;
+    gameState.particles.push({
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 2 + Math.random() * 4,
+      color: color,
+      life: 1.0,
+      decay: 0.04 + Math.random() * 0.04
+    });
+  }
+}
+
+function updateParticles() {
+  for (var i = gameState.particles.length - 1; i >= 0; i--) {
+    var p = gameState.particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.2; // gravity
+    p.life -= p.decay;
+    if (p.life <= 0) {
+      gameState.particles.splice(i, 1);
+    }
+  }
+}
+
+function drawParticles() {
+  for (var i = 0; i < gameState.particles.length; i++) {
+    var p = gameState.particles[i];
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ===== CLICK RIPPLE =====
+var ripples = [];
+function spawnRipple(x, y, hit) {
+  ripples.push({
+    x: x, y: y,
+    radius: 5,
+    maxRadius: hit ? 40 : 20,
+    life: 1.0,
+    hit: hit
+  });
+}
+
+function updateDrawRipples() {
+  for (var i = ripples.length - 1; i >= 0; i--) {
+    var r = ripples[i];
+    r.radius += (r.maxRadius - r.radius) * 0.15;
+    r.life -= 0.07;
+    if (r.life <= 0) { ripples.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = r.life * 0.7;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = r.hit ? '#ffaa44' : 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ===== SCORE POPUP =====
+var scorePopups = [];
+function spawnScorePopup(x, y, text) {
+  scorePopups.push({ x: x, y: y, text: text, life: 1.0, vy: -2 });
+}
+
+function updateDrawScorePopups() {
+  for (var i = scorePopups.length - 1; i >= 0; i--) {
+    var p = scorePopups[i];
+    p.y += p.vy;
+    p.life -= 0.025;
+    if (p.life <= 0) { scorePopups.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.font = 'bold 22px Arial Black, Arial';
+    ctx.fillStyle = '#ffdd44';
+    ctx.shadowColor = '#ff8800';
+    ctx.shadowBlur = 8;
+    ctx.textAlign = 'center';
+    ctx.fillText(p.text, p.x, p.y);
+    ctx.restore();
+  }
+}
+
+// ===== DRAW BACKGROUND =====
+function drawBackground() {
+  ctx.fillStyle = '#1a0505';
+  ctx.fillRect(0, 0, 480, 592);
+
+  // Subtle skin texture dots
+  ctx.fillStyle = 'rgba(180,80,60,0.04)';
+  for (var i = 0; i < 40; i++) {
+    var tx = (i * 97 + 33) % 480;
+    var ty = (i * 137 + 71) % 592;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 3 + (i % 4), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ===== DRAW HUD =====
+function updateHUD() {
+  document.getElementById('hudScore').textContent = 'SCORE: ' + gameState.score;
+  document.getElementById('hudProgress').textContent = gameState.totalPopped + ' / 30';
+  var timeEl = document.getElementById('hudTime');
+  timeEl.textContent = Math.ceil(gameState.time);
+  if (gameState.time <= 10) {
+    timeEl.className = 'urgent';
+  } else {
+    timeEl.className = '';
+  }
+}
+
+// ===== MAIN GAME LOOP =====
+function gameLoop() {
+  if (!gameState.running) return;
+
+  gameState.frameCount++;
+
+  // Update time (16ms per frame ~= 60fps)
+  gameState.time -= 16 / 1000;
+  if (gameState.time < 0) gameState.time = 0;
+
+  // Spawn
+  gameState.spawnTimer++;
+  var minPimples = 3;
+  if (gameState.spawnTimer >= gameState.spawnInterval || gameState.pimples.length < minPimples) {
+    spawnPimple();
+    gameState.spawnTimer = 0;
+    // Increase difficulty over time
+    var elapsed = 60 - gameState.time;
+    gameState.spawnInterval = Math.max(40, 80 - elapsed * 0.5);
+  }
+
+  // Update pimples
+  for (var i = gameState.pimples.length - 1; i >= 0; i--) {
+    var p = gameState.pimples[i];
+
+    // Grow-in
+    if (p.growProgress < 1) {
+      p.growProgress += 0.08;
+      if (p.growProgress > 1) p.growProgress = 1;
+    }
+
+    if (p.popping) {
+      p.popProgress += 0.08;
+      p.radius = p.baseRadius * (1 - p.popProgress);
+      if (p.popProgress >= 1) {
+        gameState.pimples.splice(i, 1);
+      }
+    } else {
+      p.age++;
+      if (p.age >= p.maxAge) {
+        // Expired: faded out quietly
+        gameState.pimples.splice(i, 1);
+      }
+    }
+  }
+
+  updateParticles();
+  updateHUD();
+
+  // Draw
+  drawBackground();
+  drawParticles();
+  updateDrawRipples();
+
+  for (var j = 0; j < gameState.pimples.length; j++) {
+    var opacity = 1;
+    if (gameState.pimples[j].popping) {
+      opacity = 1 - gameState.pimples[j].popProgress;
+    }
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    drawPimple(gameState.pimples[j]);
+    ctx.restore();
+  }
+
+  updateDrawScorePopups();
+
+  // Check end conditions
+  if (gameState.totalPopped >= 30) {
+    endGame('clear');
+    return;
+  }
+  if (gameState.time <= 0) {
+    endGame('gameover');
+    return;
+  }
+}
+
+// ===== CLICK HANDLER =====
+canvas.addEventListener('click', function(e) {
+  if (!gameState.running) return;
+
+  var rect = canvas.getBoundingClientRect();
+  var scaleX = canvas.width / rect.width;
+  var scaleY = canvas.height / rect.height;
+  var cx = (e.clientX - rect.left) * scaleX;
+  var cy = (e.clientY - rect.top) * scaleY;
+
+  var hit = false;
+
+  // Check from front (last rendered = front)
+  for (var i = gameState.pimples.length - 1; i >= 0; i--) {
+    var p = gameState.pimples[i];
+    if (p.popping) continue;
+    if (p.growProgress < 0.5) continue; // not grown enough to click
+
+    var dx = cx - p.x;
+    var dy = cy - p.y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist <= p.radius) {
+      // HIT
+      hit = true;
+      p.popping = true;
+      p.popProgress = 0;
+
+      gameState.score += 10;
+      gameState.totalPopped++;
+
+      spawnParticles(p.x, p.y, p.fill);
+      spawnRipple(cx, cy, true);
+      spawnScorePopup(p.x, p.y - p.radius, '+10');
+      break;
+    }
+  }
+
+  if (!hit) {
+    spawnRipple(cx, cy, false);
+  }
+});
+
+// ===== END GAME =====
+function endGame(result) {
+  gameState.running = false;
+
+  if (gameLoopId !== null) {
+    clearInterval(gameLoopId);
+    gameLoopId = null;
+  }
+
+  if (result === 'clear') {
+    document.getElementById('clearScore').textContent = 'SCORE: ' + gameState.score;
+    document.getElementById('clearTime').textContent = '残り時間: ' + Math.ceil(gameState.time) + '秒';
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('gameOverScore').textContent = 'SCORE: ' + gameState.score;
+    document.getElementById('gameOverPopped').textContent = '潰せたニキビ: ' + gameState.totalPopped + '個';
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+  }
+}
+
+// ===== START GAME =====
+function startGame() {
+  gameState.running = false;
+  gameState.score = 0;
+  gameState.time = 60;
+  gameState.pimples = [];
+  gameState.totalPopped = 0;
+  gameState.particles = [];
+  gameState.spawnTimer = 0;
+  gameState.spawnInterval = 80;
+  gameState.frameCount = 0;
+  ripples.length = 0;
+  scorePopups.length = 0;
+
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('gameOverScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'flex';
+
+  // Spawn initial pimples
+  for (var i = 0; i < 3; i++) {
+    spawnPimple();
+  }
+
+  gameState.running = true;
+
+  if (gameLoopId !== null) {
+    clearInterval(gameLoopId);
+    gameLoopId = null;
+  }
+  gameLoopId = setInterval(gameLoop, 16);
+}
+
+// ===== RETRY =====
+function retryGame() {
+  gameState.running = false;
+
+  if (gameLoopId !== null) {
+    clearInterval(gameLoopId);
+    gameLoopId = null;
+  }
+
+  gameState.score = 0;
+  gameState.time = 60;
+  gameState.pimples = [];
+  gameState.totalPopped = 0;
+  gameState.particles = [];
+  gameState.spawnTimer = 0;
+  gameState.spawnInterval = 80;
+  gameState.frameCount = 0;
+  ripples.length = 0;
+  scorePopups.length = 0;
+
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('gameOverScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+// ===== BUTTON BINDINGS =====
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('clearRetryBtn').addEventListener('click', retryGame);
+document.getElementById('gameOverRetryBtn').addEventListener('click', retryGame);
+
+// ===== INIT =====
+document.getElementById('startScreen').style.display = 'flex';
+</script>
+</body>
+</html>

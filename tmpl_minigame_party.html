@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MINIGAME PARTY</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #gameContainer {
+            width: 480px;
+            height: 640px;
+            background: #16213e;
+            border: 3px solid #0f3460;
+            position: relative;
+            overflow: hidden;
+            color: white;
+        }
+
+        /* ===== SCREENS ===== */
+        #startScreen, #clearScreen, #gameOverScreen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            z-index: 200;
+        }
+        #gameScreen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* ===== TYPOGRAPHY ===== */
+        .bigTitle {
+            font-size: 48px;
+            font-weight: 900;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233,69,96,0.6);
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
+        .subTitle {
+            font-size: 18px;
+            color: #a8dadc;
+            margin-bottom: 40px;
+        }
+        .resultTitle {
+            font-size: 52px;
+            font-weight: 900;
+            margin-bottom: 16px;
+        }
+        .resultSub {
+            font-size: 18px;
+            color: #a8dadc;
+            margin-bottom: 32px;
+        }
+
+        /* ===== BUTTONS ===== */
+        .btnMain {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 16px 48px;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: transform 0.1s, background 0.1s;
+        }
+        .btnMain:hover { background: #c73652; transform: scale(1.05); }
+        .btnMain:active { transform: scale(0.97); }
+
+        /* ===== PHASE HEADER ===== */
+        #phaseHeader {
+            width: 100%;
+            background: #0f3460;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        #phaseTitle {
+            font-size: 20px;
+            font-weight: bold;
+            color: #e94560;
+        }
+        #phaseIndicator {
+            font-size: 14px;
+            color: #a8dadc;
+        }
+
+        /* ===== MINI AREAS ===== */
+        #mini1Area, #mini2Area, #mini3Area {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* ===== MINI1: REACTION ===== */
+        #reactionCircle {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: #e94560;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 52px;
+            font-weight: 900;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+            border: 4px solid rgba(255,255,255,0.2);
+            box-shadow: 0 0 30px rgba(233,69,96,0.4);
+        }
+        #reactionCircle.go {
+            background: #2ecc71;
+            box-shadow: 0 0 40px rgba(46,204,113,0.7);
+            animation: pulse 0.3s ease;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        #mini1Status {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #a8dadc;
+            text-align: center;
+        }
+        #mini1Attempts {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        #mini1Msg {
+            margin-top: 14px;
+            font-size: 22px;
+            font-weight: bold;
+            height: 28px;
+            text-align: center;
+        }
+
+        /* ===== MINI2: NUMBER ===== */
+        #numberGrid {
+            width: 380px;
+            height: 380px;
+            position: relative;
+        }
+        .numBtn {
+            position: absolute;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: 3px solid #a8dadc;
+            background: #0f3460;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.1s, transform 0.1s;
+            user-select: none;
+        }
+        .numBtn:hover { background: #1a4a8a; transform: scale(1.1); }
+        .numBtn.hit {
+            background: #2ecc71;
+            border-color: #2ecc71;
+            cursor: default;
+        }
+        .numBtn.wrong {
+            background: #e94560;
+            border-color: #e94560;
+            animation: shake 0.3s;
+        }
+        @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        #mini2Timer {
+            font-size: 28px;
+            font-weight: bold;
+            color: #e94560;
+            margin-bottom: 12px;
+        }
+        #mini2Status {
+            font-size: 16px;
+            color: #a8dadc;
+            margin-top: 10px;
+        }
+
+        /* ===== MINI3: MEMORY ===== */
+        #memoryGrid {
+            display: grid;
+            grid-template-columns: repeat(4, 80px);
+            grid-template-rows: repeat(4, 80px);
+            gap: 6px;
+        }
+        .memCell {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            background: #0f3460;
+            border: 2px solid #1e4a8a;
+            cursor: pointer;
+            transition: background 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .memCell.lit {
+            background: #f39c12;
+            border-color: #f39c12;
+            box-shadow: 0 0 15px rgba(243,156,18,0.8);
+        }
+        .memCell.selected {
+            background: #3498db;
+            border-color: #3498db;
+        }
+        .memCell.correct {
+            background: #2ecc71;
+            border-color: #2ecc71;
+        }
+        .memCell.wrong {
+            background: #e94560;
+            border-color: #e94560;
+        }
+        .memCell.disabled {
+            cursor: default;
+        }
+        #mini3Status {
+            margin-top: 16px;
+            font-size: 18px;
+            color: #a8dadc;
+            text-align: center;
+        }
+        #mini3Phase {
+            font-size: 14px;
+            color: #666;
+            margin-top: 6px;
+        }
+
+        /* ===== PROGRESS PIPS ===== */
+        #progressPips {
+            display: flex;
+            gap: 10px;
+            margin: 8px 0;
+        }
+        .pip {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #333;
+            border: 2px solid #555;
+        }
+        .pip.done { background: #2ecc71; border-color: #2ecc71; }
+        .pip.active { background: #e94560; border-color: #e94560; }
+
+        /* ===== OVERLAY MSG ===== */
+        #overlayMsg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.88);
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            padding: 20px 40px;
+            border-radius: 12px;
+            z-index: 300;
+            display: none;
+            text-align: center;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+
+    <!-- START SCREEN -->
+    <div id="startScreen">
+        <div class="bigTitle">MINIGAME</div>
+        <div class="bigTitle" style="margin-top:-16px">PARTY</div>
+        <div class="subTitle">3つのミニゲームをクリアせよ！</div>
+        <div style="font-size:14px;color:#555;margin-bottom:30px;text-align:center;line-height:1.8">
+            ⚡ 反応ゲー「GO!」<br>
+            🔢 数字順「NUMBER!」<br>
+            🧠 記憶ゲー「MEMORY!」
+        </div>
+        <button class="btnMain" onclick="startGame()">START</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="gameScreen">
+        <div id="phaseHeader">
+            <div id="phaseTitle">GO!</div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                <div id="progressPips" style="margin:0">
+                    <div class="pip active" id="pip1"></div>
+                    <div class="pip" id="pip2"></div>
+                    <div class="pip" id="pip3"></div>
+                </div>
+                <div id="phaseIndicator">GAME 1 / 3</div>
+            </div>
+        </div>
+
+        <!-- MINI1 AREA -->
+        <div id="mini1Area">
+            <div id="mini1Status">準備ができたら円をクリック</div>
+            <div style="margin-top:20px">
+                <div id="reactionCircle" onclick="onReactionClick()">WAIT</div>
+            </div>
+            <div id="mini1Msg"></div>
+            <div id="mini1Attempts">挑戦: 0/3　成功: 0</div>
+        </div>
+
+        <!-- MINI2 AREA -->
+        <div id="mini2Area" style="display:none">
+            <div id="mini2Timer">⏱ 20</div>
+            <div id="numberGrid"></div>
+            <div id="mini2Status">1から順にクリック！</div>
+        </div>
+
+        <!-- MINI3 AREA -->
+        <div id="mini3Area" style="display:none">
+            <div id="memoryGrid"></div>
+            <div id="mini3Status">光ったマスを覚えよう</div>
+            <div id="mini3Phase"></div>
+        </div>
+    </div>
+
+    <!-- CLEAR SCREEN -->
+    <div id="clearScreen" style="display:none">
+        <div class="resultTitle" style="color:#f39c12">ALL CLEAR!</div>
+        <div class="resultSub">全3ミニゲームクリア！</div>
+        <div style="font-size:48px;margin-bottom:28px">🎉</div>
+        <button class="btnMain" onclick="retryGame()">RETRY</button>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="gameOverScreen" style="display:none">
+        <div class="resultTitle" style="color:#e94560">FAILED</div>
+        <div id="failedGameName" class="resultSub"></div>
+        <div style="font-size:48px;margin-bottom:28px">💥</div>
+        <button class="btnMain" onclick="retryGame()">RETRY</button>
+    </div>
+
+    <!-- OVERLAY MESSAGE -->
+    <div id="overlayMsg"></div>
+
+</div>
+
+<script>
+// ===== GLOBAL STATE =====
+var gameState = {
+    running: false,
+    phase: 'mini1',
+    // mini1
+    m1: {
+        attempts: 0,
+        successes: 0,
+        waiting: false,  // waiting for GO
+        isGo: false,
+        goTimer: 0,
+        goStartTime: 0,
+        started: false
+    },
+    // mini2
+    m2: {
+        timeLeft: 20,
+        nextNum: 1,
+        numPositions: [],
+        timerInterval: null
+    },
+    // mini3
+    m3: {
+        litCells: [],
+        selectedCells: [],
+        phase: 'showing', // showing | input
+        showTimer: 0
+    }
+};
+
+var mainInterval = null;
+
+// ===== UTILS =====
+function showOverlay(msg, duration) {
+    var el = document.getElementById('overlayMsg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(function() { el.style.display = 'none'; }, duration || 1000);
+}
+
+function updatePips() {
+    var phases = ['mini1','mini2','mini3'];
+    for (var i = 0; i < 3; i++) {
+        var pip = document.getElementById('pip' + (i+1));
+        var phaseIdx = phases.indexOf(gameState.phase);
+        if (i < phaseIdx) {
+            pip.className = 'pip done';
+        } else if (i === phaseIdx) {
+            pip.className = 'pip active';
+        } else {
+            pip.className = 'pip';
+        }
+    }
+}
+
+// ===== START / RETRY =====
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'flex';
+
+    gameState.running = true;
+    gameState.phase = 'mini1';
+
+    initMini1();
+    updatePips();
+
+    if (mainInterval) clearInterval(mainInterval);
+    mainInterval = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+    gameState.running = false;
+
+    // clear any sub-timers
+    if (gameState.m2.timerInterval) {
+        clearInterval(gameState.m2.timerInterval);
+        gameState.m2.timerInterval = null;
+    }
+    if (mainInterval) {
+        clearInterval(mainInterval);
+        mainInterval = null;
+    }
+
+    // reset state
+    gameState.phase = 'mini1';
+    gameState.m1 = { attempts:0, successes:0, waiting:false, isGo:false, goTimer:0, goStartTime:0, started:false };
+    gameState.m2 = { timeLeft:20, nextNum:1, numPositions:[], timerInterval:null };
+    gameState.m3 = { litCells:[], selectedCells:[], phase:'showing', showTimer:0 };
+
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+// ===== GAME LOOP =====
+function gameLoop() {
+    if (!gameState.running) return;
+
+    if (gameState.phase === 'mini1') {
+        loopMini1();
+    } else if (gameState.phase === 'mini3') {
+        loopMini3();
+    }
+    // mini2 uses its own setInterval for timer
+}
+
+// ===== MINI 1: REACTION =====
+function initMini1() {
+    var m1 = gameState.m1;
+    m1.attempts = 0;
+    m1.successes = 0;
+    m1.waiting = false;
+    m1.isGo = false;
+    m1.started = false;
+
+    document.getElementById('mini1Area').style.display = 'flex';
+    document.getElementById('mini2Area').style.display = 'none';
+    document.getElementById('mini3Area').style.display = 'none';
+
+    document.getElementById('phaseTitle').textContent = '⚡ GO!';
+    document.getElementById('phaseIndicator').textContent = 'GAME 1 / 3';
+
+    var circle = document.getElementById('reactionCircle');
+    circle.className = '';
+    circle.textContent = 'START';
+    document.getElementById('mini1Status').textContent = '円をクリックしてスタート';
+    document.getElementById('mini1Msg').textContent = '';
+    updateMini1Attempts();
+}
+
+function updateMini1Attempts() {
+    var m1 = gameState.m1;
+    document.getElementById('mini1Attempts').textContent =
+        '挑戦: ' + m1.attempts + '/3　成功: ' + m1.successes;
+}
+
+function onReactionClick() {
+    if (!gameState.running || gameState.phase !== 'mini1') return;
+    var m1 = gameState.m1;
+    var circle = document.getElementById('reactionCircle');
+
+    // Not started yet
+    if (!m1.started) {
+        m1.started = true;
+        startReactionRound();
+        return;
+    }
+
+    if (!m1.waiting) return; // between rounds
+
+    if (m1.isGo) {
+        // SUCCESS
+        var elapsed = Date.now() - m1.goStartTime;
+        if (elapsed <= 500) {
+            m1.successes++;
+            m1.attempts++;
+            document.getElementById('mini1Msg').textContent = '✅ ' + elapsed + 'ms！';
+            document.getElementById('mini1Msg').style.color = '#2ecc71';
+        } else {
+            // too slow
+            m1.attempts++;
+            document.getElementById('mini1Msg').textContent = '⏰ 遅い！';
+            document.getElementById('mini1Msg').style.color = '#e94560';
+        }
+    } else {
+        // FOUL - flyin
+        m1.attempts++;
+        document.getElementById('mini1Msg').textContent = '🚨 フライング！';
+        document.getElementById('mini1Msg').style.color = '#f39c12';
+    }
+
+    m1.waiting = false;
+    m1.isGo = false;
+    m1.goTimer = 0;
+    circle.className = '';
+    circle.textContent = 'WAIT';
+    updateMini1Attempts();
+
+    // Check result
+    var remaining = 3 - m1.attempts;
+    var neededToWin = 2 - m1.successes;
+
+    if (m1.successes >= 2) {
+        // CLEAR
+        m1.waiting = false;
+        m1.started = false;
+        setTimeout(function() { transitionToMini2(); }, 800);
+        return;
+    }
+    if (remaining < neededToWin) {
+        // Cannot win
+        m1.waiting = false;
+        m1.started = false;
+        setTimeout(function() { showGameOver('⚡ GO!'); }, 800);
+        return;
+    }
+
+    // Next round
+    if (m1.attempts < 3) {
+        setTimeout(function() { startReactionRound(); }, 800);
+    }
+}
+
+function startReactionRound() {
+    var m1 = gameState.m1;
+    var circle = document.getElementById('reactionCircle');
+
+    m1.waiting = true;
+    m1.isGo = false;
+    // random 1000-3000ms delay
+    m1.goTimer = 1000 + Math.random() * 2000;
+    m1.goStartTime = 0;
+
+    circle.className = '';
+    circle.textContent = 'WAIT';
+    document.getElementById('mini1Status').textContent = 'GOになったら即クリック！';
+    document.getElementById('mini1Msg').textContent = '';
+}
+
+var m1LastTime = 0;
+function loopMini1() {
+    var m1 = gameState.m1;
+    if (!m1.waiting || m1.isGo) return;
+
+    var now = Date.now();
+    if (m1LastTime === 0) { m1LastTime = now; return; }
+    var dt = now - m1LastTime;
+    m1LastTime = now;
+
+    m1.goTimer -= dt;
+    if (m1.goTimer <= 0) {
+        m1.isGo = true;
+        m1.goStartTime = Date.now();
+        var circle = document.getElementById('reactionCircle');
+        circle.className = 'go';
+        circle.textContent = 'GO!';
+    }
+}
+
+// ===== MINI 2: NUMBER =====
+function initMini2() {
+    var m2 = gameState.m2;
+    m2.timeLeft = 20;
+    m2.nextNum = 1;
+    m2.numPositions = [];
+
+    document.getElementById('mini1Area').style.display = 'none';
+    document.getElementById('mini2Area').style.display = 'flex';
+    document.getElementById('mini3Area').style.display = 'none';
+
+    document.getElementById('phaseTitle').textContent = '🔢 NUMBER!';
+    document.getElementById('phaseIndicator').textContent = 'GAME 2 / 3';
+    updatePips();
+
+    // Place 9 numbers randomly (no overlap)
+    var grid = document.getElementById('numberGrid');
+    grid.innerHTML = '';
+
+    var positions = generateNumPositions();
+    m2.numPositions = positions;
+
+    for (var i = 0; i < 9; i++) {
+        (function(num, pos) {
+            var btn = document.createElement('div');
+            btn.className = 'numBtn';
+            btn.id = 'numBtn' + num;
+            btn.textContent = num;
+            btn.style.left = pos.x + 'px';
+            btn.style.top = pos.y + 'px';
+            btn.onclick = function() { onNumClick(num); };
+            grid.appendChild(btn);
+        })(i+1, positions[i]);
+    }
+
+    document.getElementById('mini2Timer').textContent = '⏱ 20';
+    document.getElementById('mini2Status').textContent = '1 から順にクリック！';
+
+    // Start countdown
+    if (m2.timerInterval) clearInterval(m2.timerInterval);
+    m2.timerInterval = setInterval(function() {
+        if (!gameState.running || gameState.phase !== 'mini2') {
+            clearInterval(m2.timerInterval);
+            m2.timerInterval = null;
+            return;
+        }
+        m2.timeLeft--;
+        document.getElementById('mini2Timer').textContent = '⏱ ' + m2.timeLeft;
+        if (m2.timeLeft <= 5) {
+            document.getElementById('mini2Timer').style.color = '#e94560';
+        }
+        if (m2.timeLeft <= 0) {
+            clearInterval(m2.timerInterval);
+            m2.timerInterval = null;
+            showGameOver('🔢 NUMBER!');
+        }
+    }, 1000);
+}
+
+function generateNumPositions() {
+    var W = 380, H = 380, R = 28;
+    var positions = [];
+    var attempts = 0;
+    while (positions.length < 9 && attempts < 2000) {
+        attempts++;
+        var x = R + Math.random() * (W - R*2 - 56);
+        var y = R + Math.random() * (H - R*2 - 56);
+        var ok = true;
+        for (var j = 0; j < positions.length; j++) {
+            var dx = x - positions[j].x;
+            var dy = y - positions[j].y;
+            if (Math.sqrt(dx*dx + dy*dy) < 70) { ok = false; break; }
+        }
+        if (ok) positions.push({x: x, y: y});
+    }
+    return positions;
+}
+
+function onNumClick(num) {
+    if (!gameState.running || gameState.phase !== 'mini2') return;
+    var m2 = gameState.m2;
+    var btn = document.getElementById('numBtn' + num);
+    if (!btn || btn.className.indexOf('hit') !== -1) return;
+
+    if (num === m2.nextNum) {
+        btn.className = 'numBtn hit';
+        m2.nextNum++;
+        document.getElementById('mini2Status').textContent = '次: ' + m2.nextNum;
+
+        if (m2.nextNum > 9) {
+            // CLEAR
+            if (m2.timerInterval) { clearInterval(m2.timerInterval); m2.timerInterval = null; }
+            document.getElementById('mini2Status').textContent = '✅ クリア！';
+            setTimeout(function() { transitionToMini3(); }, 800);
+        }
+    } else {
+        btn.className = 'numBtn wrong';
+        setTimeout(function() {
+            if (btn.className.indexOf('hit') === -1) btn.className = 'numBtn';
+        }, 300);
+        document.getElementById('mini2Status').textContent = '❌ ' + num + ' じゃないよ！次は ' + m2.nextNum;
+    }
+}
+
+// ===== MINI 3: MEMORY =====
+var memCells = [];
+
+function initMini3() {
+    var m3 = gameState.m3;
+    m3.litCells = [];
+    m3.selectedCells = [];
+    m3.phase = 'showing';
+    m3.showTimer = 0;
+
+    document.getElementById('mini1Area').style.display = 'none';
+    document.getElementById('mini2Area').style.display = 'none';
+    document.getElementById('mini3Area').style.display = 'flex';
+
+    document.getElementById('phaseTitle').textContent = '🧠 MEMORY!';
+    document.getElementById('phaseIndicator').textContent = 'GAME 3 / 3';
+    updatePips();
+
+    // Build 4x4 grid
+    var grid = document.getElementById('memoryGrid');
+    grid.innerHTML = '';
+    memCells = [];
+    for (var i = 0; i < 16; i++) {
+        (function(idx) {
+            var cell = document.createElement('div');
+            cell.className = 'memCell disabled';
+            cell.id = 'memCell' + idx;
+            cell.onclick = function() { onMemCellClick(idx); };
+            grid.appendChild(cell);
+            memCells.push(cell);
+        })(i);
+    }
+
+    // Pick 4 random lit cells
+    var indices = shuffleArray([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
+    m3.litCells = indices.slice(0, 4);
+    m3.selectedCells = [];
+
+    document.getElementById('mini3Status').textContent = '光ったマスを覚えよう！';
+    document.getElementById('mini3Phase').textContent = '';
+
+    // Show lit cells for 2 seconds
+    for (var k = 0; k < m3.litCells.length; k++) {
+        memCells[m3.litCells[k]].className = 'memCell lit disabled';
+    }
+
+    m3.showTimer = 2000;
+}
+
+var m3LastTime = 0;
+function loopMini3() {
+    var m3 = gameState.m3;
+    if (m3.phase !== 'showing') return;
+
+    var now = Date.now();
+    if (m3LastTime === 0) { m3LastTime = now; return; }
+    var dt = now - m3LastTime;
+    m3LastTime = now;
+
+    m3.showTimer -= dt;
+    if (m3.showTimer <= 0) {
+        // Hide cells and switch to input
+        m3.phase = 'input';
+        for (var i = 0; i < 16; i++) {
+            memCells[i].className = 'memCell';
+        }
+        document.getElementById('mini3Status').textContent = '光ったマスをクリック！';
+        document.getElementById('mini3Phase').textContent = '0 / 4 選択済み';
+    }
+}
+
+function onMemCellClick(idx) {
+    if (!gameState.running || gameState.phase !== 'mini3') return;
+    var m3 = gameState.m3;
+    if (m3.phase !== 'input') return;
+
+    var cell = memCells[idx];
+    if (cell.className.indexOf('selected') !== -1 ||
+        cell.className.indexOf('correct') !== -1 ||
+        cell.className.indexOf('wrong') !== -1) return;
+
+    var isCorrect = (m3.litCells.indexOf(idx) !== -1);
+
+    if (isCorrect) {
+        cell.className = 'memCell correct';
+        m3.selectedCells.push(idx);
+        document.getElementById('mini3Phase').textContent = m3.selectedCells.length + ' / 4 選択済み';
+
+        if (m3.selectedCells.length === 4) {
+            // ALL CLEAR
+            document.getElementById('mini3Status').textContent = '✅ 全正解！';
+            document.getElementById('mini3Phase').textContent = '';
+            setTimeout(function() { showClear(); }, 800);
+        }
+    } else {
+        cell.className = 'memCell wrong';
+        document.getElementById('mini3Status').textContent = '❌ ハズレ！ゲームオーバー';
+        setTimeout(function() { showGameOver('🧠 MEMORY!'); }, 800);
+    }
+}
+
+// ===== TRANSITIONS =====
+function transitionToMini2() {
+    if (!gameState.running) return;
+    gameState.phase = 'mini2';
+    showOverlay('CLEAR! 🎉 → NUMBER!', 900);
+    setTimeout(function() {
+        if (!gameState.running) return;
+        initMini2();
+    }, 900);
+}
+
+function transitionToMini3() {
+    if (!gameState.running) return;
+    gameState.phase = 'mini3';
+    m3LastTime = 0;
+    showOverlay('CLEAR! 🎉 → MEMORY!', 900);
+    setTimeout(function() {
+        if (!gameState.running) return;
+        initMini3();
+    }, 900);
+}
+
+function showClear() {
+    gameState.running = false;
+    if (mainInterval) { clearInterval(mainInterval); mainInterval = null; }
+    if (gameState.m2.timerInterval) { clearInterval(gameState.m2.timerInterval); gameState.m2.timerInterval = null; }
+
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'flex';
+}
+
+function showGameOver(gameName) {
+    if (!gameState.running) return;
+    gameState.running = false;
+    if (mainInterval) { clearInterval(mainInterval); mainInterval = null; }
+    if (gameState.m2.timerInterval) { clearInterval(gameState.m2.timerInterval); gameState.m2.timerInterval = null; }
+
+    document.getElementById('failedGameName').textContent = '失敗: ' + gameName;
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+}
+
+// ===== HELPERS =====
+function shuffleArray(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+}
+</script>
+</body>
+</html>

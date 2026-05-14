@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>放課後の物語</title>
+    <!-- title: string // config.title = '{{title}}' -->
+    <!-- bg_color: string // config.bg_color = '{{bg_color}}' -->
+    <!-- text_color: string // config.text_color = '{{text_color}}' -->
+    <!-- btn_color: string // config.btn_color = '{{btn_color}}' -->
+    <!-- btn_hover: string // config.btn_hover = '{{btn_hover}}' -->
+    <!-- char_color: string // config.char_color = '{{char_color}}' -->
+    <!-- char_name: string // config.char_name = '{{char_name}}' -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+        }
+        #gameContainer {
+            width: 100%;
+            max-width: 720px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* ========== START SCREEN ========== */
+        #startScreen {
+            display: block;
+            text-align: center;
+            padding: 60px 40px;
+        }
+        #startScreen .startTitle {
+            font-size: 40px;
+            font-weight: bold;
+            color: #f0c040;
+            text-shadow: 0 0 20px rgba(240,192,64,0.5);
+            margin-bottom: 16px;
+            letter-spacing: 4px;
+        }
+        #startScreen .startSub {
+            font-size: 16px;
+            color: #aaa;
+            margin-bottom: 50px;
+        }
+        .btnStart {
+            padding: 14px 50px;
+            font-size: 20px;
+            font-family: inherit;
+            border: 2px solid #f0c040;
+            border-radius: 4px;
+            background: transparent;
+            color: #f0c040;
+            cursor: pointer;
+            letter-spacing: 4px;
+        }
+        .btnStart:hover {
+            background: rgba(240,192,64,0.15);
+        }
+
+        /* ========== GAME SCREEN ========== */
+        #gameScreen {
+            display: none;
+            flex-direction: column;
+            height: 100vh;
+            min-height: 480px;
+        }
+
+        /* 背景エリア */
+        #bgArea {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            min-height: 260px;
+        }
+        #bgLayer {
+            position: absolute;
+            inset: 0;
+            transition: background 0.4s;
+        }
+        /* キャラエリア（BGの中に配置） */
+        #charArea {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        #charFigure {
+            width: 90px;
+            height: 160px;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            transition: background 0.4s;
+        }
+        #charLabel {
+            font-size: 13px;
+            color: #fff;
+            background: rgba(0,0,0,0.55);
+            padding: 3px 12px;
+            border-radius: 12px;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+
+        /* テキストボックス */
+        #textBox {
+            background: rgba(10, 10, 30, 0.88);
+            border-top: 2px solid rgba(240,192,64,0.35);
+            padding: 20px 24px 16px;
+            min-height: 130px;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        #speakerName {
+            font-size: 14px;
+            color: #f0c040;
+            font-weight: bold;
+            margin-bottom: 8px;
+            letter-spacing: 2px;
+            min-height: 18px;
+        }
+        #dialogText {
+            font-size: 16px;
+            color: #e8e8e8;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            min-height: 56px;
+        }
+        #nextHint {
+            position: absolute;
+            right: 20px;
+            bottom: 14px;
+            font-size: 18px;
+            color: #f0c040;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #nextHint.visible {
+            opacity: 1;
+        }
+
+        /* 選択肢エリア */
+        #choiceArea {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            padding: 14px 24px 20px;
+            background: rgba(10, 10, 30, 0.92);
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .choiceBtn {
+            padding: 12px 20px;
+            font-size: 15px;
+            font-family: inherit;
+            border: 1px solid rgba(240,192,64,0.4);
+            border-radius: 4px;
+            background: rgba(240,192,64,0.05);
+            color: #e8e8e8;
+            cursor: pointer;
+            text-align: left;
+            letter-spacing: 1px;
+        }
+        .choiceBtn:hover {
+            background: rgba(240,192,64,0.18);
+            border-color: #f0c040;
+            color: #f0c040;
+        }
+
+        /* ========== CLEAR SCREEN ========== */
+        #clearScreen {
+            display: none;
+            text-align: center;
+            padding: 60px 40px;
+        }
+        #endingLabel {
+            font-size: 13px;
+            color: #aaa;
+            letter-spacing: 4px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+        #endingTitle {
+            font-size: 34px;
+            font-weight: bold;
+            margin-bottom: 24px;
+            letter-spacing: 3px;
+        }
+        #endingTitle.good {
+            color: #f0c040;
+            text-shadow: 0 0 20px rgba(240,192,64,0.5);
+        }
+        #endingTitle.normal {
+            color: #8ab4d8;
+            text-shadow: 0 0 20px rgba(138,180,216,0.4);
+        }
+        #endingSynopsis {
+            font-size: 15px;
+            color: #bbb;
+            line-height: 1.8;
+            margin-bottom: 40px;
+        }
+        .btnRetry {
+            padding: 12px 40px;
+            font-size: 16px;
+            font-family: inherit;
+            border: 1px solid #888;
+            border-radius: 4px;
+            background: transparent;
+            color: #ccc;
+            cursor: pointer;
+            letter-spacing: 3px;
+        }
+        .btnRetry:hover {
+            border-color: #ccc;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+
+    <!-- START SCREEN -->
+    <div id="startScreen">
+        <div class="startTitle">放課後の物語</div>
+        <div class="startSub">ある日の夕暮れ、あなたは教室を出た。</div>
+        <button class="btnStart" onclick="startGame()">START</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="gameScreen">
+        <div id="bgArea">
+            <div id="bgLayer"></div>
+            <div id="charArea">
+                <div id="charFigure"></div>
+                <div id="charLabel"></div>
+            </div>
+        </div>
+        <div id="textBox" onclick="onTextBoxClick()">
+            <div id="speakerName"></div>
+            <div id="dialogText"></div>
+            <div id="nextHint">&#9660;</div>
+        </div>
+        <div id="choiceArea"></div>
+    </div>
+
+    <!-- CLEAR SCREEN -->
+    <div id="clearScreen">
+        <div id="endingLabel">ENDING</div>
+        <div id="endingTitle"></div>
+        <div id="endingSynopsis"></div>
+        <button class="btnRetry" onclick="retryGame()">RETRY</button>
+    </div>
+
+</div>
+
+<script>
+    // ========== CONFIG ==========
+    var config = {
+        title: '放課後の物語',
+        bg_color: '#1a1a2e',
+        text_color: '#e8e8e8',
+        btn_color: 'rgba(240,192,64,0.05)',
+        btn_hover: 'rgba(240,192,64,0.18)',
+        char_color: '#e8a0b0',
+        char_name: '彩夏'
+    };
+
+    // ========== GAME STATE ==========
+    var gameState = {
+        running: false,
+        currentScene: 'scene1',
+        route: 'none',
+        lineIndex: 0,
+        typing: false,
+        typingTimer: null,
+        loopTimer: null
+    };
+
+    // ========== BG / CHAR PRESETS ==========
+    var bgPresets = {
+        corridor: 'linear-gradient(180deg, #2a1a4a 0%, #3a2a5a 40%, #5a3a2a 100%)',
+        roof:     'linear-gradient(180deg, #1a2a4a 0%, #2a4a7a 40%, #e8a060 100%)',
+        sunset:   'linear-gradient(180deg, #3a1a1a 0%, #7a3a2a 40%, #c86030 100%)',
+        dark:     'linear-gradient(180deg, #0a0a1a 0%, #1a1a2a 100%)'
+    };
+    var charPresets = {
+        visible:  { color: config.char_color, name: config.char_name },
+        hidden:   { color: 'transparent',     name: '' }
+    };
+
+    // ========== SCENE DATA ==========
+    // lines: [{speaker, text}] or {speaker, text}
+    // bg, char: preset key
+    // after_lines: scene to go to after all lines are done (auto-advance)
+    // choices: [{text, next}]
+    var scenes = {
+        // --- Scene 1: 出会い ---
+        scene1: {
+            bg: 'corridor',
+            char: 'visible',
+            lines: [
+                { speaker: '',      text: '放課後。夕日が廊下を橙色に染めていた。' },
+                { speaker: '',      text: 'あなたは教室を出て、廊下を歩いていた。' },
+                { speaker: '',      text: 'すると、窓際で一人佇む女子生徒が目に入った。' },
+                { speaker: '',      text: 'クラスメートの' + config.char_name + '——いつもは明るい彼女が、どこか遠くを見つめていた。' },
+                { speaker: config.char_name, text: '…………。' }
+            ],
+            choices: [
+                { text: '声をかける', next: 'scene2a_1' },
+                { text: 'そのまま通り過ぎる', next: 'scene2b_1' }
+            ]
+        },
+
+        // ===== A ルート: 声をかける =====
+        scene2a_1: {
+            bg: 'corridor',
+            char: 'visible',
+            lines: [
+                { speaker: 'あなた', text: 'ねえ、どうしたの。ボーっとして。' },
+                { speaker: config.char_name, text: 'え——ッ、ご、ごめん。気づかなかった。' },
+                { speaker: config.char_name, text: 'なんでもない…んじゃなくて、ちょっとだけ考えごとしてた。' }
+            ],
+            choices: [
+                { text: 'もっと話す', next: 'scene2a_2' },
+                { text: '邪魔して悪かった、帰る', next: 'scene2a_end' }
+            ]
+        },
+        scene2a_2: {
+            bg: 'roof',
+            char: 'visible',
+            lines: [
+                { speaker: 'あなた', text: '屋上、行かない？ここより夕日きれいだよ。' },
+                { speaker: config.char_name, text: '…うん。行く。' },
+                { speaker: '',      text: '二人で屋上に出ると、空が燃えるように赤かった。' },
+                { speaker: config.char_name, text: '私ね、来年から転校することになったんだ。親の仕事の都合で。' },
+                { speaker: config.char_name, text: 'ずっと言えなかった。こんな夕日、もう見られないかもって思って。' },
+                { speaker: 'あなた', text: 'それは……寂しいな。' },
+                { speaker: config.char_name, text: 'でも、今日ここで話せてよかった。ありがとう。' }
+            ],
+            after_lines: 'scene3a'
+        },
+        scene2a_end: {
+            bg: 'corridor',
+            char: 'visible',
+            lines: [
+                { speaker: config.char_name, text: 'あ…うん。また明日ね。' },
+                { speaker: '',      text: 'あなたは何も聞かずに帰った。' },
+                { speaker: '',      text: '翌朝、彼女の席は空いていた。' }
+            ],
+            after_lines: 'endingNormal'
+        },
+
+        // ===== B ルート: 通り過ぎる =====
+        scene2b_1: {
+            bg: 'corridor',
+            char: 'hidden',
+            lines: [
+                { speaker: '',      text: 'あなたは目を逸らし、そのまま廊下を歩き続けた。' },
+                { speaker: '',      text: '…なんとなく、胸がざわついた。' },
+                { speaker: '',      text: '階段を半分降りたところで、足が止まった。' }
+            ],
+            choices: [
+                { text: '引き返す', next: 'scene2b_2' },
+                { text: 'そのまま帰る', next: 'scene2b_end' }
+            ]
+        },
+        scene2b_2: {
+            bg: 'corridor',
+            char: 'visible',
+            lines: [
+                { speaker: '',      text: 'あなたは引き返した。' },
+                { speaker: '',      text: config.char_name + 'はまだそこにいた。' },
+                { speaker: 'あなた', text: 'さっき通り過ぎたけど——やっぱり気になって。' },
+                { speaker: config.char_name, text: '……戻ってきたの？' },
+                { speaker: config.char_name, text: 'ありがとう。実は、話したいことがあったんだ。' }
+            ],
+            after_lines: 'scene2a_2'
+        },
+        scene2b_end: {
+            bg: 'dark',
+            char: 'hidden',
+            lines: [
+                { speaker: '',      text: 'あなたは帰宅した。' },
+                { speaker: '',      text: 'その夜、なぜか眠れなかった。' },
+                { speaker: '',      text: '翌朝、彼女の席は空いていた。' },
+                { speaker: '',      text: '転校したらしい——と、誰かが言っていた。' }
+            ],
+            after_lines: 'endingNormal'
+        },
+
+        // ===== Scene 3A: クライマックス（Good ルート） =====
+        scene3a: {
+            bg: 'sunset',
+            char: 'visible',
+            lines: [
+                { speaker: '',      text: '夕日が二人を包んだ。' },
+                { speaker: config.char_name, text: '転校しても、今日のこと忘れないよ。' },
+                { speaker: 'あなた', text: '俺も。また——話せるといいな。' },
+                { speaker: config.char_name, text: 'うん……また明日。最後の「また明日」だけど。' },
+                { speaker: '',      text: '彼女は初めて笑った。' }
+            ],
+            after_lines: 'endingGood'
+        },
+
+        // ===== ENDINGS =====
+        endingGood: {
+            type: 'ending',
+            endingType: 'good',
+            title: 'また明日',
+            synopsis: '声をかけたあの一歩が、最後の夕日を二人のものにした。\nまた明日——その言葉は、きっと遠くまで届く。'
+        },
+        endingNormal: {
+            type: 'ending',
+            endingType: 'normal',
+            title: 'もう会えない',
+            synopsis: '言葉にできなかった気持ちは、夕日とともに消えた。\n彼女の席は、次の日から空のままだった。'
+        }
+    };
+
+    // ========== TYPING EFFECT ==========
+    var typingFullText = '';
+    var typingCurrentLen = 0;
+
+    function startTyping(text, onDone) {
+        gameState.typing = true;
+        typingFullText = text;
+        typingCurrentLen = 0;
+        document.getElementById('dialogText').textContent = '';
+        document.getElementById('nextHint').style.opacity = '0';
+        document.getElementById('nextHint').className = '';
+
+        if (gameState.typingTimer !== null) {
+            clearInterval(gameState.typingTimer);
+        }
+        gameState.typingTimer = setInterval(function() {
+            typingCurrentLen++;
+            document.getElementById('dialogText').textContent = typingFullText.slice(0, typingCurrentLen);
+            if (typingCurrentLen >= typingFullText.length) {
+                clearInterval(gameState.typingTimer);
+                gameState.typingTimer = null;
+                gameState.typing = false;
+                document.getElementById('nextHint').className = 'visible';
+                if (onDone) onDone();
+            }
+        }, 40);
+    }
+
+    function finishTypingNow() {
+        if (gameState.typingTimer !== null) {
+            clearInterval(gameState.typingTimer);
+            gameState.typingTimer = null;
+        }
+        gameState.typing = false;
+        document.getElementById('dialogText').textContent = typingFullText;
+        document.getElementById('nextHint').className = 'visible';
+    }
+
+    // ========== SCENE RENDERING ==========
+    function applyBg(bgKey) {
+        var bg = bgPresets[bgKey] || bgPresets['dark'];
+        document.getElementById('bgLayer').style.background = bg;
+    }
+
+    function applyChar(charKey) {
+        var preset = charPresets[charKey] || charPresets['hidden'];
+        document.getElementById('charFigure').style.background = preset.color;
+        document.getElementById('charLabel').textContent = preset.name;
+    }
+
+    function showScene(sceneId) {
+        var scene = scenes[sceneId];
+        if (!scene) return;
+        gameState.currentScene = sceneId;
+        gameState.lineIndex = 0;
+
+        if (scene.type === 'ending') {
+            showEnding(scene);
+            return;
+        }
+
+        applyBg(scene.bg || 'dark');
+        applyChar(scene.char || 'hidden');
+
+        // 選択肢非表示
+        document.getElementById('choiceArea').style.display = 'none';
+        document.getElementById('textBox').style.display = 'block';
+
+        showLine(sceneId, 0);
+    }
+
+    function showLine(sceneId, lineIdx) {
+        var scene = scenes[sceneId];
+        if (!scene || !scene.lines) return;
+
+        gameState.lineIndex = lineIdx;
+
+        if (lineIdx >= scene.lines.length) {
+            // 全行終了
+            if (scene.choices && scene.choices.length > 0) {
+                showChoices(scene.choices);
+            } else if (scene.after_lines) {
+                showScene(scene.after_lines);
+            }
+            return;
+        }
+
+        var line = scene.lines[lineIdx];
+        document.getElementById('speakerName').textContent = line.speaker || '';
+        startTyping(line.text);
+    }
+
+    function showChoices(choices) {
+        document.getElementById('nextHint').className = '';
+        document.getElementById('nextHint').style.opacity = '0';
+        var area = document.getElementById('choiceArea');
+        area.innerHTML = '';
+        area.style.display = 'flex';
+
+        choices.forEach(function(choice) {
+            var btn = document.createElement('button');
+            btn.className = 'choiceBtn';
+            btn.textContent = choice.text;
+            btn.onclick = (function(next) {
+                return function() {
+                    area.style.display = 'none';
+                    showScene(next);
+                };
+            })(choice.next);
+            area.appendChild(btn);
+        });
+    }
+
+    function onTextBoxClick() {
+        if (!gameState.running) return;
+
+        // 選択肢表示中は無視
+        if (document.getElementById('choiceArea').style.display === 'flex') return;
+
+        if (gameState.typing) {
+            // タイピング中: 全文一括表示
+            finishTypingNow();
+            return;
+        }
+
+        // 次の行へ
+        var scene = scenes[gameState.currentScene];
+        if (!scene || !scene.lines) return;
+
+        var nextIdx = gameState.lineIndex + 1;
+        if (nextIdx >= scene.lines.length) {
+            if (scene.choices && scene.choices.length > 0) {
+                showChoices(scene.choices);
+            } else if (scene.after_lines) {
+                showScene(scene.after_lines);
+            }
+        } else {
+            showLine(gameState.currentScene, nextIdx);
+        }
+    }
+
+    function showEnding(scene) {
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('clearScreen').style.display = 'block';
+
+        var titleEl = document.getElementById('endingTitle');
+        titleEl.textContent = scene.title;
+        titleEl.className = scene.endingType === 'good' ? 'good' : 'normal';
+
+        document.getElementById('endingSynopsis').textContent = scene.synopsis;
+    }
+
+    // ========== GAME LOOP (setInterval) ==========
+    function gameLoop() {
+        // ゲームループ: 現在は状態監視のみ（アニメーションはCSS/typing timerで行う）
+        // 将来のエフェクト拡張用にフレームを確保
+        if (!gameState.running) return;
+    }
+
+    // ========== MAIN CONTROLS ==========
+    function startGame() {
+        gameState.running = true;
+        gameState.currentScene = 'scene1';
+        gameState.route = 'none';
+        gameState.lineIndex = 0;
+        gameState.typing = false;
+
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'flex';
+        document.getElementById('clearScreen').style.display = 'none';
+
+        if (gameState.loopTimer !== null) {
+            clearInterval(gameState.loopTimer);
+        }
+        gameState.loopTimer = setInterval(gameLoop, 16);
+
+        showScene('scene1');
+    }
+
+    function retryGame() {
+        gameState.running = false;
+
+        if (gameState.typingTimer !== null) {
+            clearInterval(gameState.typingTimer);
+            gameState.typingTimer = null;
+        }
+        if (gameState.loopTimer !== null) {
+            clearInterval(gameState.loopTimer);
+            gameState.loopTimer = null;
+        }
+
+        gameState.currentScene = 'scene1';
+        gameState.route = 'none';
+        gameState.lineIndex = 0;
+        gameState.typing = false;
+
+        typingFullText = '';
+        typingCurrentLen = 0;
+
+        document.getElementById('clearScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('startScreen').style.display = 'block';
+
+        document.getElementById('choiceArea').style.display = 'none';
+        document.getElementById('choiceArea').innerHTML = '';
+        document.getElementById('dialogText').textContent = '';
+        document.getElementById('speakerName').textContent = '';
+        document.getElementById('nextHint').className = '';
+    }
+
+    // ========== INIT ==========
+    (function init() {
+        document.body.style.background = config.bg_color;
+    })();
+</script>
+</body>
+</html>

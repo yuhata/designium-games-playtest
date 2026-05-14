@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infinite Zoom</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #fff;
+    overflow: hidden;
+  }
+  #wrapper {
+    position: relative;
+    width: 600px;
+    height: 600px;
+  }
+  .screen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 600px;
+    height: 600px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  #startScreen {
+    background: #000;
+    z-index: 10;
+  }
+  #gameScreen {
+    background: #000;
+    z-index: 5;
+    display: none;
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
+  #clearScreen {
+    background: #000;
+    z-index: 10;
+    display: none;
+  }
+  #gameOverScreen {
+    background: #000;
+    z-index: 10;
+    display: none;
+  }
+  h1 {
+    font-size: 48px;
+    letter-spacing: 4px;
+    margin-bottom: 16px;
+    color: #fff;
+    text-shadow: 0 0 20px #88aaff;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #88aaff;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  .description {
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 40px;
+    line-height: 1.8;
+  }
+  button {
+    background: transparent;
+    border: 2px solid #88aaff;
+    color: #88aaff;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    letter-spacing: 4px;
+    padding: 12px 40px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button:hover {
+    background: #88aaff;
+    color: #000;
+  }
+  #gameScreen {
+    flex-direction: column;
+  }
+  #uiBar {
+    width: 600px;
+    height: 48px;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+  }
+  #depthLabel {
+    font-size: 13px;
+    color: #88aaff;
+    letter-spacing: 2px;
+  }
+  #depthDots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #333;
+    border: 1px solid #555;
+    transition: background 0.3s;
+  }
+  .dot.active {
+    background: #88aaff;
+    box-shadow: 0 0 6px #88aaff;
+  }
+  #hintText {
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 1px;
+  }
+  #gameCanvas {
+    display: block;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .clear-title {
+    font-size: 64px;
+    letter-spacing: 8px;
+    color: #fff;
+    text-shadow: 0 0 30px #88aaff, 0 0 60px #4466ff;
+    margin-bottom: 24px;
+  }
+  .clear-sub {
+    font-size: 15px;
+    color: #88aaff;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+  .clear-msg {
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 48px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+<div id="wrapper">
+
+  <!-- START SCREEN -->
+  <div id="startScreen" class="screen">
+    <h1>INFINITE<br>ZOOM</h1>
+    <p class="subtitle">宇宙から原子まで</p>
+    <p class="description">
+      クリックするたびに世界が拡大される<br>
+      宇宙 → 銀河 → 太陽系 → 地球 → 街 → 部屋 → 原子<br>
+      深度6に到達してクリアせよ
+    </p>
+    <button id="startBtn">START</button>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="gameScreen" class="screen">
+    <div id="uiBar">
+      <div id="depthLabel">DEPTH: 0</div>
+      <div id="depthDots">
+        <div class="dot active" id="dot0"></div>
+        <div class="dot" id="dot1"></div>
+        <div class="dot" id="dot2"></div>
+        <div class="dot" id="dot3"></div>
+        <div class="dot" id="dot4"></div>
+        <div class="dot" id="dot5"></div>
+        <div class="dot" id="dot6"></div>
+      </div>
+      <div id="hintText">クリックでズーム</div>
+    </div>
+    <canvas id="gameCanvas" width="600" height="552"></canvas>
+  </div>
+
+  <!-- CLEAR SCREEN -->
+  <div id="clearScreen" class="screen">
+    <div class="clear-title">CLEAR!</div>
+    <p class="clear-sub">DEPTH 6 REACHED</p>
+    <p class="clear-msg">
+      あなたは宇宙の果てまで辿り着いた<br>
+      宇宙から原子まで — 全ての階層を踏破した
+    </p>
+    <button id="retryBtnClear">RETRY</button>
+  </div>
+
+  <!-- GAME OVER SCREEN (構造として存在) -->
+  <div id="gameOverScreen" class="screen">
+    <h1>GAME<br>OVER</h1>
+    <button id="retryBtnGameOver">RETRY</button>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+var gameState = {
+  running: false,
+  depth: 0,
+  zoomProgress: 0.0,
+  zooming: false,
+  intervalId: null
+};
+
+var MAX_DEPTH = 6;
+var ZOOM_SPEED = 0.04;
+
+var DEPTH_NAMES = [
+  '宇宙', '銀河', '太陽系', '地球', '街', '部屋', '原子'
+];
+
+// Canvas setup
+var canvas = document.getElementById('gameCanvas');
+var ctx = canvas.getContext('2d');
+var W = canvas.width;   // 600
+var H = canvas.height;  // 552
+
+// ============================================================
+// SCENE DRAWING
+// ============================================================
+function drawScene(context, depth) {
+  context.clearRect(0, 0, W, H);
+  context.save();
+  switch (depth) {
+    case 0: drawUniverse(context); break;
+    case 1: drawGalaxy(context); break;
+    case 2: drawSolarSystem(context); break;
+    case 3: drawEarth(context); break;
+    case 4: drawCity(context); break;
+    case 5: drawRoom(context); break;
+    case 6: drawAtom(context); break;
+    default: drawUniverse(context); break;
+  }
+  context.restore();
+}
+
+// depth0: 宇宙
+function drawUniverse(ctx) {
+  ctx.fillStyle = '#000008';
+  ctx.fillRect(0, 0, W, H);
+  // 星
+  var stars = [
+    [45,30],[120,80],[230,45],[310,120],[450,60],[530,90],[80,170],
+    [200,200],[340,180],[500,140],[60,280],[160,300],[270,260],[410,290],
+    [550,250],[30,390],[140,420],[260,380],[390,360],[520,400],[70,490],
+    [180,510],[300,480],[440,500],[570,470],[100,550],[220,530],[360,540],
+    [480,520],[15,150],[380,440],[555,340],[250,140],[90,450],[470,190],
+    [150,350],[320,310],[490,360],[40,560],[580,200],[200,400],[400,100],
+    [280,480],[500,280],[120,240],[360,220],[80,320],[440,430],[560,130],
+    [240,320],[30,460],[510,470],[160,130],[350,350],[490,500]
+  ];
+  for (var i = 0; i < stars.length; i++) {
+    var x = stars[i][0], y = stars[i][1];
+    var size = (i % 4 === 0) ? 2.5 : (i % 3 === 0) ? 1.8 : 1.2;
+    var brightness = 150 + (i * 37) % 105;
+    ctx.fillStyle = 'rgb(' + brightness + ',' + brightness + ',' + Math.min(255, brightness + 40) + ')';
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 中央に淡い銀河ヒント
+  var grd = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, 80);
+  grd.addColorStop(0, 'rgba(100,120,200,0.25)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.ellipse(W/2, H/2, 80, 50, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// depth1: 銀河
+function drawGalaxy(ctx) {
+  ctx.fillStyle = '#000010';
+  ctx.fillRect(0, 0, W, H);
+  // 背景星
+  for (var i = 0; i < 60; i++) {
+    var bx = (i * 97 + 13) % W;
+    var by = (i * 61 + 29) % H;
+    ctx.fillStyle = 'rgba(200,200,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(bx, by, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 渦巻き点群
+  var cx = W / 2, cy = H / 2;
+  var arms = 3;
+  var pointsPerArm = 120;
+  for (var arm = 0; arm < arms; arm++) {
+    var armOffset = (Math.PI * 2 / arms) * arm;
+    for (var p = 0; p < pointsPerArm; p++) {
+      var t = p / pointsPerArm;
+      var angle = t * Math.PI * 4 + armOffset;
+      var radius = t * 220;
+      var scatter = (p * 17 % 30) - 15;
+      var px = cx + Math.cos(angle) * radius + scatter * 0.4;
+      var py = cy + Math.sin(angle) * radius * 0.55 + scatter * 0.2;
+      var brightness = Math.floor(150 + t * 105);
+      var alpha = 0.3 + t * 0.7;
+      ctx.fillStyle = 'rgba(' + brightness + ',' + brightness + ',' + Math.min(255, brightness + 60) + ',' + alpha + ')';
+      var sz = t < 0.3 ? 2.5 : (t < 0.7 ? 1.5 : 1.0);
+      ctx.beginPath();
+      ctx.arc(px, py, sz, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // 中心核
+  var grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40);
+  grd.addColorStop(0, 'rgba(255,240,180,1)');
+  grd.addColorStop(0.4, 'rgba(200,180,255,0.6)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// depth2: 太陽系
+function drawSolarSystem(ctx) {
+  ctx.fillStyle = '#000015';
+  ctx.fillRect(0, 0, W, H);
+  // 背景星
+  var starPos = [[50,40],[150,80],[400,30],[520,70],[80,200],[480,180],[30,300],[560,320],[100,450],[490,500],[250,50],[350,550]];
+  for (var i = 0; i < starPos.length; i++) {
+    ctx.fillStyle = 'rgba(200,200,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(starPos[i][0], starPos[i][1], 1.0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  var cx = W / 2, cy = H / 2;
+  // 太陽
+  var sunGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 35);
+  sunGrd.addColorStop(0, '#fff8c0');
+  sunGrd.addColorStop(0.5, '#ffcc00');
+  sunGrd.addColorStop(1, '#ff8800');
+  ctx.fillStyle = sunGrd;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 35, 0, Math.PI * 2);
+  ctx.fill();
+  // 太陽グロー
+  var glow = ctx.createRadialGradient(cx, cy, 30, cx, cy, 60);
+  glow.addColorStop(0, 'rgba(255,200,0,0.3)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 60, 0, Math.PI * 2);
+  ctx.fill();
+  // 惑星データ: [軌道半径, 惑星半径, 色, 角度]
+  var planets = [
+    [70,  6,  '#888888', 0.8],
+    [105, 9,  '#ddaa66', 1.9],
+    [145, 10, '#4488ff', 3.2],
+    [185, 8,  '#cc4422', 4.7],
+    [245, 16, '#ccaa88', 1.1],
+    [290, 13, '#ddcc99', 2.5],
+    [330, 11, '#88ccdd', 5.0],
+    [365, 10, '#4466aa', 0.4]
+  ];
+  for (var i = 0; i < planets.length; i++) {
+    var r = planets[i][0], pr = planets[i][1];
+    var col = planets[i][2], ang = planets[i][3];
+    // 軌道
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    // 惑星
+    var px = cx + Math.cos(ang) * r;
+    var py = cy + Math.sin(ang) * r;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// depth3: 地球
+function drawEarth(ctx) {
+  ctx.fillStyle = '#000020';
+  ctx.fillRect(0, 0, W, H);
+  // 背景星
+  for (var i = 0; i < 40; i++) {
+    var bx = (i * 113 + 7) % W;
+    var by = (i * 79 + 11) % H;
+    ctx.fillStyle = 'rgba(200,200,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(bx, by, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  var cx = W / 2, cy = H / 2;
+  var er = 180;
+  // 海
+  ctx.fillStyle = '#1a5080';
+  ctx.beginPath();
+  ctx.arc(cx, cy, er, 0, Math.PI * 2);
+  ctx.fill();
+  // 大陸 (簡略化した陸地)
+  ctx.fillStyle = '#2d7a2d';
+  // ユーラシア
+  ctx.beginPath();
+  ctx.ellipse(cx + 30, cy - 30, 90, 50, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  // アメリカ
+  ctx.beginPath();
+  ctx.ellipse(cx - 110, cy + 10, 40, 70, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  // アフリカ
+  ctx.beginPath();
+  ctx.ellipse(cx + 20, cy + 70, 35, 60, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // 南極
+  ctx.fillStyle = '#e8f0f8';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + er - 20, 60, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 雲
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(cx - 50, cy - 80, 70, 20, 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + 80, cy + 40, 55, 15, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  // 大気グロー
+  var atm = ctx.createRadialGradient(cx, cy, er - 5, cx, cy, er + 20);
+  atm.addColorStop(0, 'rgba(100,180,255,0.3)');
+  atm.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = atm;
+  ctx.beginPath();
+  ctx.arc(cx, cy, er + 20, 0, Math.PI * 2);
+  ctx.fill();
+  // クリップ（円形マスク）
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.beginPath();
+  ctx.arc(cx, cy, er, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  // 再描画: 縁取り
+  ctx.strokeStyle = 'rgba(100,180,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, er, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+// depth4: 街
+function drawCity(ctx) {
+  ctx.fillStyle = '#111118';
+  ctx.fillRect(0, 0, W, H);
+  // 空
+  var sky = ctx.createLinearGradient(0, 0, 0, 200);
+  sky.addColorStop(0, '#1a1a3a');
+  sky.addColorStop(1, '#2a2a4a');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, 200);
+  // 月
+  ctx.fillStyle = '#ffffcc';
+  ctx.beginPath();
+  ctx.arc(480, 60, 20, 0, Math.PI * 2);
+  ctx.fill();
+  // 建物データ: [x, y, w, h, 窓行, 窓列]
+  var buildings = [
+    [20,  300, 60,  252, 5, 2],
+    [90,  250, 50,  302, 7, 2],
+    [150, 200, 70,  352, 8, 3],
+    [230, 280, 55,  272, 5, 2],
+    [295, 160, 65,  392, 9, 3],
+    [370, 230, 50,  322, 7, 2],
+    [430, 270, 75,  282, 5, 3],
+    [515, 200, 55,  352, 8, 2],
+    [0,   320, 25,  232, 4, 1],
+    [580, 310, 20,  242, 3, 1]
+  ];
+  for (var b = 0; b < buildings.length; b++) {
+    var bx = buildings[b][0], by = buildings[b][1];
+    var bw = buildings[b][2], bh = buildings[b][3];
+    var rows = buildings[b][4], cols = buildings[b][5];
+    // 建物本体
+    var bGrd = ctx.createLinearGradient(bx, by, bx + bw, by);
+    bGrd.addColorStop(0, '#2a2a3a');
+    bGrd.addColorStop(1, '#1a1a2a');
+    ctx.fillStyle = bGrd;
+    ctx.fillRect(bx, by, bw, bh);
+    // 窓
+    var winW = (bw - 10) / cols - 2;
+    var winH = 12;
+    var startY = by + 12;
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) {
+        var wx = bx + 5 + col * ((bw - 10) / cols);
+        var wy = startY + row * 22;
+        if (wy + winH < by + bh - 5) {
+          var lit = ((b * 7 + row * 3 + col * 11) % 5 !== 0);
+          if (lit) {
+            ctx.fillStyle = ((b + row + col) % 3 === 0) ? '#ffeeaa' : '#aaddff';
+          } else {
+            ctx.fillStyle = '#222233';
+          }
+          ctx.fillRect(wx, wy, winW, winH);
+        }
+      }
+    }
+  }
+  // 道路
+  ctx.fillStyle = '#222222';
+  ctx.fillRect(0, 540, W, 12);
+  // 道路ライン
+  ctx.strokeStyle = '#555544';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([20, 15]);
+  ctx.beginPath();
+  ctx.moveTo(0, 546);
+  ctx.lineTo(W, 546);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// depth5: 部屋
+function drawRoom(ctx) {
+  ctx.fillStyle = '#1a1008';
+  ctx.fillRect(0, 0, W, H);
+  // 壁
+  ctx.fillStyle = '#c8b890';
+  ctx.fillRect(40, 60, W - 80, H - 180);
+  // 床
+  ctx.fillStyle = '#8b6340';
+  ctx.fillRect(40, H - 120, W - 80, 60);
+  // 天井
+  ctx.fillStyle = '#b0a080';
+  ctx.fillRect(40, 60, W - 80, 30);
+  // 窓
+  ctx.fillStyle = '#88aacc';
+  ctx.fillRect(200, 90, 180, 120);
+  ctx.strokeStyle = '#6688aa';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(200, 90, 180, 120);
+  // 窓の枠
+  ctx.strokeStyle = '#6688aa';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(290, 90); ctx.lineTo(290, 210);
+  ctx.moveTo(200, 150); ctx.lineTo(380, 150);
+  ctx.stroke();
+  // 窓の光
+  var winLight = ctx.createRadialGradient(290, 150, 0, 290, 150, 100);
+  winLight.addColorStop(0, 'rgba(220,240,255,0.4)');
+  winLight.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = winLight;
+  ctx.fillRect(200, 90, 180, 120);
+  // ベッド
+  ctx.fillStyle = '#6b4226';
+  ctx.fillRect(60, 310, 160, 100);
+  ctx.fillStyle = '#e8d8c0';
+  ctx.fillRect(65, 315, 150, 75);
+  ctx.fillStyle = '#cc8866';
+  ctx.fillRect(65, 315, 150, 25);
+  // デスク
+  ctx.fillStyle = '#5a3e1b';
+  ctx.fillRect(380, 300, 160, 15);
+  ctx.fillRect(385, 315, 15, 80);
+  ctx.fillRect(520, 315, 15, 80);
+  // 椅子
+  ctx.fillStyle = '#4a3010';
+  ctx.fillRect(400, 380, 100, 10);
+  ctx.fillRect(405, 390, 10, 50);
+  ctx.fillRect(485, 390, 10, 50);
+  // ランプ
+  ctx.fillStyle = '#ccaa44';
+  ctx.beginPath();
+  ctx.arc(460, 295, 15, 0, Math.PI * 2);
+  ctx.fill();
+  var lampGlow = ctx.createRadialGradient(460, 295, 0, 460, 295, 60);
+  lampGlow.addColorStop(0, 'rgba(255,220,100,0.3)');
+  lampGlow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = lampGlow;
+  ctx.beginPath();
+  ctx.arc(460, 295, 60, 0, Math.PI * 2);
+  ctx.fill();
+  // 本棚
+  ctx.fillStyle = '#7a5030';
+  ctx.fillRect(60, 170, 120, 130);
+  for (var shelf = 0; shelf < 3; shelf++) {
+    ctx.fillStyle = '#6a4020';
+    ctx.fillRect(60, 170 + shelf * 43, 120, 4);
+    // 本
+    var bookColors = ['#cc4444','#4488cc','#44aa44','#aaaa22','#cc6622'];
+    var bx = 65;
+    for (var bk = 0; bk < 5; bk++) {
+      ctx.fillStyle = bookColors[bk];
+      ctx.fillRect(bx, 174 + shelf * 43, 18, 36);
+      bx += 21;
+    }
+  }
+  // 額縁
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(420, 90, 110, 80);
+  ctx.fillStyle = '#445566';
+  ctx.fillRect(423, 93, 104, 74);
+  // 床板ライン
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 1;
+  for (var line = 0; line < 6; line++) {
+    ctx.beginPath();
+    ctx.moveTo(40, H - 120 + line * 10);
+    ctx.lineTo(W - 40, H - 120 + line * 10);
+    ctx.stroke();
+  }
+}
+
+// depth6: 原子
+function drawAtom(ctx) {
+  ctx.fillStyle = '#000020';
+  ctx.fillRect(0, 0, W, H);
+  var cx = W / 2, cy = H / 2;
+  // 背景グロー
+  var bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 250);
+  bg.addColorStop(0, 'rgba(50,30,100,0.5)');
+  bg.addColorStop(1, 'rgba(0,0,20,0)');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  // 電子軌道（3軌道）
+  var orbits = [
+    { rx: 180, ry: 70, angle: 0,        eAngle: 1.2 },
+    { rx: 180, ry: 70, angle: Math.PI/3, eAngle: 3.5 },
+    { rx: 180, ry: 70, angle: -Math.PI/3, eAngle: 5.8 }
+  ];
+  for (var o = 0; o < orbits.length; o++) {
+    var orb = orbits[o];
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(orb.angle);
+    ctx.strokeStyle = 'rgba(100,150,255,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, orb.rx, orb.ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // 電子
+    var ex = Math.cos(orb.eAngle) * orb.rx;
+    var ey = Math.sin(orb.eAngle) * orb.ry;
+    ctx.fillStyle = '#88ccff';
+    ctx.beginPath();
+    ctx.arc(ex, ey, 8, 0, Math.PI * 2);
+    ctx.fill();
+    var eGlow = ctx.createRadialGradient(ex, ey, 0, ex, ey, 18);
+    eGlow.addColorStop(0, 'rgba(100,200,255,0.8)');
+    eGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = eGlow;
+    ctx.beginPath();
+    ctx.arc(ex, ey, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  // 核（陽子・中性子）
+  var nucleons = [
+    { dx:  0, dy:  0, color: '#ff6644' },
+    { dx: 10, dy:-8,  color: '#ff8844' },
+    { dx:-10, dy:-8,  color: '#ffaa22' },
+    { dx:  5, dy: 12, color: '#ff5533' },
+    { dx:-5,  dy: 12, color: '#ffcc33' },
+    { dx: 12, dy:  4, color: '#ff7744' }
+  ];
+  for (var n = 0; n < nucleons.length; n++) {
+    var nx = cx + nucleons[n].dx;
+    var ny = cy + nucleons[n].dy;
+    ctx.fillStyle = nucleons[n].color;
+    ctx.beginPath();
+    ctx.arc(nx, ny, 10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 核のグロー
+  var nucGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 45);
+  nucGlow.addColorStop(0, 'rgba(255,150,50,0.6)');
+  nucGlow.addColorStop(0.5, 'rgba(255,100,30,0.2)');
+  nucGlow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = nucGlow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 45, 0, Math.PI * 2);
+  ctx.fill();
+  // テキスト
+  ctx.fillStyle = 'rgba(150,200,255,0.5)';
+  ctx.font = '12px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('ATOM', cx, cy + 220);
+}
+
+// ============================================================
+// UI UPDATE
+// ============================================================
+function updateUI() {
+  var label = document.getElementById('depthLabel');
+  label.textContent = 'DEPTH: ' + gameState.depth + ' / ' + MAX_DEPTH + '  ' + DEPTH_NAMES[gameState.depth];
+  for (var i = 0; i <= MAX_DEPTH; i++) {
+    var dot = document.getElementById('dot' + i);
+    if (dot) {
+      if (i <= gameState.depth) {
+        dot.style.background = '#88aaff';
+        dot.style.boxShadow = '0 0 6px #88aaff';
+      } else {
+        dot.style.background = '#333';
+        dot.style.boxShadow = 'none';
+      }
+    }
+  }
+  var hint = document.getElementById('hintText');
+  if (gameState.zooming) {
+    hint.textContent = 'ズーム中...';
+  } else if (gameState.depth >= MAX_DEPTH) {
+    hint.textContent = 'CLEAR!';
+  } else {
+    hint.textContent = 'クリックでズーム';
+  }
+}
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+function gameLoop() {
+  if (!gameState.running) return;
+
+  if (gameState.zooming) {
+    gameState.zoomProgress += ZOOM_SPEED;
+    if (gameState.zoomProgress >= 1.0) {
+      gameState.zoomProgress = 0.0;
+      gameState.zooming = false;
+      gameState.depth += 1;
+      updateUI();
+      if (gameState.depth >= MAX_DEPTH) {
+        // CLEAR
+        gameState.running = false;
+        clearInterval(gameState.intervalId);
+        gameState.intervalId = null;
+        drawScene(ctx, gameState.depth);
+        // 少し待ってからクリア画面
+        setTimeout(function() {
+          document.getElementById('gameScreen').style.display = 'none';
+          document.getElementById('clearScreen').style.display = 'flex';
+        }, 400);
+        return;
+      }
+    }
+  }
+
+  // 描画
+  ctx.save();
+  ctx.clearRect(0, 0, W, H);
+
+  if (gameState.zooming) {
+    var scale = 1 + gameState.zoomProgress * 9;
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(scale, scale);
+    ctx.translate(-W / 2, -H / 2);
+    drawScene(ctx, gameState.depth);
+    ctx.restore();
+    // フェード
+    var fadeAlpha = gameState.zoomProgress * 0.85;
+    ctx.fillStyle = 'rgba(0,0,0,' + fadeAlpha + ')';
+    ctx.fillRect(0, 0, W, H);
+    // 次の深度をフェードイン（後半）
+    if (gameState.zoomProgress > 0.5) {
+      var nextAlpha = (gameState.zoomProgress - 0.5) * 2;
+      ctx.globalAlpha = nextAlpha;
+      drawScene(ctx, gameState.depth + 1);
+      ctx.globalAlpha = 1.0;
+    }
+  } else {
+    drawScene(ctx, gameState.depth);
+  }
+
+  ctx.restore();
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+canvas.addEventListener('click', function() {
+  if (!gameState.running) return;
+  if (gameState.zooming) return;
+  if (gameState.depth >= MAX_DEPTH) return;
+  gameState.zooming = true;
+  gameState.zoomProgress = 0.0;
+  updateUI();
+});
+
+// ============================================================
+// SCREEN CONTROL
+// ============================================================
+function startGame() {
+  gameState.running = true;
+  gameState.depth = 0;
+  gameState.zoomProgress = 0.0;
+  gameState.zooming = false;
+
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('gameOverScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'flex';
+
+  updateUI();
+  drawScene(ctx, 0);
+
+  if (gameState.intervalId) {
+    clearInterval(gameState.intervalId);
+  }
+  gameState.intervalId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+
+  if (gameState.intervalId) {
+    clearInterval(gameState.intervalId);
+    gameState.intervalId = null;
+  }
+
+  gameState.depth = 0;
+  gameState.zoomProgress = 0.0;
+  gameState.zooming = false;
+
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('gameOverScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+// ============================================================
+// BUTTON EVENTS
+// ============================================================
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('retryBtnClear').addEventListener('click', retryGame);
+document.getElementById('retryBtnGameOver').addEventListener('click', retryGame);
+</script>
+</body>
+</html>
