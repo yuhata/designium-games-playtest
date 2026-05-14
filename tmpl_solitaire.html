@@ -3,611 +3,495 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Klondike Solitaire</title>
+    <title>SOLITAIRE</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: #076324;
         }
-
+        
         #startScreen {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
+            z-index: 100;
         }
-
+        
         .start-content {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
             text-align: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            color: white;
         }
-
+        
         .start-content h1 {
-            font-size: 36px;
-            margin-bottom: 20px;
-            color: #076324;
+            font-size: 48px;
+            margin-bottom: 30px;
         }
-
+        
         .start-content p {
-            font-size: 14px;
-            margin-bottom: 10px;
-            color: #333;
+            font-size: 18px;
+            margin-bottom: 20px;
             line-height: 1.6;
         }
-
-        .start-content button {
-            margin-top: 30px;
+        
+        button {
             padding: 12px 30px;
-            font-size: 16px;
-            background: #076324;
-            color: white;
+            font-size: 18px;
+            cursor: pointer;
             border: none;
             border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.3s;
+            background: #f1c40f;
+            color: #1a1a1a;
+            font-weight: bold;
+            transition: all 0.3s;
+            margin: 5px;
         }
-
-        .start-content button:hover {
-            background: #054920;
+        
+        button:hover {
+            background: #f39c12;
+            transform: scale(1.05);
         }
-
+        
         #clearScreen {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.9);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
-        }
-
-        .clear-content {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        }
-
-        .clear-content h1 {
-            font-size: 36px;
-            margin-bottom: 20px;
-            color: #076324;
-        }
-
-        .clear-content button {
-            margin-top: 20px;
-            padding: 12px 30px;
-            font-size: 16px;
-            background: #076324;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .clear-content button:hover {
-            background: #054920;
-        }
-
-        #gameContainer {
-            position: relative;
-            background: #076324;
-            border: 2px solid #999;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-
-        #gameCanvas {
-            display: block;
-            background: white;
-        }
-
-        .game-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
             z-index: 100;
         }
-
-        .game-controls button {
-            padding: 8px 16px;
-            font-size: 14px;
-            background: #d9534f;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.3s;
+        
+        .clear-content {
+            text-align: center;
+            color: #f1c40f;
         }
-
-        .game-controls button:hover {
-            background: #c9302c;
+        
+        .clear-content h1 {
+            font-size: 56px;
+            margin-bottom: 30px;
+        }
+        
+        #gameContainer {
+            position: relative;
+        }
+        
+        canvas {
+            border: 2px solid #333;
+            display: block;
+            background: white;
+            cursor: pointer;
+        }
+        
+        #resetBtn {
+            margin-top: 10px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .instructions {
+            margin-top: 10px;
+            color: #333;
+            font-size: 12px;
+            text-align: center;
+            max-width: 400px;
         }
     </style>
 </head>
 <body>
-
-<div id="startScreen">
-    <div class="start-content">
-        <h1>Klondike Solitaire</h1>
-        <p><strong>Goal:</strong> Move all cards to the Foundations (top right)</p>
-        <p><strong>Rules:</strong></p>
-        <p>• Tableau: Stack cards in alternating colors, K → A descending</p>
-        <p>• Foundations: Build A → K by suit</p>
-        <p>• Stock: Click to reveal cards from the deck</p>
-        <p><strong>Operation:</strong> Click card → Click destination to move</p>
-        <button onclick="startGame()">START</button>
+    <div id="startScreen">
+        <div class="start-content">
+            <h1>SOLITAIRE</h1>
+            <p>クロンダイク・ソリティア</p>
+            <p>全てのカードをスート別にA→Kで積み上げてクリア</p>
+            <button onclick="startGame()">START</button>
+        </div>
     </div>
-</div>
-
-<div id="clearScreen">
-    <div class="clear-content">
-        <h1>Congratulations!</h1>
-        <p>You cleared Klondike Solitaire!</p>
-        <button onclick="retryGame()">PLAY AGAIN</button>
+    
+    <div id="clearScreen">
+        <div class="clear-content">
+            <h1>CLEAR!</h1>
+            <p style="font-size: 24px; margin-bottom: 30px;">全てのカードがそろいました</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
     </div>
-</div>
-
-<div id="gameContainer">
-    <canvas id="gameCanvas"></canvas>
-    <div class="game-controls">
-        <button onclick="resetGame()">RESET</button>
+    
+    <div style="display: flex; flex-direction: column; align-items: center;">
+        <div id="gameContainer">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+        <button id="resetBtn" onclick="resetGame()">RESET</button>
+        <div class="instructions">[1]カードをクリック→選択 [2]移動先をクリック→移動 / STOCKクリック：めくる</div>
     </div>
-</div>
 
-<script>
-// theme:             string
-// title:             string
-// bg_color:          string
-// card_bg:           string
-// card_back:         string
-// highlight_color:   string
-
-const config = {
-    title: 'SOLITAIRE',
-    bg_color: '#076324',
-    card_bg: '#ffffff',
-    card_back: '#1a5276',
-    highlight_color: '#f1c40f'
-};
-
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-
-canvas.width = 400;
-canvas.height = 600;
-document.getElementById('gameContainer').style.width = canvas.width + 'px';
-document.getElementById('gameContainer').style.height = canvas.height + 'px';
-
-const CARD_W = 50;
-const CARD_H = 70;
-const SUITS = ['♠', '♥', '♦', '♣'];
-const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-const RANK_VALUES = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
-
-let gameState = {
-    running: false,
-    deck: [],
-    tableau: [[], [], [], [], [], [], []],
-    foundation: [[], [], [], []],
-    stock: [],
-    waste: [],
-    selected: null,
-    selectedIndex: null
-};
-
-function createDeck() {
-    let deck = [];
-    for (let suit = 0; suit < 4; suit++) {
-        for (let rank = 0; rank < 13; rank++) {
-            deck.push({ suit: suit, rank: rank, faceUp: false });
-        }
-    }
-    return deck.sort(() => Math.random() - 0.5);
-}
-
-function initializeGame() {
-    gameState.deck = createDeck();
-    gameState.tableau = [[], [], [], [], [], [], []];
-    gameState.foundation = [[], [], [], []];
-    gameState.stock = [];
-    gameState.waste = [];
-    gameState.selected = null;
-    gameState.selectedIndex = null;
-
-    let deckIndex = 0;
-
-    for (let i = 0; i < 7; i++) {
-        for (let j = i; j < 7; j++) {
-            let card = gameState.deck[deckIndex++];
-            card.faceUp = (i === j);
-            gameState.tableau[j].push(card);
-        }
-    }
-
-    gameState.stock = gameState.deck.slice(deckIndex);
-    gameState.stock.forEach(card => card.faceUp = false);
-    gameState.waste = [];
-    gameState.running = true;
-}
-
-function getRankString(rank) {
-    return RANKS[rank];
-}
-
-function getSuitSymbol(suit) {
-    return SUITS[suit];
-}
-
-function isRed(suit) {
-    return suit === 1 || suit === 2;
-}
-
-function canMoveToTableau(card, tableauCol) {
-    if (tableauCol.length === 0) {
-        return card.rank === 12;
-    }
-    let topCard = tableauCol[tableauCol.length - 1];
-    return isRed(card.suit) !== isRed(topCard.suit) && card.rank === topCard.rank - 1;
-}
-
-function canMoveToFoundation(card, foundationCol) {
-    if (card.rank === 0) {
-        return foundationCol.length === 0 && gameState.foundation.every((col, idx) => idx === card.suit || col.length === 0);
-    }
-    if (foundationCol.length === 0) return false;
-    let topCard = foundationCol[foundationCol.length - 1];
-    return topCard.suit === card.suit && topCard.rank === card.rank - 1;
-}
-
-function moveCard(fromArea, fromIdx, toArea, toIdx) {
-    let card;
-
-    if (fromArea === 'tableau') {
-        card = gameState.tableau[fromIdx].pop();
-        if (gameState.tableau[fromIdx].length > 0) {
-            gameState.tableau[fromIdx][gameState.tableau[fromIdx].length - 1].faceUp = true;
-        }
-    } else if (fromArea === 'waste') {
-        card = gameState.waste.pop();
-    } else if (fromArea === 'foundation') {
-        card = gameState.foundation[fromIdx].pop();
-    }
-
-    if (toArea === 'tableau') {
-        gameState.tableau[toIdx].push(card);
-    } else if (toArea === 'foundation') {
-        gameState.foundation[toIdx].push(card);
-    }
-
-    gameState.selected = null;
-    gameState.selectedIndex = null;
-}
-
-function handleClick(x, y) {
-    if (!gameState.running) return;
-
-    let foundationStartX = 250;
-    let foundationStartY = 20;
-
-    for (let i = 0; i < 4; i++) {
-        let fx = foundationStartX + i * 65;
-        let fy = foundationStartY;
-        if (x >= fx && x <= fx + CARD_W && y >= fy && y <= fy + CARD_H) {
-            if (gameState.selected && gameState.selectedIndex !== null) {
-                let card;
-                if (gameState.selected === 'tableau') {
-                    card = gameState.tableau[gameState.selectedIndex][gameState.tableau[gameState.selectedIndex].length - 1];
-                } else if (gameState.selected === 'waste') {
-                    card = gameState.waste[gameState.waste.length - 1];
-                } else {
-                    return;
-                }
-
-                if (card.suit === i && canMoveToFoundation(card, gameState.foundation[i])) {
-                    moveCard(gameState.selected, gameState.selectedIndex, 'foundation', i);
-                    checkClear();
-                    return;
+    <script>
+        // Parameters: theme, title, bg_color, card_bg, card_back, highlight_color
+        
+        const config = {
+            title: 'SOLITAIRE',
+            bg_color: '#076324',
+            card_bg: '#ffffff',
+            card_back: '#1a5276',
+            highlight_color: '#f1c40f'
+        };
+        
+        const CARD_W = 50;
+        const CARD_H = 70;
+        const CARD_OVERLAP = 25;
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 400;
+        canvas.height = 600;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        
+        document.body.style.background = config.bg_color;
+        
+        const suits = ['♠', '♥', '♦', '♣'];
+        const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+        const rankValues = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
+        
+        let gameState = {
+            running: false,
+            selected: null,
+            stock: [],
+            waste: [],
+            tableau: [[], [], [], [], [], [], []],
+            foundation: [[], [], [], []],
+            deckCards: []
+        };
+        
+        function createDeck() {
+            let deck = [];
+            for (let s = 0; s < 4; s++) {
+                for (let r = 0; r < 13; r++) {
+                    deck.push({
+                        suit: suits[s],
+                        rank: ranks[r],
+                        value: rankValues[ranks[r]],
+                        red: s === 1 || s === 2,
+                        faceUp: false
+                    });
                 }
             }
-            return;
+            return deck.sort(() => Math.random() - 0.5);
         }
-    }
-
-    let stockX = 20;
-    let stockY = 20;
-    if (x >= stockX && x <= stockX + CARD_W && y >= stockY && y <= stockY + CARD_H) {
-        if (gameState.stock.length > 0) {
-            let card = gameState.stock.pop();
-            card.faceUp = true;
-            gameState.waste.push(card);
-        }
-        gameState.selected = null;
-        gameState.selectedIndex = null;
-        return;
-    }
-
-    let wasteX = 100;
-    let wasteY = 20;
-    if (x >= wasteX && x <= wasteX + CARD_W && y >= wasteY && y <= wasteY + CARD_H) {
-        if (gameState.waste.length > 0) {
-            if (gameState.selected === 'waste' && gameState.selectedIndex === 0) {
-                gameState.selected = null;
-                gameState.selectedIndex = null;
-            } else {
-                gameState.selected = 'waste';
-                gameState.selectedIndex = 0;
+        
+        function initGame() {
+            gameState.stock = [];
+            gameState.waste = [];
+            gameState.tableau = [[], [], [], [], [], [], []];
+            gameState.foundation = [[], [], [], []];
+            gameState.selected = null;
+            
+            let deck = createDeck();
+            let deckIndex = 0;
+            
+            for (let col = 0; col < 7; col++) {
+                for (let row = col; row < 7; row++) {
+                    let card = deck[deckIndex++];
+                    card.faceUp = (row === col);
+                    gameState.tableau[row].push(card);
+                }
             }
+            
+            gameState.stock = deck.slice(deckIndex);
+            gameState.running = true;
         }
-        return;
-    }
-
-    for (let i = 0; i < 7; i++) {
-        let col = gameState.tableau[i];
-        let colX = 20 + i * 55;
-        let colY = 130;
-
-        for (let j = 0; j < col.length; j++) {
-            let cardY = colY + j * 20;
-            if (x >= colX && x <= colX + CARD_W && y >= cardY && y <= cardY + CARD_H) {
-                if (!col[j].faceUp) return;
-
-                if (gameState.selected === 'tableau' && gameState.selectedIndex === i) {
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            initGame();
+            gameLoop();
+        }
+        
+        function resetGame() {
+            initGame();
+        }
+        
+        function retryGame() {
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+        
+        function isRed(card) {
+            return card.red;
+        }
+        
+        function canMoveToTableau(card, targetCol) {
+            let target = gameState.tableau[targetCol];
+            if (target.length === 0) {
+                return card.rank === 'K';
+            }
+            let topCard = target[target.length - 1];
+            return isRed(card) !== isRed(topCard) && card.value === topCard.value - 1;
+        }
+        
+        function canMoveToFoundation(card, foundCol) {
+            let target = gameState.foundation[foundCol];
+            if (target.length === 0) {
+                return card.rank === 'A';
+            }
+            let topCard = target[target.length - 1];
+            return card.suit === topCard.suit && card.value === topCard.value + 1;
+        }
+        
+        function handleClick(x, y) {
+            if (!gameState.running) return;
+            
+            let clicked = null;
+            
+            for (let i = 0; i < 4; i++) {
+                let fx = 280 + i * 60;
+                let fy = 20;
+                if (x >= fx && x <= fx + CARD_W && y >= fy && y <= fy + CARD_H) {
+                    if (gameState.foundation[i].length > 0) {
+                        clicked = { type: 'foundation', index: i, card: gameState.foundation[i][gameState.foundation[i].length - 1] };
+                    }
+                }
+            }
+            
+            if (!clicked) {
+                let sx = 20;
+                let sy = 20;
+                if (x >= sx && x <= sx + CARD_W && y >= sy && y <= sy + CARD_H) {
+                    if (gameState.stock.length > 0) {
+                        clicked = { type: 'stock' };
+                    } else if (gameState.waste.length > 0) {
+                        clicked = { type: 'waste', card: gameState.waste[gameState.waste.length - 1] };
+                    }
+                }
+            }
+            
+            if (!clicked) {
+                let wx = 80;
+                let wy = 20;
+                if (x >= wx && x <= wx + CARD_W && y >= wy && y <= wy + CARD_H) {
+                    if (gameState.waste.length > 0) {
+                        clicked = { type: 'waste', card: gameState.waste[gameState.waste.length - 1] };
+                    }
+                }
+            }
+            
+            for (let col = 0; col < 7; col++) {
+                let tx = 20 + col * 60;
+                let ty = 130;
+                
+                for (let i = 0; i < gameState.tableau[col].length; i++) {
+                    let card = gameState.tableau[col][i];
+                    let cy = ty + (i > 0 && !gameState.tableau[col][i - 1].faceUp ? CARD_OVERLAP : (i > 0 ? CARD_OVERLAP : 0));
+                    
+                    if (x >= tx && x <= tx + CARD_W && y >= cy && y <= cy + CARD_H) {
+                        if (card.faceUp) {
+                            clicked = { type: 'tableau', col: col, index: i, card: card };
+                        }
+                    }
+                }
+            }
+            
+            if (clicked && clicked.type === 'stock') {
+                if (gameState.stock.length > 0) {
+                    let card = gameState.stock.pop();
+                    card.faceUp = true;
+                    gameState.waste.push(card);
                     gameState.selected = null;
-                    gameState.selectedIndex = null;
-                    return;
                 }
-
-                if (gameState.selected && gameState.selectedIndex !== null) {
-                    let card;
-                    if (gameState.selected === 'tableau') {
-                        card = gameState.tableau[gameState.selectedIndex][gameState.tableau[gameState.selectedIndex].length - 1];
-                    } else if (gameState.selected === 'waste') {
-                        card = gameState.waste[gameState.waste.length - 1];
-                    } else {
-                        return;
-                    }
-
-                    if (canMoveToTableau(card, col)) {
-                        moveCard(gameState.selected, gameState.selectedIndex, 'tableau', i);
-                        return;
-                    }
-                }
-
-                gameState.selected = 'tableau';
-                gameState.selectedIndex = i;
                 return;
             }
-        }
-
-        if (col.length === 0 && x >= colX && x <= colX + CARD_W && y >= colY && y <= colY + CARD_H) {
-            if (gameState.selected === 'tableau' && gameState.selectedIndex === i) {
-                gameState.selected = null;
-                gameState.selectedIndex = null;
-                return;
-            }
-
-            if (gameState.selected && gameState.selectedIndex !== null) {
-                let card;
-                if (gameState.selected === 'tableau') {
-                    card = gameState.tableau[gameState.selectedIndex][gameState.tableau[gameState.selectedIndex].length - 1];
-                } else if (gameState.selected === 'waste') {
-                    card = gameState.waste[gameState.waste.length - 1];
+            
+            if (gameState.selected) {
+                if (clicked && clicked.type === 'tableau') {
+                    if (gameState.selected.type === 'tableau') {
+                        if (canMoveToTableau(gameState.selected.card, clicked.col)) {
+                            let oldCol = gameState.selected.col;
+                            let idx = gameState.selected.index;
+                            let cardsToMove = gameState.tableau[oldCol].splice(idx);
+                            gameState.tableau[clicked.col].push(...cardsToMove);
+                            
+                            if (gameState.tableau[oldCol].length > 0) {
+                                gameState.tableau[oldCol][gameState.tableau[oldCol].length - 1].faceUp = true;
+                            }
+                            
+                            gameState.selected = null;
+                        }
+                    } else if (gameState.selected.type === 'waste') {
+                        if (canMoveToTableau(gameState.selected.card, clicked.col)) {
+                            gameState.waste.pop();
+                            gameState.tableau[clicked.col].push(gameState.selected.card);
+                            gameState.selected = null;
+                        }
+                    }
+                } else if (clicked && clicked.type === 'foundation') {
+                    let foundCol = clicked.index;
+                    if (gameState.selected.type === 'tableau') {
+                        if (canMoveToFoundation(gameState.selected.card, foundCol)) {
+                            let oldCol = gameState.selected.col;
+                            gameState.tableau[oldCol].pop();
+                            gameState.foundation[foundCol].push(gameState.selected.card);
+                            
+                            if (gameState.tableau[oldCol].length > 0) {
+                                gameState.tableau[oldCol][gameState.tableau[oldCol].length - 1].faceUp = true;
+                            }
+                            
+                            gameState.selected = null;
+                            
+                            if (gameState.foundation[0].length + gameState.foundation[1].length + gameState.foundation[2].length + gameState.foundation[3].length === 52) {
+                                gameState.running = false;
+                                document.getElementById('clearScreen').style.display = 'flex';
+                                return;
+                            }
+                        }
+                    } else if (gameState.selected.type === 'waste') {
+                        if (canMoveToFoundation(gameState.selected.card, foundCol)) {
+                            gameState.waste.pop();
+                            gameState.foundation[foundCol].push(gameState.selected.card);
+                            gameState.selected = null;
+                            
+                            if (gameState.foundation[0].length + gameState.foundation[1].length + gameState.foundation[2].length + gameState.foundation[3].length === 52) {
+                                gameState.running = false;
+                                document.getElementById('clearScreen').style.display = 'flex';
+                                return;
+                            }
+                        }
+                    }
                 } else {
-                    return;
+                    gameState.selected = null;
                 }
-
-                if (card.rank === 12) {
-                    moveCard(gameState.selected, gameState.selectedIndex, 'tableau', i);
-                    return;
-                }
-            }
-
-            gameState.selected = 'tableau';
-            gameState.selectedIndex = i;
-            return;
-        }
-    }
-}
-
-function checkClear() {
-    let allComplete = gameState.foundation.every(col => col.length === 13);
-    if (allComplete) {
-        gameState.running = false;
-        document.getElementById('clearScreen').style.display = 'flex';
-        return;
-    }
-}
-
-function drawCard(x, y, card, faceUp = true) {
-    if (faceUp && card) {
-        ctx.fillStyle = isRed(card.suit) ? '#e74c3c' : '#000000';
-        ctx.fillRect(x, y, CARD_W, CARD_H);
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x, y, CARD_W, CARD_H);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(getRankString(card.rank), x + CARD_W / 2, y + 5);
-        ctx.font = 'bold 12px Arial';
-        ctx.fillText(getSuitSymbol(card.suit), x + CARD_W / 2, y + 18);
-    } else {
-        ctx.fillStyle = config.card_back;
-        ctx.fillRect(x, y, CARD_W, CARD_H);
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x, y, CARD_W, CARD_H);
-    }
-}
-
-function drawGame() {
-    ctx.fillStyle = config.card_bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.fillStyle = '#333333';
-    ctx.font = 'bold 14px Arial';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Stock', 20, 100);
-    ctx.fillText('Waste', 100, 100);
-    ctx.fillText('Foundations', 250, 100);
-    ctx.fillText('Tableau', 20, 280);
-
-    let stockX = 20;
-    let stockY = 20;
-    if (gameState.stock.length > 0) {
-        drawCard(stockX, stockY, null, false);
-    } else {
-        ctx.fillStyle = '#cccccc';
-        ctx.fillRect(stockX, stockY, CARD_W, CARD_H);
-        ctx.strokeStyle = '#999999';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(stockX, stockY, CARD_W, CARD_H);
-    }
-
-    let wasteX = 100;
-    let wasteY = 20;
-    if (gameState.waste.length > 0) {
-        let wasteCard = gameState.waste[gameState.waste.length - 1];
-        let offsetY = gameState.selected === 'waste' && gameState.selectedIndex === 0 ? -15 : 0;
-        drawCard(wasteX, wasteY + offsetY, wasteCard, true);
-        if (gameState.selected === 'waste' && gameState.selectedIndex === 0) {
-            ctx.fillStyle = config.highlight_color;
-            ctx.fillRect(wasteX, wasteY + offsetY, CARD_W, CARD_H);
-            ctx.strokeStyle = config.highlight_color;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(wasteX, wasteY + offsetY, CARD_W, CARD_H);
-        }
-    } else {
-        ctx.fillStyle = '#cccccc';
-        ctx.fillRect(wasteX, wasteY, CARD_W, CARD_H);
-        ctx.strokeStyle = '#999999';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(wasteX, wasteY, CARD_W, CARD_H);
-    }
-
-    let foundationStartX = 250;
-    let foundationStartY = 20;
-    for (let i = 0; i < 4; i++) {
-        let fx = foundationStartX + i * 65;
-        let fy = foundationStartY;
-        if (gameState.foundation[i].length > 0) {
-            let topCard = gameState.foundation[i][gameState.foundation[i].length - 1];
-            drawCard(fx, fy, topCard, true);
-        } else {
-            ctx.fillStyle = '#cccccc';
-            ctx.fillRect(fx, fy, CARD_W, CARD_H);
-            ctx.strokeStyle = '#999999';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(fx, fy, CARD_W, CARD_H);
-            ctx.fillStyle = '#999999';
-            ctx.font = 'bold 16px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(getSuitSymbol(i), fx + CARD_W / 2, fy + CARD_H / 2);
-        }
-    }
-
-    for (let i = 0; i < 7; i++) {
-        let col = gameState.tableau[i];
-        let colX = 20 + i * 55;
-        let colY = 130;
-
-        if (col.length === 0) {
-            ctx.fillStyle = '#cccccc';
-            ctx.fillRect(colX, colY, CARD_W, CARD_H);
-            ctx.strokeStyle = '#999999';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(colX, colY, CARD_W, CARD_H);
-        } else {
-            for (let j = 0; j < col.length; j++) {
-                let cardY = colY + j * 20;
-                drawCard(colX, cardY, col[j], col[j].faceUp);
-
-                if (gameState.selected === 'tableau' && gameState.selectedIndex === i && j === col.length - 1) {
-                    ctx.fillStyle = config.highlight_color;
-                    ctx.fillRect(colX, cardY - 15, CARD_W, CARD_H);
-                    ctx.strokeStyle = config.highlight_color;
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(colX, cardY - 15, CARD_W, CARD_H);
+            } else if (clicked) {
+                if (clicked.type === 'waste' || clicked.type === 'tableau') {
+                    gameState.selected = clicked;
                 }
             }
         }
-    }
-
-    ctx.fillStyle = '#333333';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    let foundationCount = gameState.foundation.reduce((sum, col) => sum + col.length, 0);
-    ctx.fillText('Foundation: ' + foundationCount + '/52', 20, 570);
-    ctx.fillText('Stock: ' + gameState.stock.length, 200, 570);
-}
-
-function gameLoop() {
-    drawGame();
-    if (gameState.running) {
-        requestAnimationFrame(gameLoop);
-    }
-}
-
-function startGame() {
-    document.getElementById('startScreen').style.display = 'none';
-    initializeGame();
-    gameLoop();
-}
-
-function resetGame() {
-    if (gameState.running) {
-        initializeGame();
-        gameLoop();
-    }
-}
-
-function retryGame() {
-    document.getElementById('clearScreen').style.display = 'none';
-    document.getElementById('startScreen').style.display = 'flex';
-    gameState.running = false;
-}
-
-canvas.addEventListener('click', (e) => {
-    if (!gameState.running) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    handleClick(x, y);
-});
-
-document.body.style.background = config.bg_color;
-</script>
-
+        
+        function drawCard(x, y, card, highlight = false) {
+            ctx.fillStyle = config.card_bg;
+            ctx.fillRect(x, y, CARD_W, CARD_H);
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, CARD_W, CARD_H);
+            
+            if (card) {
+                ctx.fillStyle = card.red ? '#e74c3c' : '#1a1a1a';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText(card.rank, x + 4, y + 14);
+                ctx.font = '14px Arial';
+                ctx.fillText(card.suit, x + 4, y + 28);
+            } else {
+                ctx.fillStyle = config.card_back;
+                ctx.fillRect(x + 2, y + 2, CARD_W - 4, CARD_H - 4);
+            }
+            
+            if (highlight) {
+                ctx.strokeStyle = config.highlight_color;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x - 1, y - 1, CARD_W + 2, CARD_H + 2);
+            }
+        }
+        
+        function gameLoop() {
+            ctx.fillStyle = '#076324';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#999';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Stock', 20, 15);
+            ctx.fillText('Waste', 80, 15);
+            ctx.fillText('Foundation', 280, 15);
+            
+            if (gameState.stock.length > 0) {
+                drawCard(20, 20, null);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(gameState.stock.length.toString(), 45, 58);
+            }
+            
+            if (gameState.waste.length > 0) {
+                let card = gameState.waste[gameState.waste.length - 1];
+                let highlight = gameState.selected && gameState.selected.type === 'waste';
+                drawCard(80, 20, card, highlight);
+            }
+            
+            for (let i = 0; i < 4; i++) {
+                let fx = 280 + i * 60;
+                if (gameState.foundation[i].length > 0) {
+                    let card = gameState.foundation[i][gameState.foundation[i].length - 1];
+                    drawCard(fx, 20, card);
+                } else {
+                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                    ctx.fillRect(fx, 20, CARD_W, CARD_H);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(fx, 20, CARD_W, CARD_H);
+                }
+            }
+            
+            ctx.fillStyle = '#999';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'left';
+            for (let col = 0; col < 7; col++) {
+                ctx.fillText('Tableau', 20 + col * 60, 125);
+            }
+            
+            for (let col = 0; col < 7; col++) {
+                let tx = 20 + col * 60;
+                let ty = 130;
+                
+                if (gameState.tableau[col].length === 0) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                    ctx.fillRect(tx, ty, CARD_W, CARD_H);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(tx, ty, CARD_W, CARD_H);
+                } else {
+                    for (let i = 0; i < gameState.tableau[col].length; i++) {
+                        let card = gameState.tableau[col][i];
+                        let cy = ty + (i > 0 ? CARD_OVERLAP : 0);
+                        let highlight = gameState.selected && gameState.selected.type === 'tableau' && gameState.selected.col === col && gameState.selected.index === i;
+                        
+                        if (card.faceUp) {
+                            drawCard(tx, cy, card, highlight);
+                        } else {
+                            drawCard(tx, cy, null);
+                        }
+                    }
+                }
+            }
+            
+            if (gameState.running) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            handleClick(x, y);
+        });
+    </script>
 </body>
 </html>
