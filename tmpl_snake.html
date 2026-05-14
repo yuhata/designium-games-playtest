@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #0a0a0a;
+            font-family: Arial, sans-serif;
+        }
+        
+        .container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            min-width: 300px;
+        }
+        
+        #startScreen h1 {
+            color: #2ecc71;
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        
+        #startScreen p {
+            color: #fff;
+            font-size: 18px;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        
+        #startScreen button {
+            background-color: #2ecc71;
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+        
+        #startScreen button:hover {
+            background-color: #27ae60;
+        }
+        
+        .gameWrapper {
+            position: relative;
+        }
+        
+        canvas {
+            border: 2px solid #2ecc71;
+            background-color: {{bg_color}};
+            display: block;
+        }
+        
+        .info {
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+            background-color: {{bg_color}};
+            padding: 10px 20px;
+            border: 2px solid #2ecc71;
+            width: 100%;
+        }
+        
+        .length-info {
+            color: #2ecc71;
+            font-weight: bold;
+            font-size: 20px;
+        }
+        
+        .controls-info {
+            color: #aaa;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        #gameOverScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 101;
+            display: none;
+            min-width: 300px;
+        }
+        
+        #gameOverScreen h2 {
+            color: #e74c3c;
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        
+        #gameOverScreen p {
+            color: #fff;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        
+        #gameOverScreen button {
+            background-color: #e74c3c;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #gameOverScreen button:hover {
+            background-color: #c0392b;
+        }
+        
+        #clearScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 101;
+            display: none;
+            min-width: 300px;
+        }
+        
+        #clearScreen h2 {
+            color: #2ecc71;
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        
+        #clearScreen p {
+            color: #fff;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        
+        #clearScreen button {
+            background-color: #2ecc71;
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #clearScreen button:hover {
+            background-color: #27ae60;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="startScreen">
+            <h1>{{title}}</h1>
+            <p>長さ{{win_length}}に育てろ！</p>
+            <p class="controls-info">矢印キーで操作</p>
+            <button onclick="startGame()">ゲーム開始</button>
+        </div>
+        
+        <div class="gameWrapper">
+            <canvas id="gameCanvas"></canvas>
+            <div class="info">
+                <div class="length-info" id="lengthInfo">長さ 0 / {{win_length}}</div>
+                <div class="controls-info">↑↓←→ キーで操作 / 衝突でゲームオーバー</div>
+            </div>
+        </div>
+        
+        <div id="gameOverScreen">
+            <h2>GAME OVER</h2>
+            <p id="gameOverLength">長さ: 0</p>
+            <button onclick="restartGame()">もう一度</button>
+        </div>
+        
+        <div id="clearScreen">
+            <h2>CLEAR!</h2>
+            <p>{{win_length}}に育てた！</p>
+            <button onclick="restartGame()">もう一度</button>
+        </div>
+    </div>
+    
+    <script>
+        /*
+        パラメータスキーマ:
+        {
+            "theme": "string",
+            "title": "string ({{title}})",
+            "bg_color": "string ({{bg_color}})",
+            "snake_color": "string ({{snake_color}})",
+            "food_color": "string ({{food_color}})",
+            "cell_size": "int ({{cell_size}})",
+            "tick_interval": "int ({{tick_interval}})",
+            "win_length": "int ({{win_length}})"
+        }
+        
+        デフォルト値:
+        title="SNAKE", bg_color="#1a1a2e", snake_color="#2ecc71", 
+        food_color="#e74c3c", cell_size=20, tick_interval=120, win_length=20
+        */
+        
+        const CELL_SIZE = {{cell_size}};
+        const TICK_INTERVAL = {{tick_interval}};
+        const WIN_LENGTH = {{win_length}};
+        const SNAKE_COLOR = "{{snake_color}}";
+        const FOOD_COLOR = "{{food_color}}";
+        
+        const GRID_WIDTH = 20;
+        const GRID_HEIGHT = 15;
+        
+        let canvas = document.getElementById('gameCanvas');
+        let ctx = canvas.getContext('2d');
+        
+        canvas.width = GRID_WIDTH * CELL_SIZE;
+        canvas.height = GRID_HEIGHT * CELL_SIZE;
+        
+        let snake = [{x: 10, y: 7}];
+        let direction = {x: 1, y: 0};
+        let nextDirection = {x: 1, y: 0};
+        let food = {x: 15, y: 7};
+        let gameRunning = false;
+        let gameLoop = null;
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameRunning = true;
+            snake = [{x: 10, y: 7}];
+            direction = {x: 1, y: 0};
+            nextDirection = {x: 1, y: 0};
+            food = generateFood();
+            
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(update, TICK_INTERVAL);
+        }
+        
+        function generateFood() {
+            let newFood;
+            let isOnSnake;
+            do {
+                isOnSnake = false;
+                newFood = {
+                    x: Math.floor(Math.random() * GRID_WIDTH),
+                    y: Math.floor(Math.random() * GRID_HEIGHT)
+                };
+                for (let segment of snake) {
+                    if (segment.x === newFood.x && segment.y === newFood.y) {
+                        isOnSnake = true;
+                        break;
+                    }
+                }
+            } while (isOnSnake);
+            return newFood;
+        }
+        
+        function update() {
+            direction = nextDirection;
+            
+            let head = {x: snake[0].x + direction.x, y: snake[0].y + direction.y};
+            
+            if (head.x < 0 || head.x >= GRID_WIDTH || head.y < 0 || head.y >= GRID_HEIGHT) {
+                endGame();
+                return;
+            }
+            
+            for (let segment of snake) {
+                if (head.x === segment.x && head.y === segment.y) {
+                    endGame();
+                    return;
+                }
+            }
+            
+            snake.unshift(head);
+            
+            if (head.x === food.x && head.y === food.y) {
+                food = generateFood();
+                if (snake.length >= WIN_LENGTH) {
+                    clearGame();
+                    return;
+                }
+            } else {
+                snake.pop();
+            }
+            
+            updateLengthInfo();
+            draw();
+        }
+        
+        function draw() {
+            ctx.fillStyle = "{{bg_color}}";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = FOOD_COLOR;
+            ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            
+            ctx.fillStyle = SNAKE_COLOR;
+            for (let segment of snake) {
+                ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+        }
+        
+        function updateLengthInfo() {
+            document.getElementById('lengthInfo').innerText = 
+                '長さ ' + snake.length + ' / {{win_length}}';
+        }
+        
+        function endGame() {
+            gameRunning = false;
+            clearInterval(gameLoop);
+            document.getElementById('gameOverLength').innerText = '長さ: ' + snake.length;
+            document.getElementById('gameOverScreen').style.display = 'block';
+        }
+        
+        function clearGame() {
+            gameRunning = false;
+            clearInterval(gameLoop);
+            document.getElementById('clearScreen').style.display = 'block';
+        }
+        
+        function restartGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'block';
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (!gameRunning) return;
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                    if (direction.y === 0) nextDirection = {x: 0, y: -1};
+                    e.preventDefault();
+                    break;
+                case 'ArrowDown':
+                    if (direction.y === 0) nextDirection = {x: 0, y: 1};
+                    e.preventDefault();
+                    break;
+                case 'ArrowLeft':
+                    if (direction.x === 0) nextDirection = {x: -1, y: 0};
+                    e.preventDefault();
+                    break;
+                case 'ArrowRight':
+                    if (direction.x === 0) nextDirection = {x: 1, y: 0};
+                    e.preventDefault();
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: {{bg_color}};
+        }
+        canvas {
+            display: block;
+            background: {{bg_color}};
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+            z-index: 1000;
+        }
+        #startScreen h1 {
+            font-size: 3em;
+            margin-bottom: 30px;
+            color: {{bird_color}};
+        }
+        #startScreen p {
+            font-size: 1.3em;
+            margin-bottom: 40px;
+            line-height: 1.8;
+            max-width: 80%;
+        }
+        #gameOverScreen, #clearScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 50px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 999;
+            display: none;
+            min-width: 300px;
+        }
+        #gameOverScreen h2, #clearScreen h2 {
+            font-size: 2.5em;
+            margin: 0 0 20px 0;
+        }
+        #clearScreen h2 {
+            color: {{pipe_color}};
+        }
+        #gameOverScreen p, #clearScreen p {
+            font-size: 1.3em;
+            margin-bottom: 30px;
+        }
+        .retryButton {
+            background: {{pipe_color}};
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .retryButton:hover {
+            transform: scale(1.05);
+            opacity: 0.9;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 5px;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 15px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="startScreen">
+        <h1>{{title}}</h1>
+        <p>{{win_pipes}}本のパイプをくぐり抜けろ！<br><br>SPACE or クリックでジャンプ</p>
+    </div>
+    
+    <div id="gameOverScreen">
+        <h2>GAME OVER</h2>
+        <p id="gameOverMessage"></p>
+        <button class="retryButton" id="gameOverRetry">リトライ</button>
+    </div>
+    
+    <div id="clearScreen">
+        <h2>CLEAR！</h2>
+        <p id="clearMessage"></p>
+        <button class="retryButton" id="clearRetry">もう一度</button>
+    </div>
+    
+    <div id="hud">
+        <div>通過: <span id="pipeCount">0</span> / {{win_pipes}}</div>
+    </div>
+    
+    <div id="instructions">
+        SPACE or クリック = ジャンプ
+    </div>
+
+    <script>
+        /*
+         * Parameter Schema:
+         * {
+         *   "theme":          "string  // param生成への入力。HTMLには出ない",
+         *   "title":          "string  // {{title}}",
+         *   "bg_color":       "string  // {{bg_color}}",
+         *   "bird_color":     "string  // {{bird_color}}",
+         *   "pipe_color":     "string  // {{pipe_color}}",
+         *   "gravity":        "float  // {{gravity}}（px/frame²。重力加速度）",
+         *   "jump_force":     "int    // {{jump_force}}（負値。ジャンプ時の初速）",
+         *   "pipe_gap":       "int    // {{pipe_gap}}（上下パイプの隙間px）",
+         *   "pipe_speed":     "int    // {{pipe_speed}}（px/frame。パイプ移動速度）",
+         *   "pipe_interval":  "int    // {{pipe_interval}}（フレーム。パイプ出現間隔）",
+         *   "win_pipes":      "int    // {{win_pipes}}（この本数のパイプを通過したらクリア）"
+         * }
+         *
+         * Default values:
+         * title="FLAPPY", bg_color="#1a1a2e", bird_color="#f1c40f", pipe_color="#2ecc71",
+         * gravity=0.4, jump_force=-8, pipe_gap=140, pipe_speed=3, pipe_interval=120, win_pipes=10
+         */
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const params = {
+            title: '{{title}}',
+            bg_color: '{{bg_color}}',
+            bird_color: '{{bird_color}}',
+            pipe_color: '{{pipe_color}}',
+            gravity: {{gravity}},
+            jump_force: {{jump_force}},
+            pipe_gap: {{pipe_gap}},
+            pipe_speed: {{pipe_speed}},
+            pipe_interval: {{pipe_interval}},
+            win_pipes: {{win_pipes}}
+        };
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const STATE = {
+            START: 'start',
+            PLAYING: 'playing',
+            GAME_OVER: 'gameOver',
+            CLEAR: 'clear'
+        };
+
+        let state = STATE.START;
+        let frameCount = 0;
+
+        const bird = {
+            x: canvas.width * 0.25,
+            y: canvas.height / 2,
+            width: 30,
+            height: 30,
+            velocity: 0,
+            canJump: true
+        };
+
+        let pipes = [];
+        let pipeCount = 0;
+        let nextPipeFrame = 0;
+
+        const PIPE_WIDTH = 80;
+        const PIPE_MIN_Y = 50;
+        const PIPE_MAX_Y = canvas.height - 50 - params.pipe_gap;
+
+        function drawBird() {
+            ctx.fillStyle = params.bird_color;
+            ctx.fillRect(bird.x - bird.width / 2, bird.y - bird.height / 2, bird.width, bird.height);
+        }
+
+        function drawPipes() {
+            ctx.fillStyle = params.pipe_color;
+            pipes.forEach(pipe => {
+                ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.topHeight);
+                ctx.fillRect(pipe.x, pipe.topHeight + params.pipe_gap, PIPE_WIDTH, canvas.height - pipe.topHeight - params.pipe_gap);
+            });
+        }
+
+        function updateBird() {
+            bird.velocity += params.gravity;
+            bird.y += bird.velocity;
+            
+            if (bird.y - bird.height / 2 <= 0 || bird.y + bird.height / 2 >= canvas.height) {
+                state = STATE.GAME_OVER;
+            }
+            
+            bird.canJump = true;
+        }
+
+        function updatePipes() {
+            pipes.forEach(pipe => {
+                pipe.x -= params.pipe_speed;
+                
+                if (bird.x + bird.width / 2 > pipe.x && bird.x - bird.width / 2 < pipe.x + PIPE_WIDTH) {
+                    if (bird.y - bird.height / 2 < pipe.topHeight || bird.y + bird.height / 2 > pipe.topHeight + params.pipe_gap) {
+                        state = STATE.GAME_OVER;
+                    }
+                }
+                
+                if (pipe.x + PIPE_WIDTH < bird.x - bird.width / 2 && !pipe.passed) {
+                    pipe.passed = true;
+                    pipeCount++;
+                    document.getElementById('pipeCount').textContent = pipeCount;
+                    
+                    if (pipeCount >= params.win_pipes) {
+                        state = STATE.CLEAR;
+                    }
+                }
+            });
+            
+            pipes = pipes.filter(pipe => pipe.x + PIPE_WIDTH > 0);
+        }
+
+        function generatePipe() {
+            const topHeight = Math.random() * (PIPE_MAX_Y - PIPE_MIN_Y) + PIPE_MIN_Y;
+            pipes.push({
+                x: canvas.width,
+                topHeight: topHeight,
+                passed: false
+            });
+        }
+
+        function handleInput() {
+            if (state === STATE.START) {
+                state = STATE.PLAYING;
+                document.getElementById('startScreen').style.display = 'none';
+                bird.velocity = params.jump_force;
+                bird.canJump = false;
+            } else if (state === STATE.PLAYING && bird.canJump) {
+                bird.velocity = params.jump_force;
+                bird.canJump = false;
+            }
+        }
+
+        function gameLoop() {
+            ctx.fillStyle = params.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (state === STATE.PLAYING) {
+                frameCount++;
+                
+                updateBird();
+                updatePipes();
+
+                if (frameCount >= nextPipeFrame) {
+                    generatePipe();
+                    nextPipeFrame = frameCount + params.pipe_interval;
+                }
+
+                drawPipes();
+                drawBird();
+            } else if (state === STATE.GAME_OVER) {
+                drawBird();
+                drawPipes();
+                document.getElementById('gameOverScreen').style.display = 'block';
+                document.getElementById('gameOverMessage').textContent = `通過: ${pipeCount} / {{win_pipes}}`;
+            } else if (state === STATE.CLEAR) {
+                drawBird();
+                drawPipes();
+                document.getElementById('clearScreen').style.display = 'block';
+                document.getElementById('clearMessage').textContent = `${params.win_pipes}本すべてくぐり抜けた！`;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.getElementById('gameOverRetry').addEventListener('click', () => {
+            location.reload();
+        });
+
+        document.getElementById('clearRetry').addEventListener('click', () => {
+            location.reload();
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                handleInput();
+            }
+        });
+
+        canvas.addEventListener('click', () => {
+            handleInput();
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>
