@@ -838,6 +838,7 @@ function transitionToMini2() {
 function transitionToMini3() {
     if (!gameState.running) return;
     gameState.phase = 'mini3';
+    gameState.m3.phase = 'loading'; // loopMini3が空のmemCellsに触れないようにする
     m3LastTime = 0;
     showOverlay('CLEAR! 🎉 → MEMORY!', 900);
     setTimeout(function() {

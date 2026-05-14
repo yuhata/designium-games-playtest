@@ -436,11 +436,11 @@
 
       const cellElement = document.getElementById(`cell-${cardIndex}-${cellIndex}`);
       cellElement.style.cursor = 'default';
-      cellElement.textContent = cell.symbol;
 
       const overlay = cellElement.querySelector('.cellOverlay');
       overlay.style.background = 'transparent';
       overlay.style.border = 'none';
+      overlay.textContent = cell.symbol;
 
       // Check if card is won
       checkCardWin(cardIndex);
