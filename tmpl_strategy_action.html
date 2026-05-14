@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategy Action Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #666;
+        }
+        canvas {
+            display: block;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            z-index: 100;
+        }
+        #startScreen {
+            display: flex;
+        }
+        .screen h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .screen p {
+            font-size: 1.1em;
+            margin: 8px 0;
+            text-align: center;
+            max-width: 420px;
+            line-height: 1.6;
+        }
+        .screen button {
+            margin-top: 30px;
+            padding: 12px 50px;
+            font-size: 1.2em;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .screen button:hover {
+            background: #3182ce;
+        }
+        #hud {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            color: white;
+            font-size: 13px;
+            font-weight: bold;
+            z-index: 50;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.4);
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+        #hud div {
+            margin: 4px 0;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 12px;
+            color: #bbb;
+            font-size: 11px;
+            z-index: 50;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        #instructions div {
+            margin: 2px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen" class="screen">
+            <h1>STRATEGY ACTION</h1>
+            <p>自軍3ユニットで敵軍を全滅させよう！</p>
+            <p style="font-size: 1.0em; color: #aaa;">敵の接近を止めろ。スキルで一気に削ろう。</p>
+            <button onclick="startGame()">START</button>
+        </div>
+        <div id="clearScreen" class="screen">
+            <h1>CLEAR!</h1>
+            <p>敵軍を全滅させました！作戦成功だ。</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        <div id="gameOverScreen" class="screen">
+            <h1>GAME OVER</h1>
+            <p>全滅してしまいました...</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+        <div id="hud">
+            <div>敵残数: <span id="enemyCount">5</span></div>
+            <div>スキル: <span id="skillCooldown">0</span>s</div>
+            <div>援軍: <span id="reinforcementCount">30</span>s</div>
+        </div>
+        <div id="instructions">
+            <div>● ユニットをクリック選択 → 移動先をクリック</div>
+            <div>● スペースキー：全体スキル（全敵に3倍ダメージ）</div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <script>
+        // theme:           string
+        // title:           string
+        // bg_color:        string
+        // ally_color:      string
+        // enemy_color:     string
+        // skill_color:     string
+        // ally_hp:         int
+        // ally_atk:        int
+        // enemy_hp:        int
+        // enemy_count:     int
+        // skill_cooldown:  int
+        
+        const config = {
+            title: 'STRATEGY ACTION',
+            bg_color: '#0d1117',
+            ally_color: '#4299e1',
+            enemy_color: '#e53e3e',
+            skill_color: '#9f7aea',
+            ally_hp: 30,
+            ally_atk: 4,
+            enemy_hp: 20,
+            enemy_count: 5,
+            skill_cooldown: 30
+        };
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 480;
+        canvas.height = 480;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        
+        document.body.style.background = config.bg_color;
+        
+        const gameState = {
+            running: false,
+            allies: [],
+            enemies: [],
+            selectedUnit: null,
+            skillCooldown: 0,
+            reinforcementTimer: 0,
+            lastAttackMap: new Map()
+        };
+        
+        class Unit {
+            constructor(x, y, maxHp, atk, color, isAlly) {
+                this.x = x;
+                this.y = y;
+                this.maxHp = maxHp;
+                this.hp = maxHp;
+                this.atk = atk;
+                this.color = color;
+                this.isAlly = isAlly;
+                this.targetX = null;
+                this.targetY = null;
+                this.speed = 2;
+                this.radius = 12;
+            }
+            
+            update() {
+                if (this.targetX !== null && this.targetY !== null) {
+                    const dx = this.targetX - this.x;
+                    const dy = this.targetY - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < this.speed) {
+                        this.x = this.targetX;
+                        this.y = this.targetY;
+                        this.targetX = null;
+                        this.targetY = null;
+                    } else {
+                        this.x += (dx / dist) * this.speed;
+                        this.y += (dy / dist) * this.speed;
+                    }
+                }
+                
+                const targets = this.isAlly ? gameState.enemies : gameState.allies;
+                for (const target of targets) {
+                    if (target.hp > 0) {
+                        const dx = target.x - this.x;
+                        const dy = target.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < this.radius + target.radius + 8) {
+                            const unitKey = this;
+                            const now = Date.now();
+                            
+                            if (!gameState.lastAttackMap.has(unitKey)) {
+                                gameState.lastAttackMap.set(unitKey, 0);
+                            }
+                            
+                            if (now - gameState.lastAttackMap.get(unitKey) >= 1000) {
+                                target.hp -= this.atk;
+                                if (target.hp < 0) target.hp = 0;
+                                gameState.lastAttackMap.set(unitKey, now);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                if (gameState.selectedUnit === this) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                const barWidth = 26;
+                const barHeight = 4;
+                const barX = this.x - barWidth / 2;
+                const barY = this.y - this.radius - 10;
+                
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                const hpPercent = this.hp / this.maxHp;
+                ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#f87171';
+                ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+                
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(barX, barY, barWidth, barHeight);
+            }
+        }
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.allies = [];
+            gameState.enemies = [];
+            gameState.selectedUnit = null;
+            gameState.skillCooldown = 0;
+            gameState.reinforcementTimer = config.skill_cooldown * 1000;
+            gameState.lastAttackMap.clear();
+            
+            for (let i = 0; i < 3; i++) {
+                gameState.allies.push(new Unit(
+                    50 + i * 60,
+                    420,
+                    config.ally_hp,
+                    config.ally_atk,
+                    config.ally_color,
+                    true
+                ));
+            }
+            
+            for (let i = 0; i < config.enemy_count; i++) {
+                const col = i % 3;
+                const row = Math.floor(i / 3);
+                gameState.enemies.push(new Unit(
+                    280 + col * 70,
+                    50 + row * 70,
+                    config.enemy_hp,
+                    2,
+                    config.enemy_color,
+                    false
+                ));
+            }
+            
+            gameLoop();
+        }
+        
+        function gameLoop() {
+            if (!gameState.running) return;
+            
+            gameState.allies.forEach(u => {
+                if (u.hp > 0) u.update();
+            });
+            gameState.enemies.forEach(u => {
+                if (u.hp > 0) u.update();
+            });
+            
+            gameState.skillCooldown = Math.max(0, gameState.skillCooldown - 16);
+            gameState.reinforcementTimer -= 16;
+            
+            if (gameState.reinforcementTimer <= 0 && gameState.allies.length < 5) {
+                gameState.allies.push(new Unit(
+                    50 + Math.random() * 100,
+                    400 + (Math.random() - 0.5) * 40,
+                    config.ally_hp,
+                    config.ally_atk,
+                    config.ally_color,
+                    true
+                ));
+                gameState.reinforcementTimer = 30000;
+            }
+            
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            gameState.allies.forEach(u => {
+                if (u.hp > 0) u.draw(ctx);
+            });
+            gameState.enemies.forEach(u => {
+                if (u.hp > 0) u.draw(ctx);
+            });
+            
+            const aliveEnemies = gameState.enemies.filter(u => u.hp > 0).length;
+            const aliveAllies = gameState.allies.filter(u => u.hp > 0).length;
+            
+            document.getElementById('enemyCount').textContent = aliveEnemies;
+            document.getElementById('skillCooldown').textContent = Math.ceil(gameState.skillCooldown / 1000);
+            document.getElementById('reinforcementCount').textContent = Math.ceil(Math.max(0, gameState.reinforcementTimer) / 1000);
+            
+            if (aliveEnemies === 0) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+            if (aliveAllies === 0) {
+                gameState.running = false;
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+        
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            let clicked = null;
+            for (const unit of gameState.allies) {
+                if (unit.hp > 0) {
+                    const dx = unit.x - x;
+                    const dy = unit.y - y;
+                    if (Math.sqrt(dx * dx + dy * dy) < unit.radius + 6) {
+                        clicked = unit;
+                        break;
+                    }
+                }
+            }
+            
+            if (clicked) {
+                gameState.selectedUnit = clicked;
+            } else if (gameState.selectedUnit && gameState.selectedUnit.hp > 0) {
+                gameState.selectedUnit.targetX = x;
+                gameState.selectedUnit.targetY = y;
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (!gameState.running) return;
+            
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (gameState.skillCooldown <= 0) {
+                    gameState.enemies.forEach(u => {
+                        if (u.hp > 0) {
+                            u.hp -= config.ally_atk * 3;
+                            if (u.hp < 0) u.hp = 0;
+                        }
+                    });
+                    gameState.skillCooldown = config.skill_cooldown * 1000;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

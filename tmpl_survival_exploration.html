@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Escape</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #444;
+        }
+        #gameCanvas {
+            display: block;
+        }
+        .screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .screen-content {
+            text-align: center;
+            color: white;
+        }
+        .screen h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #f6e05e;
+        }
+        .screen p {
+            font-size: 1.2em;
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        .screen button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .screen button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen" class="screen">
+        <div class="screen-content">
+            <h1>DUNGEON ESCAPE</h1>
+            <p>暗いダンジョンから脱出せよ！</p>
+            <p>空腹と渇きに注意しながら脱出口を目指そう</p>
+            <p style="font-size: 1em; margin-top: 20px; color: #68d391;">食料（緑）で空腹回復　水（青）で渇き回復</p>
+            <p style="font-size: 1em; color: #f56565;">敵（赤）に注意！</p>
+            <p style="font-size: 1em; color: #9f7aea;">脱出口（紫）を目指そう</p>
+            <p style="font-size: 0.95em; margin-top: 15px; color: #aaa;">操作: WASD キーで移動</p>
+            <button onclick="startGame()">START GAME</button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen" class="screen" style="display: none;">
+        <div class="screen-content">
+            <h1 style="color: #f56565;">GAME OVER</h1>
+            <p id="gameOverMessage" style="font-size: 1.3em; margin: 20px 0;"></p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <div id="clearScreen" class="screen" style="display: none;">
+        <div class="screen-content">
+            <h1 style="color: #9f7aea;">CLEAR!</h1>
+            <p style="font-size: 1.3em; margin: 20px 0;">ダンジョンからの脱出に成功した！</p>
+            <button onclick="retryGame()">RETRY</button>
+        </div>
+    </div>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // パラメータスキーマ
+        // theme:           string  // param生成への入力。HTMLには出ない
+        // title:           string  // config.title = 'DUNGEON ESCAPE'
+        // bg_color:        string  // config.bg_color = '#0a0a0a'
+        // floor_color:     string  // config.floor_color = '#2d3748'
+        // wall_color:      string  // config.wall_color = '#1a1a2e'
+        // player_color:    string  // config.player_color = '#f6e05e'
+        // food_color:      string  // config.food_color = '#68d391'
+        // exit_color:      string  // config.exit_color = '#9f7aea'
+        // hunger_rate:     float   // default: 0.02
+        // thirst_rate:     float   // default: 0.03
+        // map_size:        int     // default: 15
+
+        const config = {
+            title: 'DUNGEON ESCAPE',
+            bg_color: '#0a0a0a',
+            floor_color: '#2d3748',
+            wall_color: '#1a1a2e',
+            player_color: '#f6e05e',
+            food_color: '#68d391',
+            exit_color: '#9f7aea',
+            hunger_rate: 0.02,
+            thirst_rate: 0.03,
+            map_size: 15
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 480;
+        canvas.height = 520;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+
+        document.body.style.background = config.bg_color;
+
+        const MAP_SIZE = config.map_size;
+        const CELL_SIZE = canvas.width / MAP_SIZE;
+        const MAP_HEIGHT = 360;
+        const HUD_HEIGHT = canvas.height - MAP_HEIGHT;
+
+        let gameState = {
+            running: false,
+            playerX: 1,
+            playerY: 1,
+            hp: 100,
+            hunger: 100,
+            thirst: 100,
+            map: [],
+            visible: [],
+            explored: [],
+            exitX: -1,
+            exitY: -1,
+            enemies: [],
+            food: [],
+            water: [],
+            lastMoveTime: 0,
+            moveDelay: 150
+        };
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            initGame();
+            gameState.running = true;
+            gameLoop();
+        }
+
+        function initGame() {
+            gameState.running = false;
+            gameState.playerX = 1;
+            gameState.playerY = 1;
+            gameState.hp = 100;
+            gameState.hunger = 100;
+            gameState.thirst = 100;
+            gameState.map = [];
+            gameState.visible = [];
+            gameState.explored = [];
+            gameState.enemies = [];
+            gameState.food = [];
+            gameState.water = [];
+            gameState.lastMoveTime = 0;
+
+            generateMaze();
+            placeFoodAndWater();
+            placeEnemies();
+            placeExit();
+
+            for (let i = 0; i < MAP_SIZE; i++) {
+                gameState.visible[i] = [];
+                gameState.explored[i] = [];
+                for (let j = 0; j < MAP_SIZE; j++) {
+                    gameState.visible[i][j] = false;
+                    gameState.explored[i][j] = false;
+                }
+            }
+
+            updateVisibility();
+        }
+
+        function generateMaze() {
+            gameState.map = [];
+            for (let y = 0; y < MAP_SIZE; y++) {
+                gameState.map[y] = [];
+                for (let x = 0; x < MAP_SIZE; x++) {
+                    gameState.map[y][x] = 1;
+                }
+            }
+
+            const visited = [];
+            for (let y = 0; y < MAP_SIZE; y++) {
+                visited[y] = [];
+                for (let x = 0; x < MAP_SIZE; x++) {
+                    visited[y][x] = false;
+                }
+            }
+
+            function carvePath(x, y) {
+                visited[y][x] = true;
+                gameState.map[y][x] = 0;
+
+                const directions = [
+                    [0, -2], [2, 0], [0, 2], [-2, 0]
+                ];
+                directions.sort(() => Math.random() - 0.5);
+
+                for (const [dx, dy] of directions) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+
+                    if (nx > 0 && nx < MAP_SIZE - 1 && ny > 0 && ny < MAP_SIZE - 1 && !visited[ny][nx]) {
+                        gameState.map[y + dy / 2][x + dx / 2] = 0;
+                        carvePath(nx, ny);
+                    }
+                }
+            }
+
+            carvePath(1, 1);
+        }
+
+        function placeFoodAndWater() {
+            gameState.food = [];
+            gameState.water = [];
+
+            let placed = 0;
+            while (placed < 5) {
+                const x = Math.floor(Math.random() * MAP_SIZE);
+                const y = Math.floor(Math.random() * MAP_SIZE);
+
+                if (gameState.map[y][x] === 0 && !(x === 1 && y === 1)) {
+                    gameState.food.push({x, y});
+                    placed++;
+                }
+            }
+
+            placed = 0;
+            while (placed < 5) {
+                const x = Math.floor(Math.random() * MAP_SIZE);
+                const y = Math.floor(Math.random() * MAP_SIZE);
+
+                if (gameState.map[y][x] === 0 && 
+                    !(x === 1 && y === 1) &&
+                    !gameState.food.some(f => f.x === x && f.y === y)) {
+                    gameState.water.push({x, y});
+                    placed++;
+                }
+            }
+        }
+
+        function placeEnemies() {
+            gameState.enemies = [];
+            let placed = 0;
+
+            while (placed < 3) {
+                const x = Math.floor(Math.random() * MAP_SIZE);
+                const y = Math.floor(Math.random() * MAP_SIZE);
+
+                if (gameState.map[y][x] === 0 && 
+                    !(x === 1 && y === 1) &&
+                    !gameState.food.some(f => f.x === x && f.y === y) &&
+                    !gameState.water.some(w => w.x === x && w.y === y) &&
+                    !gameState.enemies.some(e => e.x === x && e.y === y)) {
+                    gameState.enemies.push({x, y});
+                    placed++;
+                }
+            }
+        }
+
+        function placeExit() {
+            let placed = false;
+
+            while (!placed) {
+                const x = Math.floor(Math.random() * MAP_SIZE);
+                const y = Math.floor(Math.random() * MAP_SIZE);
+
+                if (gameState.map[y][x] === 0 && 
+                    !(x === 1 && y === 1) &&
+                    !gameState.food.some(f => f.x === x && f.y === y) &&
+                    !gameState.water.some(w => w.x === x && w.y === y) &&
+                    !gameState.enemies.some(e => e.x === x && e.y === y)) {
+                    gameState.exitX = x;
+                    gameState.exitY = y;
+                    placed = true;
+                }
+            }
+        }
+
+        function updateVisibility() {
+            for (let i = 0; i < MAP_SIZE; i++) {
+                for (let j = 0; j < MAP_SIZE; j++) {
+                    gameState.visible[i][j] = false;
+                }
+            }
+
+            for (let dx = -3; dx <= 3; dx++) {
+                for (let dy = -3; dy <= 3; dy++) {
+                    const x = gameState.playerX + dx;
+                    const y = gameState.playerY + dy;
+
+                    if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+                        gameState.visible[y][x] = true;
+                        gameState.explored[y][x] = true;
+                    }
+                }
+            }
+        }
+
+        function handleInput(e) {
+            if (!gameState.running) return;
+
+            const now = Date.now();
+            if (now - gameState.lastMoveTime < gameState.moveDelay) return;
+
+            let moved = false;
+            const key = e.key.toUpperCase();
+
+            if (key === 'W' && gameState.playerY > 0 && gameState.map[gameState.playerY - 1][gameState.playerX] === 0) {
+                gameState.playerY--;
+                moved = true;
+            } else if (key === 'S' && gameState.playerY < MAP_SIZE - 1 && gameState.map[gameState.playerY + 1][gameState.playerX] === 0) {
+                gameState.playerY++;
+                moved = true;
+            } else if (key === 'A' && gameState.playerX > 0 && gameState.map[gameState.playerY][gameState.playerX - 1] === 0) {
+                gameState.playerX--;
+                moved = true;
+            } else if (key === 'D' && gameState.playerX < MAP_SIZE - 1 && gameState.map[gameState.playerY][gameState.playerX + 1] === 0) {
+                gameState.playerX++;
+                moved = true;
+            }
+
+            if (moved) {
+                gameState.lastMoveTime = now;
+                checkCollisions();
+                updateVisibility();
+            }
+        }
+
+        function checkCollisions() {
+            gameState.food = gameState.food.filter(f => {
+                if (f.x === gameState.playerX && f.y === gameState.playerY) {
+                    gameState.hunger = Math.min(100, gameState.hunger + 30);
+                    return false;
+                }
+                return true;
+            });
+
+            gameState.water = gameState.water.filter(w => {
+                if (w.x === gameState.playerX && w.y === gameState.playerY) {
+                    gameState.thirst = Math.min(100, gameState.thirst + 30);
+                    return false;
+                }
+                return true;
+            });
+
+            gameState.enemies.forEach(e => {
+                if (e.x === gameState.playerX && e.y === gameState.playerY) {
+                    gameState.hp -= 20;
+                }
+            });
+
+            if (gameState.playerX === gameState.exitX && gameState.playerY === gameState.exitY) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+        }
+
+        function updateGameState(deltaTime) {
+            gameState.hunger -= config.hunger_rate * deltaTime / 16.67;
+            gameState.thirst -= config.thirst_rate * deltaTime / 16.67;
+
+            if (gameState.hunger < 0) {
+                gameState.hunger = 0;
+                gameState.hp -= 1 * deltaTime / 16.67;
+            }
+
+            if (gameState.thirst < 0) {
+                gameState.thirst = 0;
+                gameState.hp -= 2 * deltaTime / 16.67;
+            }
+
+            gameState.hp = Math.max(0, gameState.hp);
+
+            if (gameState.hp <= 0) {
+                gameState.running = false;
+                document.getElementById('gameOverMessage').textContent = 'HPがなくなってしまった...';
+                document.getElementById('gameOverScreen').style.display = 'flex';
+                return;
+            }
+        }
+
+        function drawMap() {
+            ctx.fillStyle = config.floor_color;
+            ctx.fillRect(0, 0, canvas.width, MAP_HEIGHT);
+
+            for (let y = 0; y < MAP_SIZE; y++) {
+                for (let x = 0; x < MAP_SIZE; x++) {
+                    const px = x * CELL_SIZE;
+                    const py = y * CELL_SIZE;
+
+                    if (gameState.map[y][x] === 1) {
+                        if (gameState.explored[y][x]) {
+                            ctx.fillStyle = config.wall_color;
+                            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+                        }
+                    } else {
+                        if (gameState.visible[y][x]) {
+                            ctx.fillStyle = config.floor_color;
+                            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+                        } else if (gameState.explored[y][x]) {
+                            ctx.fillStyle = '#0a0a0a';
+                            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+                        }
+                    }
+                }
+            }
+
+            gameState.food.forEach(f => {
+                if (gameState.visible[f.y][f.x]) {
+                    ctx.fillStyle = config.food_color;
+                    ctx.beginPath();
+                    ctx.arc(f.x * CELL_SIZE + CELL_SIZE / 2, f.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            gameState.water.forEach(w => {
+                if (gameState.visible[w.y][w.x]) {
+                    ctx.fillStyle = '#4299e1';
+                    ctx.beginPath();
+                    ctx.arc(w.x * CELL_SIZE + CELL_SIZE / 2, w.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            gameState.enemies.forEach(e => {
+                if (gameState.visible[e.y][e.x]) {
+                    ctx.fillStyle = '#f56565';
+                    ctx.beginPath();
+                    ctx.arc(e.x * CELL_SIZE + CELL_SIZE / 2, e.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            if (gameState.visible[gameState.exitY][gameState.exitX]) {
+                ctx.fillStyle = config.exit_color;
+                ctx.beginPath();
+                ctx.arc(gameState.exitX * CELL_SIZE + CELL_SIZE / 2, gameState.exitY * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = config.player_color;
+            ctx.beginPath();
+            ctx.arc(gameState.playerX * CELL_SIZE + CELL_SIZE / 2, gameState.playerY * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawHUD() {
+            const hudY = MAP_HEIGHT;
+
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, hudY, canvas.width, HUD_HEIGHT);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 14px Arial';
+
+            const hpPercent = Math.ceil(gameState.hp);
+            const hungerPercent = Math.ceil(gameState.hunger);
+            const thirstPercent = Math.ceil(gameState.thirst);
+
+            ctx.fillText('HP: ' + hpPercent + '/100', 10, hudY + 25);
+            ctx.fillText('空腹: ' + hungerPercent + '/100', 130, hudY + 25);
+            ctx.fillText('渇き: ' + thirstPercent + '/100', 280, hudY + 25);
+
+            const dx = gameState.exitX - gameState.playerX;
+            const dy = gameState.exitY - gameState.playerY;
+            const angle = Math.atan2(dy, dx);
+            const arrowX = canvas.width - 40;
+            const arrowY = hudY + 25;
+
+            ctx.save();
+            ctx.translate(arrowX, arrowY);
+            ctx.rotate(angle);
+            ctx.strokeStyle = config.exit_color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-10, -8);
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-10, 8);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#aaa';
+            ctx.fillText('WASD: 移動', 10, hudY + 50);
+        }
+
+        function gameLoop(lastTime = 0) {
+            if (gameState.running) {
+                const now = Date.now();
+                const deltaTime = Math.min(now - lastTime, 100);
+
+                updateGameState(deltaTime);
+                drawMap();
+                drawHUD();
+
+                requestAnimationFrame(() => gameLoop(now));
+            }
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        document.addEventListener('keydown', handleInput);
+    </script>
+</body>
+</html>

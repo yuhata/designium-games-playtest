@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MINI WORLD</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #333;
+            background: #000;
+        }
+        canvas {
+            display: block;
+        }
+        #startScreen, #clearScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            z-index: 100;
+            gap: 20px;
+        }
+        #startScreen {
+            display: flex;
+        }
+        #clearScreen, #gameOverScreen {
+            display: none;
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 1.1em;
+            text-align: center;
+            max-width: 450px;
+            line-height: 1.6;
+        }
+        button {
+            padding: 12px 35px;
+            font-size: 1.05em;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #3182ce;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1>MINI WORLD</h1>
+            <p>ワールドを探索して、全てのクエストを完了しよう!</p>
+            <p style="font-size: 0.9em; opacity: 0.8;">
+                WASD: 移動 | スペース: インタラクト
+            </p>
+            <button onclick="startGame()">START</button>
+        </div>
+        <div id="clearScreen">
+            <h1>CLEAR!</h1>
+            <p>全てのクエストを完了しました!</p>
+            <button onclick="retryGame()">もう一度遊ぶ</button>
+        </div>
+        <div id="gameOverScreen">
+            <h1>GAME OVER</h1>
+            <p>ゲームオーバーです</p>
+            <button onclick="retryGame()">もう一度遊ぶ</button>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // Config
+        const config = {
+            title: 'MINI WORLD',
+            bg_color: '#2d4a1e',
+            road_color: '#8b7355',
+            player_color: '#f6e05e',
+            npc_color: '#4299e1',
+            treasure_color: '#d69e2e',
+            map_width: 800,
+            map_height: 800,
+            quest_count: 3
+        };
+
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 480;
+        canvas.height = 480;
+        document.getElementById('gameContainer').style.width = canvas.width + 'px';
+        document.getElementById('gameContainer').style.height = canvas.height + 'px';
+        document.body.style.background = config.bg_color;
+
+        // Game state
+        const gameState = {
+            running: false,
+            player: {
+                x: 400,
+                y: 400,
+                radius: 8,
+                speed: 3
+            },
+            npcs: [
+                { x: 150, y: 150, radius: 8, talked: false },
+                { x: 650, y: 650, radius: 8, talked: false }
+            ],
+            treasures: [
+                { x: 350, y: 550, width: 16, height: 16, opened: false },
+                { x: 550, y: 250, width: 16, height: 16, opened: false }
+            ],
+            goal: { x: 400, y: 100, radius: 40, reached: false },
+            keys: {},
+            quests: [
+                { id: 'npc', name: 'NPCと話す', completed: false },
+                { id: 'treasure', name: '宝箱を開ける', completed: false },
+                { id: 'goal', name: '特定エリアに到達', completed: false }
+            ],
+            cameraX: config.map_width / 2 - canvas.width / 2,
+            cameraY: config.map_height / 2 - canvas.height / 2
+        };
+
+        // Input handling
+        document.addEventListener('keydown', (e) => {
+            gameState.keys[e.key.toUpperCase()] = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            gameState.keys[e.key.toUpperCase()] = false;
+        });
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameState.running = true;
+            gameState.player.x = 400;
+            gameState.player.y = 400;
+            gameState.npcs.forEach(npc => npc.talked = false);
+            gameState.treasures.forEach(t => t.opened = false);
+            gameState.goal.reached = false;
+            gameState.quests.forEach(q => q.completed = false);
+            gameState.cameraX = config.map_width / 2 - canvas.width / 2;
+            gameState.cameraY = config.map_height / 2 - canvas.height / 2;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function retryGame() {
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('clearScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            gameState.running = false;
+        }
+
+        function updatePlayer() {
+            const speed = gameState.player.speed;
+            if (gameState.keys['W']) gameState.player.y -= speed;
+            if (gameState.keys['S']) gameState.player.y += speed;
+            if (gameState.keys['A']) gameState.player.x -= speed;
+            if (gameState.keys['D']) gameState.player.x += speed;
+
+            gameState.player.x = Math.max(gameState.player.radius, Math.min(config.map_width - gameState.player.radius, gameState.player.x));
+            gameState.player.y = Math.max(gameState.player.radius, Math.min(config.map_height - gameState.player.radius, gameState.player.y));
+
+            gameState.cameraX = gameState.player.x - canvas.width / 2;
+            gameState.cameraY = gameState.player.y - canvas.height / 2;
+            gameState.cameraX = Math.max(0, Math.min(config.map_width - canvas.width, gameState.cameraX));
+            gameState.cameraY = Math.max(0, Math.min(config.map_height - canvas.height, gameState.cameraY));
+        }
+
+        function checkInteractions() {
+            const interactRange = 30;
+            if (gameState.keys[' ']) {
+                gameState.npcs.forEach(npc => {
+                    const dist = Math.sqrt((gameState.player.x - npc.x) ** 2 + (gameState.player.y - npc.y) ** 2);
+                    if (dist < interactRange && !npc.talked) {
+                        npc.talked = true;
+                        if (!gameState.quests[0].completed) {
+                            gameState.quests[0].completed = true;
+                        }
+                    }
+                });
+
+                gameState.treasures.forEach(treasure => {
+                    const dist = Math.sqrt((gameState.player.x - treasure.x) ** 2 + (gameState.player.y - treasure.y) ** 2);
+                    if (dist < interactRange && !treasure.opened) {
+                        treasure.opened = true;
+                        if (!gameState.quests[1].completed) {
+                            gameState.quests[1].completed = true;
+                        }
+                    }
+                });
+            }
+
+            const goalDist = Math.sqrt((gameState.player.x - gameState.goal.x) ** 2 + (gameState.player.y - gameState.goal.y) ** 2);
+            if (goalDist < gameState.goal.radius && !gameState.goal.reached) {
+                gameState.goal.reached = true;
+                gameState.quests[2].completed = true;
+            }
+        }
+
+        function drawWorld() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-gameState.cameraX, -gameState.cameraY);
+
+            ctx.fillStyle = '#a78bfa';
+            ctx.beginPath();
+            ctx.arc(gameState.goal.x, gameState.goal.y, gameState.goal.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = config.npc_color;
+            gameState.npcs.forEach(npc => {
+                ctx.beginPath();
+                ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = config.treasure_color;
+            gameState.treasures.forEach(treasure => {
+                ctx.fillRect(treasure.x - treasure.width / 2, treasure.y - treasure.height / 2, treasure.width, treasure.height);
+            });
+
+            ctx.fillStyle = config.player_color;
+            ctx.beginPath();
+            ctx.arc(gameState.player.x, gameState.player.y, gameState.player.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('Quests:', 10, 20);
+            
+            gameState.quests.forEach((quest, index) => {
+                const status = quest.completed ? '✓' : '✗';
+                ctx.font = '13px Arial';
+                ctx.fillText(status + ' ' + quest.name, 10, 40 + index * 18);
+            });
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '11px Arial';
+            ctx.fillText('WASD: Move | SPACE: Interact', 10, canvas.height - 10);
+
+            drawMinimap();
+        }
+
+        function drawMinimap() {
+            const minimapX = canvas.width - 110;
+            const minimapY = 10;
+            const minimapWidth = 100;
+            const minimapHeight = 100;
+            const scaleX = minimapWidth / config.map_width;
+            const scaleY = minimapHeight / config.map_height;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(minimapX, minimapY, minimapWidth, minimapHeight);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.strokeRect(minimapX, minimapY, minimapWidth, minimapHeight);
+
+            ctx.fillStyle = '#a78bfa';
+            ctx.beginPath();
+            ctx.arc(minimapX + gameState.goal.x * scaleX, minimapY + gameState.goal.y * scaleY, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = config.npc_color;
+            gameState.npcs.forEach(npc => {
+                ctx.beginPath();
+                ctx.arc(minimapX + npc.x * scaleX, minimapY + npc.y * scaleY, 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = config.treasure_color;
+            gameState.treasures.forEach(treasure => {
+                ctx.fillRect(minimapX + treasure.x * scaleX - 2, minimapY + treasure.y * scaleY - 2, 4, 4);
+            });
+
+            ctx.fillStyle = config.player_color;
+            ctx.beginPath();
+            ctx.arc(minimapX + gameState.player.x * scaleX, minimapY + gameState.player.y * scaleY, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function checkWinCondition() {
+            const allQuestsCompleted = gameState.quests.every(q => q.completed);
+            if (allQuestsCompleted) {
+                gameState.running = false;
+                document.getElementById('clearScreen').style.display = 'flex';
+                return;
+            }
+        }
+
+        function gameLoop() {
+            if (gameState.running) {
+                updatePlayer();
+                checkInteractions();
+                checkWinCondition();
+                drawWorld();
+                drawHUD();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>
