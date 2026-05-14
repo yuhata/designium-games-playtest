@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AUTO BATTLE RPG</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0814; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+#app { width: 480px; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; text-align: center; max-width: 380px; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #553388; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #7755aa; }
+/* combat area */
+#battleArea { background: #100c1e; border: 2px solid #332255; border-radius: 10px; padding: 16px; margin-bottom: 16px; min-height: 200px; }
+.combatant { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.combatant-name { font-size: 14px; color: #bbb; width: 100px; }
+.hp-bar-bg { flex: 1; height: 14px; background: #222; border-radius: 4px; margin: 0 10px; overflow: hidden; }
+.hp-bar { height: 100%; background: #44cc55; border-radius: 4px; transition: width 0.3s; }
+.hp-text { font-size: 13px; color: #888; width: 70px; text-align: right; }
+#battleLog { background: #0a0818; border: 1px solid #222; border-radius: 6px; padding: 10px; height: 100px; overflow-y: auto; font-size: 12px; color: #888; margin-bottom: 12px; }
+#battleLog p { margin-bottom: 4px; }
+#battleLog p.dmg { color: #ff7744; }
+#battleLog p.heal { color: #44ff88; }
+#battleLog p.win { color: #ffdd44; font-weight: bold; }
+/* equip */
+#equipArea { background: #0e0c1c; border: 1px solid #333; border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+#equipArea h3 { font-size: 14px; color: #aaa; margin-bottom: 10px; }
+.equip-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+.equip-btn { padding: 7px 14px; font-size: 13px; background: #223344; color: #ccc; border: 1px solid #334455; border-radius: 5px; cursor: pointer; }
+.equip-btn.active { background: #554488; border-color: #8866cc; color: #fff; }
+.equip-btn:hover { background: #334455; }
+/* skill */
+#skillArea { background: #0e0c1c; border: 1px solid #333; border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+#skillArea h3 { font-size: 14px; color: #aaa; margin-bottom: 10px; }
+.skill-btn { padding: 8px 16px; font-size: 13px; background: #442233; color: #cc88aa; border: 1px solid #553344; border-radius: 5px; cursor: pointer; margin-right: 8px; }
+.skill-btn:hover { background: #553344; }
+.skill-btn:disabled { opacity: 0.4; cursor: default; }
+/* start battle */
+#battleControls { display: flex; gap: 12px; align-items: center; }
+#startBattleBtn { padding: 10px 24px; font-size: 16px; background: #553388; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+#startBattleBtn:hover { background: #7755aa; }
+#startBattleBtn:disabled { opacity: 0.4; cursor: default; }
+#waveLabel { font-size: 14px; color: #888; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>AUTO BATTLE RPG</h1>
+  <p>装備とスキルを選んでバトル開始！</p>
+  <p>バトルは1秒ごとに自動進行する。</p>
+  <p>ラスボス（WAVE 5）を撃破せよ！</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="gameoverScreen" class="screen" style="display:none;">
+  <h1>DEFEATED...</h1>
+  <p id="goWave"></p>
+  <button onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>VICTORY!</h1>
+  <p>ラスボスを撃破した！</p>
+  <p id="clWave"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<div id="app" style="display:none; padding: 24px;">
+
+  <div id="battleArea">
+    <div class="combatant">
+      <div class="combatant-name" id="enemyName">—</div>
+      <div class="hp-bar-bg"><div class="hp-bar" id="enemyHpBar" style="width:100%;background:#cc4444;"></div></div>
+      <div class="hp-text" id="enemyHpText">—</div>
+    </div>
+    <div class="combatant">
+      <div class="combatant-name">勇者</div>
+      <div class="hp-bar-bg"><div class="hp-bar" id="playerHpBar" style="width:100%;"></div></div>
+      <div class="hp-text" id="playerHpText">—</div>
+    </div>
+    <div id="battleLog"></div>
+  </div>
+
+  <div id="equipArea">
+    <h3>装備を選択（ひとつ）</h3>
+    <div class="equip-grid">
+      <button class="equip-btn active" id="equip-sword"   onclick="selectEquip('sword')">⚔ 剣 (ATK+5)</button>
+      <button class="equip-btn"        id="equip-shield"  onclick="selectEquip('shield')">🛡 盾 (DEF+5)</button>
+      <button class="equip-btn"        id="equip-staff"   onclick="selectEquip('staff')">🔮 杖 (MAGIC+8)</button>
+    </div>
+  </div>
+
+  <div id="skillArea">
+    <h3>スキル（クールダウンあり）</h3>
+    <button class="skill-btn" id="skill-attack" onclick="useSkill('attack')">⚡ 烈火撃 (×2)</button>
+    <button class="skill-btn" id="skill-heal"   onclick="useSkill('heal')">💚 回復 (+30HP)</button>
+    <button class="skill-btn" id="skill-guard"  onclick="useSkill('guard')">🔵 防御 (次の攻撃無効)</button>
+  </div>
+
+  <div id="battleControls">
+    <button id="startBattleBtn" onclick="beginBattle()">⚔ 戦闘開始</button>
+    <div id="waveLabel">WAVE 0 / 5</div>
+  </div>
+
+</div>
+
+<script>
+let loopId = null;
+let battleIntervalId = null;
+let gameState = {
+  running: false,
+  wave: 0,
+  tick: 0,
+  inBattle: false,
+  equip: 'sword',
+  guardActive: false,
+  skillCooldowns: { attack: 0, heal: 0, guard: 0 },
+  player: { hp: 100, maxHp: 100, atk: 10, def: 3 },
+  enemy: { hp: 0, maxHp: 0, atk: 0, name: '' }
+};
+
+const ENEMIES = [
+  { name: 'スライム',   hp: 40,  atk: 5,  reward: 5  },
+  { name: 'ゴブリン',   hp: 70,  atk: 9,  reward: 10 },
+  { name: 'トロル',     hp: 120, atk: 14, reward: 15 },
+  { name: 'ドラゴン',   hp: 180, atk: 18, reward: 25 },
+  { name: '魔王 (BOSS)',hp: 300, atk: 24, reward: 0  },
+];
+
+const EQUIP_BONUS = {
+  sword:  { atk: 5, def: 0, magic: 0 },
+  shield: { atk: 0, def: 5, magic: 0 },
+  staff:  { atk: 0, def: 0, magic: 8 },
+};
+
+function getPlayerAtk() {
+  const b = EQUIP_BONUS[gameState.equip];
+  return gameState.player.atk + b.atk + b.magic;
+}
+function getPlayerDef() {
+  return gameState.player.def + EQUIP_BONUS[gameState.equip].def;
+}
+
+function initGame() {
+  gameState.wave = 0;
+  gameState.tick = 0;
+  gameState.inBattle = false;
+  gameState.equip = 'sword';
+  gameState.guardActive = false;
+  gameState.skillCooldowns = { attack: 0, heal: 0, guard: 0 };
+  gameState.player = { hp: 100, maxHp: 100, atk: 10, def: 3 };
+  gameState.enemy = { hp: 0, maxHp: 0, atk: 0, name: '' };
+  clearLog();
+  logMsg('装備とスキルを選んで「戦闘開始」！');
+  updateHpBars();
+  document.getElementById('waveLabel').textContent = 'WAVE 0 / 5';
+  document.getElementById('startBattleBtn').disabled = false;
+  selectEquip('sword');
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  if (battleIntervalId) { clearInterval(battleIntervalId); battleIntervalId = null; }
+  document.getElementById('gameoverScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+function selectEquip(id) {
+  if (gameState.inBattle) return;
+  gameState.equip = id;
+  ['sword','shield','staff'].forEach(e => {
+    document.getElementById('equip-' + e).className = 'equip-btn' + (e === id ? ' active' : '');
+  });
+}
+
+function useSkill(id) {
+  if (!gameState.inBattle) return;
+  if (gameState.skillCooldowns[id] > 0) return;
+  if (id === 'attack') {
+    const dmg = getPlayerAtk() * 2;
+    gameState.enemy.hp -= dmg;
+    logMsg(`烈火撃! ${dmg}ダメージ！`, 'dmg');
+    gameState.skillCooldowns.attack = 5;
+  } else if (id === 'heal') {
+    const h = 30;
+    gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + h);
+    logMsg(`回復魔法！ +${h}HP`, 'heal');
+    gameState.skillCooldowns.heal = 4;
+  } else if (id === 'guard') {
+    gameState.guardActive = true;
+    logMsg('防御構え！次の攻撃を無効化', 'heal');
+    gameState.skillCooldowns.guard = 6;
+  }
+  updateHpBars();
+  checkBattleEnd();
+}
+
+function beginBattle() {
+  if (gameState.inBattle) return;
+  if (gameState.wave >= 5) return;
+  gameState.wave++;
+  const def = ENEMIES[gameState.wave - 1];
+  gameState.enemy = { hp: def.hp, maxHp: def.hp, atk: def.atk, name: def.name };
+  gameState.inBattle = true;
+  document.getElementById('startBattleBtn').disabled = true;
+  document.getElementById('waveLabel').textContent = `WAVE ${gameState.wave} / 5`;
+  document.getElementById('enemyName').textContent = def.name;
+  clearLog();
+  logMsg(`${def.name}が現れた！`);
+  updateHpBars();
+  if (battleIntervalId) clearInterval(battleIntervalId);
+  battleIntervalId = setInterval(autoBattle, 1000);
+}
+
+function autoBattle() {
+  if (!gameState.running || !gameState.inBattle) return;
+  // cooldowns
+  ['attack','heal','guard'].forEach(k => {
+    if (gameState.skillCooldowns[k] > 0) gameState.skillCooldowns[k]--;
+  });
+  updateSkillBtns();
+
+  // player auto-attack
+  const pdmg = Math.max(1, getPlayerAtk() - Math.floor(gameState.enemy.atk * 0.1));
+  gameState.enemy.hp -= pdmg;
+  logMsg(`勇者の攻撃! ${pdmg}ダメージ`, 'dmg');
+
+  if (checkBattleEnd()) return;
+
+  // enemy attack
+  const raw = gameState.enemy.atk;
+  const reduced = Math.max(1, raw - getPlayerDef());
+  if (gameState.guardActive) {
+    logMsg(`${gameState.enemy.name}の攻撃を防いだ！`, 'heal');
+    gameState.guardActive = false;
+  } else {
+    gameState.player.hp -= reduced;
+    logMsg(`${gameState.enemy.name}の攻撃! ${reduced}ダメージ`);
+  }
+  updateHpBars();
+  checkBattleEnd();
+}
+
+function checkBattleEnd() {
+  if (gameState.enemy.hp <= 0) {
+    clearInterval(battleIntervalId); battleIntervalId = null;
+    gameState.inBattle = false;
+    logMsg(`${gameState.enemy.name}を倒した！`, 'win');
+    // stat boost
+    gameState.player.maxHp += 10;
+    gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + 20);
+    gameState.player.atk += 2;
+    updateHpBars();
+    if (gameState.wave >= 5) {
+      endGame(true);
+    } else {
+      document.getElementById('startBattleBtn').disabled = false;
+      logMsg('次のWAVEへ進もう！');
+    }
+    return true;
+  }
+  if (gameState.player.hp <= 0) {
+    gameState.player.hp = 0;
+    clearInterval(battleIntervalId); battleIntervalId = null;
+    gameState.inBattle = false;
+    updateHpBars();
+    endGame(false);
+    return true;
+  }
+  return false;
+}
+
+function endGame(won) {
+  gameState.running = false;
+  if (won) {
+    document.getElementById('clWave').textContent = `全5WAVE クリア！残HP: ${gameState.player.hp}`;
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goWave').textContent = `WAVE ${gameState.wave}で全滅`;
+    document.getElementById('gameoverScreen').style.display = 'flex';
+  }
+}
+
+function updateHpBars() {
+  const p = gameState.player;
+  const e = gameState.enemy;
+  document.getElementById('playerHpBar').style.width = Math.max(0, p.hp / p.maxHp * 100) + '%';
+  document.getElementById('playerHpText').textContent = `${Math.max(0, p.hp)}/${p.maxHp}`;
+  if (e.maxHp > 0) {
+    document.getElementById('enemyHpBar').style.width = Math.max(0, e.hp / e.maxHp * 100) + '%';
+    document.getElementById('enemyHpText').textContent = `${Math.max(0, e.hp)}/${e.maxHp}`;
+  }
+}
+
+function updateSkillBtns() {
+  ['attack','heal','guard'].forEach(k => {
+    const btn = document.getElementById('skill-' + k);
+    const cd = gameState.skillCooldowns[k];
+    btn.disabled = cd > 0 || !gameState.inBattle;
+    if (cd > 0) {
+      const labels = { attack:'⚡ 烈火撃', heal:'💚 回復', guard:'🔵 防御' };
+      btn.textContent = `${labels[k]} (${cd}s)`;
+    } else {
+      const labels = { attack:'⚡ 烈火撃 (×2)', heal:'💚 回復 (+30HP)', guard:'🔵 防御 (次無効)' };
+      btn.textContent = labels[k];
+    }
+  });
+}
+
+function logMsg(text, cls) {
+  const log = document.getElementById('battleLog');
+  const p = document.createElement('p');
+  if (cls) p.className = cls;
+  p.textContent = text;
+  log.appendChild(p);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('battleLog').innerHTML = '';
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  gameState.tick++;
+}
+</script>
+</body>
+</html>

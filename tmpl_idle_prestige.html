@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRESTIGE IDLE</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a14; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+#app { width: 480px; color: #eee; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; text-align: center; max-width: 380px; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #884400; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #aa5500; }
+/* game UI */
+#goldDisplay { font-size: 36px; font-weight: bold; color: #f0c040; margin-bottom: 6px; }
+#rateDisplay { font-size: 14px; color: #888; margin-bottom: 20px; }
+.upgrade { background: #1a1a2a; border: 1px solid #333; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+.upgrade-name { font-size: 15px; color: #ddd; }
+.upgrade-info { font-size: 12px; color: #888; margin-top: 4px; }
+.upgrade-btn { padding: 8px 18px; font-size: 14px; background: #334455; color: #ccc; border: none; border-radius: 5px; cursor: pointer; transition: background 0.1s; }
+.upgrade-btn:hover { background: #445566; }
+.upgrade-btn:disabled { opacity: 0.4; cursor: default; }
+#prestigeZone { margin-top: 20px; padding: 16px; background: #1a0a00; border: 2px solid #663300; border-radius: 10px; display: none; }
+#prestigeZone h3 { color: #f0a040; margin-bottom: 8px; }
+#prestigeZone p { font-size: 13px; color: #aa7744; margin-bottom: 12px; }
+#prestigeBtn { padding: 10px 28px; font-size: 16px; background: #884400; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+#prestigeBtn:hover { background: #aa5500; }
+#prestigeCount { font-size: 13px; color: #f0c040; margin-top: 8px; }
+#clearBanner { display: none; background: #003322; border: 2px solid #00cc66; border-radius: 10px; padding: 16px; margin-top: 16px; color: #00ff88; text-align: center; font-size: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>PRESTIGE IDLE</h1>
+  <p>ゴールドを貯めてアップグレード！</p>
+  <p>10,000G 到達でプレスティージ可能。</p>
+  <p>リセットするたびに永続乗数が上がる。</p>
+  <p style="color:#666;font-size:13px;">目標: プレスティージ3回</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>PRESTIGE MASTER!</h1>
+  <p>3回プレスティージ達成！</p>
+  <p id="clTotal"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<div id="app" style="display:none; padding: 24px;">
+  <div id="goldDisplay">0 G</div>
+  <div id="rateDisplay">生産: 1.0 G/sec</div>
+
+  <div id="upgradesArea"></div>
+
+  <div id="prestigeZone">
+    <h3>⭐ プレスティージ</h3>
+    <p>全リセットの代わりに永続乗数 +0.5 を獲得</p>
+    <button id="prestigeBtn" onclick="doPrestige()">プレスティージ実行</button>
+    <div id="prestigeCount">現在の乗数: ×1.0 / 達成: 0/3回</div>
+  </div>
+
+  <div id="clearBanner">🏆 3回プレスティージ達成！</div>
+</div>
+
+<script>
+let loopId = null;
+let gameState = {
+  running: false,
+  gold: 0,
+  prestigeCount: 0,
+  prestigeMultiplier: 1.0,
+  tick: 0
+};
+
+const UPGRADES_DEF = [
+  { id: 'basic',   name: 'ベーシック採掘',   baseCost: 10,  baseRate: 0.5,  level: 0, maxLevel: 20 },
+  { id: 'worker',  name: 'ワーカー配置',      baseCost: 80,  baseRate: 2.0,  level: 0, maxLevel: 15 },
+  { id: 'factory', name: 'ファクトリー建設',  baseCost: 500, baseRate: 10.0, level: 0, maxLevel: 10 },
+  { id: 'power',   name: 'パワープラント',    baseCost: 3000,baseRate: 50.0, level: 0, maxLevel: 8  },
+];
+
+let upgrades = [];
+
+function cloneUpgrades() {
+  return UPGRADES_DEF.map(u => ({ ...u, level: 0 }));
+}
+
+function getRate() {
+  let rate = 0.2; // base
+  for (const u of upgrades) rate += u.baseRate * u.level;
+  return rate * gameState.prestigeMultiplier;
+}
+
+function getCost(u) {
+  return Math.floor(u.baseCost * Math.pow(1.15, u.level));
+}
+
+function initGame() {
+  gameState.gold = 0;
+  gameState.tick = 0;
+  upgrades = cloneUpgrades();
+  renderUpgrades();
+  updateDisplay();
+  document.getElementById('prestigeZone').style.display = 'none';
+  document.getElementById('clearBanner').style.display = 'none';
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  gameState.prestigeCount = 0;
+  gameState.prestigeMultiplier = 1.0;
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+function renderUpgrades() {
+  const area = document.getElementById('upgradesArea');
+  area.innerHTML = '';
+  for (const u of upgrades) {
+    if (u.level >= u.maxLevel) continue;
+    const cost = getCost(u);
+    const div = document.createElement('div');
+    div.className = 'upgrade';
+    div.innerHTML = `
+      <div>
+        <div class="upgrade-name">${u.name} Lv${u.level}</div>
+        <div class="upgrade-info">+${(u.baseRate * gameState.prestigeMultiplier).toFixed(1)} G/sec / 最大${u.maxLevel}</div>
+      </div>
+      <button class="upgrade-btn" id="btn-${u.id}" onclick="buyUpgrade('${u.id}')" ${gameState.gold < cost ? 'disabled' : ''}>
+        購入 ${formatNum(cost)}G
+      </button>`;
+    area.appendChild(div);
+  }
+}
+
+function buyUpgrade(id) {
+  const u = upgrades.find(x => x.id === id);
+  if (!u || u.level >= u.maxLevel) return;
+  const cost = getCost(u);
+  if (gameState.gold < cost) return;
+  gameState.gold -= cost;
+  u.level++;
+  renderUpgrades();
+  updateDisplay();
+}
+
+function doPrestige() {
+  if (gameState.gold < 10000) return;
+  gameState.prestigeCount++;
+  gameState.prestigeMultiplier += 0.5;
+  gameState.gold = 0;
+  upgrades = cloneUpgrades();
+  renderUpgrades();
+  updateDisplay();
+  if (gameState.prestigeCount >= 3) {
+    endGame();
+  }
+}
+
+function endGame() {
+  gameState.running = false;
+  document.getElementById('clTotal').textContent = `累計生産: ${formatNum(Math.floor(gameState.tick / 60))}秒プレイ`;
+  document.getElementById('clearScreen').style.display = 'flex';
+}
+
+function formatNum(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return Math.floor(n).toString();
+}
+
+function updateDisplay() {
+  document.getElementById('goldDisplay').textContent = formatNum(gameState.gold) + ' G';
+  const rate = getRate();
+  document.getElementById('rateDisplay').textContent = `生産: ${rate.toFixed(2)} G/sec | 乗数: ×${gameState.prestigeMultiplier.toFixed(1)}`;
+  document.getElementById('prestigeCount').textContent =
+    `現在の乗数: ×${gameState.prestigeMultiplier.toFixed(1)} / 達成: ${gameState.prestigeCount}/3回`;
+
+  // prestige button
+  const pzone = document.getElementById('prestigeZone');
+  pzone.style.display = gameState.gold >= 10000 ? 'block' : 'none';
+
+  // upgrade buttons
+  for (const u of upgrades) {
+    const btn = document.getElementById('btn-' + u.id);
+    if (btn) btn.disabled = gameState.gold < getCost(u);
+  }
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  gameState.tick++;
+  // gold per tick (60fps approx)
+  gameState.gold += getRate() / 60;
+  if (gameState.tick % 10 === 0) updateDisplay();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOLLEYBALL</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #08080e; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+canvas { display: block; border: 2px solid #222; cursor: pointer; }
+#hud { margin-top: 8px; display: flex; gap: 28px; font-size: 14px; color: #ccc; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; text-align: center; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #446688; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #5588aa; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>VOLLEYBALL</h1>
+  <p>クリックでサーブ＆スパイク！</p>
+  <p>ラリーを続けてスコアを稼ごう</p>
+  <p>ボールが自コートの床に落ちると相手の点</p>
+  <p style="color:#666;font-size:13px;">15点先取でクリア</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="gameoverScreen" class="screen" style="display:none;">
+  <h1>DEFEATED</h1>
+  <p id="goScore"></p>
+  <button onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>MATCH WIN!</h1>
+  <p id="clScore"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<canvas id="gameCanvas" width="480" height="360"></canvas>
+<div id="hud">
+  <span>自分: <span id="myScore">0</span></span>
+  <span>CPU: <span id="cpuScore">0</span></span>
+  <span>ラリー: <span id="rallyHud">0</span></span>
+  <span>倍率: <span id="multHud">×1</span></span>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const NET_Y = H / 2;
+const FLOOR_Y = H - 20;
+const CEIL_Y = 20;
+
+let loopId = null;
+let cpuReturnId = null;
+let gameState = {
+  running: false,
+  myScore: 0,
+  cpuScore: 0,
+  rally: 0,
+  tick: 0,
+  phase: 'serve', // serve | play | cpu_return | point
+  pointTimer: 0,
+  lastScorer: '',
+  ballInPlay: false
+};
+
+let ball = {};
+let player = {}; // player avatar (bottom half)
+let cpu = {};    // cpu avatar (top half)
+
+function initGame() {
+  gameState.myScore = 0;
+  gameState.cpuScore = 0;
+  gameState.rally = 0;
+  gameState.tick = 0;
+  gameState.phase = 'serve';
+  gameState.pointTimer = 0;
+  gameState.ballInPlay = false;
+  resetPositions();
+}
+
+function resetPositions() {
+  ball = { x: W/2, y: FLOOR_Y - 50, vx: 0, vy: 0, r: 10 };
+  player = { x: W/2, y: FLOOR_Y - 25, w: 40, h: 16 };
+  cpu    = { x: W/2, y: CEIL_Y + 18,  w: 40, h: 16 };
+  gameState.phase = 'serve';
+  gameState.ballInPlay = false;
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  if (cpuReturnId) { clearInterval(cpuReturnId); cpuReturnId = null; }
+  document.getElementById('gameoverScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+const keys = {};
+document.addEventListener('keydown', e => { keys[e.key] = true; });
+document.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+canvas.addEventListener('click', e => {
+  if (!gameState.running) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+
+  if (gameState.phase === 'serve') {
+    // serve: launch ball toward CPU side
+    const spd = 7 + Math.random() * 2;
+    const angle = -0.9 - Math.random() * 0.4; // upward
+    ball.vx = (mx > W/2 ? 1 : -1) * spd * 0.5;
+    ball.vy = -spd;
+    gameState.phase = 'play';
+    gameState.ballInPlay = true;
+  } else if (gameState.phase === 'play') {
+    // spike if ball is near player
+    const dx = ball.x - player.x, dy = ball.y - player.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 60) {
+      // spike toward CPU territory
+      const mult = 1 + gameState.rally * 0.1;
+      ball.vx = (mx - W/2) / 50 * 6 * mult;
+      ball.vy = -(8 + Math.random() * 3) * mult;
+      gameState.rally++;
+    }
+  }
+});
+
+function cpuAI() {
+  if (!gameState.running) return;
+  if (gameState.phase !== 'cpu_return') return;
+  // CPU tries to return toward player side
+  const targetX = W/4 + Math.random() * W/2;
+  ball.vx = (targetX - ball.x) / 30;
+  ball.vy = (FLOOR_Y - ball.y) / 15;
+  // Add some speed
+  const spd = 5 + gameState.rally * 0.3 + Math.random() * 2;
+  const mag = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy) || 1;
+  ball.vx = (ball.vx / mag) * spd;
+  ball.vy = (ball.vy / mag) * spd;
+  gameState.phase = 'play';
+  gameState.rally++;
+}
+
+function update() {
+  gameState.tick++;
+
+  // player movement
+  const SPEED = 5;
+  if (keys['ArrowLeft']  || keys['a']) player.x = Math.max(player.w/2, player.x - SPEED);
+  if (keys['ArrowRight'] || keys['d']) player.x = Math.min(W - player.w/2, player.x + SPEED);
+
+  // point timer
+  if (gameState.phase === 'point') {
+    gameState.pointTimer--;
+    if (gameState.pointTimer <= 0) {
+      if (gameState.myScore >= 15) { endGame(true); return; }
+      if (gameState.cpuScore >= 15) { endGame(false); return; }
+      gameState.rally = 0;
+      resetPositions();
+    }
+    return;
+  }
+
+  if (gameState.phase === 'serve') return;
+
+  // physics
+  ball.vy += 0.3; // gravity
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // wall bounce
+  if (ball.x - ball.r < 0)   { ball.x = ball.r;     ball.vx = Math.abs(ball.vx) * 0.85; }
+  if (ball.x + ball.r > W)   { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * 0.85; }
+
+  // net collision (y around NET_Y, thin)
+  const netLeft = 0, netRight = W;
+  if (ball.y + ball.r >= NET_Y - 5 && ball.y - ball.r <= NET_Y + 5 &&
+      ball.x >= netLeft && ball.x <= netRight) {
+    if (ball.vy > 0) ball.vy = -Math.abs(ball.vy) * 0.8; // bounce off net top
+  }
+
+  // ball enters CPU zone (upper half)
+  if (ball.phase !== 'cpu_return' && ball.y < NET_Y && ball.vy < 0) {
+    // ball crossed net going up → now CPU's turn
+    if (gameState.phase === 'play') gameState.phase = 'cpu_return';
+  }
+
+  // CPU hit detection
+  if (gameState.phase === 'cpu_return' && ball.y <= cpu.y + 20 && ball.y >= CEIL_Y) {
+    const dx = Math.abs(ball.x - cpu.x);
+    if (dx < cpu.w) {
+      cpuAI();
+    }
+  }
+
+  // CPU ceiling miss (ball hits CEIL_Y without CPU touching)
+  if (ball.y - ball.r <= CEIL_Y) {
+    // CPU fails if ball in CPU zone
+    if (gameState.phase === 'cpu_return') {
+      ball.y = CEIL_Y + ball.r;
+      ball.vy = Math.abs(ball.vy) * 0.7;
+    }
+  }
+
+  // ball lands in player zone (FLOOR_Y)
+  if (ball.y + ball.r >= FLOOR_Y) {
+    ball.y = FLOOR_Y - ball.r;
+    // cpu scores
+    gameState.cpuScore++;
+    gameState.lastScorer = 'cpu';
+    gameState.phase = 'point';
+    gameState.pointTimer = 90;
+  }
+
+  // ball lands in CPU zone (ball hits back from ceiling)
+  if (ball.y - ball.r <= CEIL_Y && ball.phase === 'play') {
+    // player scores
+    gameState.myScore++;
+    gameState.lastScorer = 'player';
+    gameState.phase = 'point';
+    gameState.pointTimer = 90;
+  }
+
+  // player hits ball
+  if (gameState.phase === 'play' && ball.y >= FLOOR_Y - 60) {
+    const dx = Math.abs(ball.x - player.x);
+    if (ball.y + ball.r >= player.y - 10 && dx < player.w + 5 && ball.vy > 0) {
+      // auto-bounce if player doesn't click
+      ball.vy = -Math.abs(ball.vy) * 0.9 - 1;
+      ball.vy = Math.max(ball.vy, -8);
+    }
+  }
+
+  // CPU position tracks ball x
+  cpu.x += (ball.x - cpu.x) * 0.06;
+  cpu.x = Math.max(cpu.w/2, Math.min(W - cpu.w/2, cpu.x));
+
+  document.getElementById('myScore').textContent  = gameState.myScore;
+  document.getElementById('cpuScore').textContent = gameState.cpuScore;
+  document.getElementById('rallyHud').textContent = gameState.rally;
+  document.getElementById('multHud').textContent  = '×' + (1 + Math.floor(gameState.rally / 3));
+}
+
+function endGame(won) {
+  gameState.running = false;
+  if (won) {
+    document.getElementById('clScore').textContent = `${gameState.myScore} - ${gameState.cpuScore}`;
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goScore').textContent = `${gameState.myScore} - ${gameState.cpuScore}`;
+    document.getElementById('gameoverScreen').style.display = 'flex';
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#08080e';
+  ctx.fillRect(0, 0, W, H);
+
+  // court
+  ctx.fillStyle = '#0c1828';
+  ctx.fillRect(0, CEIL_Y, W, FLOOR_Y - CEIL_Y);
+
+  // court lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(10, CEIL_Y + 5, W - 20, FLOOR_Y - CEIL_Y - 10);
+
+  // score zone colors
+  ctx.fillStyle = 'rgba(80,120,200,0.05)';
+  ctx.fillRect(0, CEIL_Y, W, NET_Y - CEIL_Y);
+  ctx.fillStyle = 'rgba(200,80,80,0.05)';
+  ctx.fillRect(0, NET_Y, W, FLOOR_Y - NET_Y);
+
+  // net
+  ctx.fillStyle = '#666';
+  ctx.fillRect(0, NET_Y - 3, W, 6);
+  ctx.fillStyle = '#888';
+  for (let x = 0; x < W; x += 16) {
+    ctx.fillRect(x, NET_Y - 3, 8, 2);
+  }
+
+  // CPU
+  ctx.fillStyle = '#cc4444';
+  ctx.fillRect(cpu.x - cpu.w/2, cpu.y - cpu.h/2, cpu.w, cpu.h);
+  ctx.fillStyle = '#fff';
+  ctx.font = '11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('CPU', cpu.x, cpu.y + 4);
+
+  // player
+  ctx.fillStyle = '#4466cc';
+  ctx.fillRect(player.x - player.w/2, player.y - player.h/2, player.w, player.h);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('YOU', player.x, player.y + 4);
+
+  // ball
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fillStyle = '#f0e040';
+  ctx.fill();
+  ctx.strokeStyle = '#c0b020';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // point indicator
+  if (gameState.phase === 'point') {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(W/2 - 80, H/2 - 20, 160, 40);
+    ctx.fillStyle = gameState.lastScorer === 'player' ? '#44ff88' : '#ff4444';
+    ctx.font = 'bold 22px Arial';
+    ctx.fillText(gameState.lastScorer === 'player' ? '得点！' : '失点...', W/2, H/2 + 7);
+  }
+
+  // serve prompt
+  if (gameState.phase === 'serve') {
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = '14px Arial';
+    ctx.fillText('クリックでサーブ', W/2, FLOOR_Y - 70);
+  }
+
+  // score display
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = 'bold 28px Arial';
+  ctx.fillText(gameState.myScore, W/2 - 30, FLOOR_Y - 8);
+  ctx.fillText(gameState.cpuScore, W/2 + 10, CEIL_Y + 28);
+
+  ctx.textAlign = 'left';
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  update();
+  draw();
+}
+</script>
+</body>
+</html>

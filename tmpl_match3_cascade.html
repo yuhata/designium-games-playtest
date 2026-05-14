@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CASCADE MATCH 3</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0c0c18; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+canvas { display: block; border: 2px solid #222; cursor: pointer; }
+#hud { margin-top: 8px; display: flex; gap: 24px; font-size: 14px; color: #ccc; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #8844dd; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #aa66ff; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>CASCADE MATCH 3</h1>
+  <p>同色3つ以上でマッチ！</p>
+  <p>連鎖すると倍率ボーナス！</p>
+  <p style="color:#666;font-size:13px;">タイルをクリックして隣と入れ替え / 目標: 1500点</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="gameoverScreen" class="screen" style="display:none;">
+  <h1>TIME UP!</h1>
+  <p id="goScore"></p>
+  <button onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>CLEARED!</h1>
+  <p id="clScore"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<canvas id="gameCanvas" width="480" height="480"></canvas>
+<div id="hud">
+  <span>スコア: <span id="scoreHud">0</span>/1500</span>
+  <span>チェーン: <span id="chainHud">×1</span></span>
+  <span>時間: <span id="timeHud">90</span>s</span>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const COLS = 8, ROWS = 8;
+const TILE = 52;
+const OFFX = (W - COLS * TILE) / 2;
+const OFFY = (H - ROWS * TILE) / 2;
+const COLORS = ['#e84040','#40a0e8','#40cc60','#e0c020','#cc44cc','#e06820'];
+
+let loopId = null;
+let gameState = {
+  running: false,
+  score: 0,
+  chain: 0,
+  tick: 0,
+  timeLeft: 90 * 60,
+  phase: 'play', // play | fall | check | flash
+  flashTimer: 0,
+  selected: null,
+  animating: false
+};
+
+let grid = [];
+let flashCells = [];
+
+function makeGrid() {
+  const g = [];
+  for (let r = 0; r < ROWS; r++) {
+    g[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      g[r][c] = { color: Math.floor(Math.random() * COLORS.length), flash: 0 };
+    }
+  }
+  // ensure no initial matches
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      let tries = 0;
+      while (hasMatchAt(g, r, c) && tries < 20) {
+        g[r][c].color = Math.floor(Math.random() * COLORS.length);
+        tries++;
+      }
+    }
+  }
+  return g;
+}
+
+function hasMatchAt(g, r, c) {
+  const col = g[r][c].color;
+  let h = 1, v = 1;
+  if (c >= 2 && g[r][c-1].color === col && g[r][c-2].color === col) h = 3;
+  if (r >= 2 && g[r-1][c].color === col && g[r-2][c].color === col) v = 3;
+  return h >= 3 || v >= 3;
+}
+
+function findMatches(g) {
+  const marked = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      marked.push(false);
+    }
+  }
+  const idx = (r, c) => r * COLS + c;
+  // horizontal
+  for (let r = 0; r < ROWS; r++) {
+    let run = 1;
+    for (let c = 1; c <= COLS; c++) {
+      if (c < COLS && g[r][c].color === g[r][c-1].color) { run++; }
+      else {
+        if (run >= 3) for (let k = c - run; k < c; k++) marked[idx(r,k)] = true;
+        run = 1;
+      }
+    }
+  }
+  // vertical
+  for (let c = 0; c < COLS; c++) {
+    let run = 1;
+    for (let r = 1; r <= ROWS; r++) {
+      if (r < ROWS && g[r][c].color === g[r-1][c].color) { run++; }
+      else {
+        if (run >= 3) for (let k = r - run; k < r; k++) marked[idx(k,c)] = true;
+        run = 1;
+      }
+    }
+  }
+  const result = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (marked[idx(r,c)]) result.push({ r, c });
+  return result;
+}
+
+function applyGravity(g) {
+  let moved = false;
+  for (let c = 0; c < COLS; c++) {
+    let write = ROWS - 1;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (g[r][c] !== null) { g[write][c] = g[r][c]; if (write !== r) moved = true; write--; }
+    }
+    while (write >= 0) { g[write][c] = { color: Math.floor(Math.random() * COLORS.length), flash: 0 }; write--; moved = true; }
+  }
+  return moved;
+}
+
+function initGame() {
+  grid = makeGrid();
+  gameState.score = 0;
+  gameState.chain = 0;
+  gameState.tick = 0;
+  gameState.timeLeft = 90 * 60;
+  gameState.phase = 'play';
+  gameState.flashTimer = 0;
+  gameState.selected = null;
+  gameState.animating = false;
+  flashCells = [];
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  document.getElementById('gameoverScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+canvas.addEventListener('click', e => {
+  if (!gameState.running || gameState.animating) return;
+  if (gameState.phase !== 'play') return;
+  const r2 = canvas.getBoundingClientRect();
+  const mx = e.clientX - r2.left, my = e.clientY - r2.top;
+  const c = Math.floor((mx - OFFX) / TILE);
+  const r = Math.floor((my - OFFY) / TILE);
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) { gameState.selected = null; return; }
+
+  if (!gameState.selected) {
+    gameState.selected = { r, c };
+  } else {
+    const sel = gameState.selected;
+    const dr = Math.abs(r - sel.r), dc = Math.abs(c - sel.c);
+    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+      // swap
+      const tmp = grid[r][c];
+      grid[r][c] = grid[sel.r][sel.c];
+      grid[sel.r][sel.c] = tmp;
+      gameState.selected = null;
+      gameState.chain = 0;
+      // start check
+      processMatches();
+    } else {
+      gameState.selected = { r, c };
+    }
+  }
+});
+
+function processMatches() {
+  const matches = findMatches(grid);
+  if (matches.length === 0) return;
+  // mark flash
+  flashCells = matches;
+  for (const m of matches) grid[m.r][m.c].flash = 1;
+  gameState.chain++;
+  const pts = matches.length * 10 * gameState.chain;
+  gameState.score += pts;
+  gameState.animating = true;
+  gameState.flashTimer = 30;
+  gameState.phase = 'flash';
+}
+
+function update() {
+  gameState.tick++;
+  gameState.timeLeft--;
+  if (gameState.timeLeft <= 0) { endGame(false); return; }
+  if (gameState.score >= 1500) { endGame(true); return; }
+
+  if (gameState.phase === 'flash') {
+    gameState.flashTimer--;
+    if (gameState.flashTimer <= 0) {
+      // remove matched cells
+      for (const m of flashCells) grid[m.r][m.c] = null;
+      flashCells = [];
+      applyGravity(grid);
+      gameState.phase = 'check';
+      gameState.flashTimer = 20;
+    }
+  } else if (gameState.phase === 'check') {
+    gameState.flashTimer--;
+    if (gameState.flashTimer <= 0) {
+      const matches = findMatches(grid);
+      if (matches.length > 0) {
+        processMatches(); // cascade!
+      } else {
+        gameState.phase = 'play';
+        gameState.animating = false;
+        gameState.chain = 0;
+      }
+    }
+  }
+
+  document.getElementById('scoreHud').textContent = gameState.score;
+  document.getElementById('chainHud').textContent = '×' + gameState.chain;
+  document.getElementById('timeHud').textContent = Math.ceil(gameState.timeLeft / 60);
+}
+
+function endGame(won) {
+  gameState.running = false;
+  if (won) {
+    document.getElementById('clScore').textContent = `スコア: ${gameState.score}点！`;
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goScore').textContent = `スコア: ${gameState.score} / 1500`;
+    document.getElementById('gameoverScreen').style.display = 'flex';
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#0c0c18';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = OFFX + c * TILE, y = OFFY + r * TILE;
+      const cell = grid[r][c];
+      if (!cell) continue;
+
+      const flash = cell.flash && gameState.phase === 'flash' && Math.floor(gameState.flashTimer / 5) % 2 === 0;
+      ctx.fillStyle = flash ? '#ffffff' : COLORS[cell.color];
+      ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+
+      // border
+      if (gameState.selected && gameState.selected.r === r && gameState.selected.c === c) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x + 2, y + 2, TILE - 4, TILE - 4);
+      }
+    }
+  }
+
+  // chain popup
+  if (gameState.chain > 1 && gameState.phase === 'flash') {
+    ctx.fillStyle = '#ffdd44';
+    ctx.font = `bold ${24 + gameState.chain * 4}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`CHAIN ×${gameState.chain}!`, W/2, H/2);
+  }
+
+  // score bar
+  const pct = Math.min(gameState.score / 1500, 1);
+  ctx.fillStyle = '#222';
+  ctx.fillRect(OFFX, OFFY - 18, COLS * TILE, 10);
+  ctx.fillStyle = '#8844dd';
+  ctx.fillRect(OFFX, OFFY - 18, COLS * TILE * pct, 10);
+  ctx.textAlign = 'left';
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  update();
+  draw();
+}
+</script>
+</body>
+</html>

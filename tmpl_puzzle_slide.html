@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLIDE PUZZLE</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0e0e1c; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+canvas { display: block; border: 2px solid #333; cursor: pointer; }
+#hud { margin-top: 10px; display: flex; gap: 28px; font-size: 15px; color: #ccc; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; text-align: center; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #3388cc; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #55aaee; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>SLIDE PUZZLE</h1>
+  <p>15パズル — 空きマスに隣のタイルをスライド</p>
+  <p>1〜15を順番に並べてクリア！</p>
+  <p style="color:#666;font-size:13px;">クリック or ← → ↑ ↓ キーで操作</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>CLEAR!</h1>
+  <p id="clMoves"></p>
+  <p id="clTime"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<canvas id="gameCanvas" width="420" height="420"></canvas>
+<div id="hud">
+  <span>手数: <span id="movesHud">0</span></span>
+  <span>時間: <span id="timeHud">0</span>s</span>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const N = 4;
+const TILE = Math.floor(W / N);
+
+let loopId = null;
+let gameState = {
+  running: false,
+  moves: 0,
+  tick: 0,
+  slideAnim: null
+};
+
+let board = [];  // 1D, N*N values, 0 = blank
+let blankPos = { r: N-1, c: N-1 };
+
+function initBoard() {
+  // start from solved state
+  board = [];
+  for (let i = 0; i < N*N - 1; i++) board.push(i + 1);
+  board.push(0);
+  blankPos = { r: N-1, c: N-1 };
+  // shuffle by making 300 random legal moves
+  for (let i = 0; i < 300; i++) {
+    const dirs = [];
+    if (blankPos.r > 0)   dirs.push({ dr: -1, dc: 0 });
+    if (blankPos.r < N-1) dirs.push({ dr:  1, dc: 0 });
+    if (blankPos.c > 0)   dirs.push({ dr: 0, dc: -1 });
+    if (blankPos.c < N-1) dirs.push({ dr: 0, dc:  1 });
+    const d = dirs[Math.floor(Math.random() * dirs.length)];
+    const tr = blankPos.r + d.dr, tc = blankPos.c + d.dc;
+    const bi = blankPos.r * N + blankPos.c;
+    const ti = tr * N + tc;
+    board[bi] = board[ti];
+    board[ti] = 0;
+    blankPos = { r: tr, c: tc };
+  }
+}
+
+function isSolved() {
+  for (let i = 0; i < N*N - 1; i++) if (board[i] !== i + 1) return false;
+  return board[N*N - 1] === 0;
+}
+
+function tryMove(tr, tc) {
+  if (tr < 0 || tr >= N || tc < 0 || tc >= N) return false;
+  const bi = blankPos.r * N + blankPos.c;
+  const ti = tr * N + tc;
+  board[bi] = board[ti];
+  board[ti] = 0;
+  blankPos = { r: tr, c: tc };
+  gameState.moves++;
+  return true;
+}
+
+function initGame() {
+  initBoard();
+  gameState.moves = 0;
+  gameState.tick = 0;
+  gameState.slideAnim = null;
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+const keys = {};
+document.addEventListener('keydown', e => {
+  if (!gameState.running) return;
+  let dr = 0, dc = 0;
+  if (e.key === 'ArrowUp')    dr =  1;
+  if (e.key === 'ArrowDown')  dr = -1;
+  if (e.key === 'ArrowLeft')  dc =  1;
+  if (e.key === 'ArrowRight') dc = -1;
+  if (dr !== 0 || dc !== 0) {
+    e.preventDefault();
+    tryMove(blankPos.r + dr, blankPos.c + dc);
+    if (isSolved()) endGame();
+  }
+});
+
+canvas.addEventListener('click', e => {
+  if (!gameState.running) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const cc = Math.floor(mx / TILE), cr = Math.floor(my / TILE);
+  if (cc < 0 || cc >= N || cr < 0 || cr >= N) return;
+  // check adjacency to blank
+  const dr = cr - blankPos.r, dc = cc - blankPos.c;
+  if ((Math.abs(dr) === 1 && dc === 0) || (dr === 0 && Math.abs(dc) === 1)) {
+    tryMove(cr, cc);
+    if (isSolved()) endGame();
+  }
+});
+
+function endGame() {
+  gameState.running = false;
+  const sec = Math.floor(gameState.tick / 60);
+  document.getElementById('clMoves').textContent = `手数: ${gameState.moves}手`;
+  document.getElementById('clTime').textContent = `タイム: ${sec}秒`;
+  document.getElementById('clearScreen').style.display = 'flex';
+}
+
+function update() {
+  gameState.tick++;
+  document.getElementById('movesHud').textContent = gameState.moves;
+  document.getElementById('timeHud').textContent = Math.floor(gameState.tick / 60);
+}
+
+const TILE_COLORS = [
+  '#2255aa','#1e4e99','#1a4488','#163a77',
+  '#123066','#0e2655','#0a1c44','#061233',
+  '#2a5599','#264d88','#224577','#1e3d66',
+  '#1a3555','#162d44','#122533'
+];
+
+function draw() {
+  ctx.fillStyle = '#0e0e1c';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const val = board[r * N + c];
+      const x = c * TILE, y = r * TILE;
+      if (val === 0) {
+        ctx.fillStyle = '#1a1a2a';
+        ctx.fillRect(x + 3, y + 3, TILE - 6, TILE - 6);
+        continue;
+      }
+      // solved position highlight
+      const solved = (val === r * N + c + 1);
+      ctx.fillStyle = solved ? '#336688' : TILE_COLORS[(val - 1) % TILE_COLORS.length];
+      ctx.fillRect(x + 3, y + 3, TILE - 6, TILE - 6);
+
+      ctx.fillStyle = solved ? '#88ddff' : '#ffffff';
+      ctx.font = `bold ${TILE > 80 ? 28 : 20}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(val, x + TILE/2, y + TILE/2);
+    }
+  }
+
+  // grid lines
+  ctx.strokeStyle = '#0e0e1c';
+  ctx.lineWidth = 6;
+  for (let i = 0; i <= N; i++) {
+    ctx.beginPath(); ctx.moveTo(i * TILE, 0); ctx.lineTo(i * TILE, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * TILE); ctx.lineTo(W, i * TILE); ctx.stroke();
+  }
+
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  update();
+  draw();
+}
+</script>
+</body>
+</html>

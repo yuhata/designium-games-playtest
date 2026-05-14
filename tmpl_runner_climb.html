@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VERTICAL CLIMB</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a14; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+canvas { display: block; border: 2px solid #222; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; text-align: center; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #22aa66; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #33cc77; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>VERTICAL CLIMB</h1>
+  <p>縦スクロールで上へ登れ！</p>
+  <p>← → で左右移動して障害物を回避</p>
+  <p style="color:#666;font-size:13px;">3000m到達でクリア</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="gameoverScreen" class="screen" style="display:none;">
+  <h1>CRASHED!</h1>
+  <p id="goHeight"></p>
+  <button onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>SUMMIT!</h1>
+  <p>3000m 到達！</p>
+  <p id="clTime"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<canvas id="gameCanvas" width="360" height="540"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let loopId = null;
+let gameState = {
+  running: false,
+  scrollY: 0,
+  scrollSpeed: 1.5,
+  tick: 0,
+  life: 3,
+  invincible: 0
+};
+
+let player = {};
+let obstacles = [];
+const keys = {};
+const CLEAR_HEIGHT = 3000;
+const OBSTACLE_INTERVAL = 90;
+
+document.addEventListener('keydown', e => { keys[e.key] = true; });
+document.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+function initGame() {
+  player = { x: W/2 - 10, y: H - 80, w: 20, h: 24 };
+  obstacles = [];
+  gameState.scrollY = 0;
+  gameState.scrollSpeed = 1.5;
+  gameState.tick = 0;
+  gameState.life = 3;
+  gameState.invincible = 0;
+  // pre-fill obstacles
+  for (let i = 0; i < 5; i++) spawnObstacle(H - 200 - i * 120);
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  document.getElementById('gameoverScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+function spawnObstacle(yPos) {
+  const type = Math.floor(Math.random() * 3);
+  if (type === 0) {
+    // full-width gap bar
+    const gap = 80 + Math.random() * 60;
+    const gapX = 20 + Math.random() * (W - gap - 40);
+    obstacles.push({ x: 0, y: yPos, w: gapX, h: 14, color: '#e04020' });
+    obstacles.push({ x: gapX + gap, y: yPos, w: W - (gapX + gap), h: 14, color: '#e04020' });
+  } else if (type === 1) {
+    // single block on left or right
+    const side = Math.random() < 0.5;
+    const bw = 80 + Math.random() * 60;
+    obstacles.push({ x: side ? 0 : W - bw, y: yPos, w: bw, h: 18, color: '#cc4488' });
+  } else {
+    // two blocks with gap
+    const b1w = 60 + Math.random() * 40;
+    const b2w = 60 + Math.random() * 40;
+    obstacles.push({ x: 0,       y: yPos, w: b1w, h: 16, color: '#4488cc' });
+    obstacles.push({ x: W - b2w, y: yPos, w: b2w, h: 16, color: '#4488cc' });
+  }
+}
+
+function update() {
+  gameState.tick++;
+  // increase speed over time
+  gameState.scrollSpeed = 1.5 + gameState.tick / 2000;
+
+  // player move
+  const SPEED = 4;
+  if (keys['ArrowLeft']  || keys['a']) player.x -= SPEED;
+  if (keys['ArrowRight'] || keys['d']) player.x += SPEED;
+  player.x = Math.max(0, Math.min(W - player.w, player.x));
+
+  // scroll
+  gameState.scrollY += gameState.scrollSpeed;
+  for (const o of obstacles) o.y += gameState.scrollSpeed;
+
+  // spawn new obstacles
+  if (gameState.tick % OBSTACLE_INTERVAL === 0) {
+    spawnObstacle(-30);
+  }
+
+  // remove off-screen obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    if (obstacles[i].y > H + 40) obstacles.splice(i, 1);
+  }
+
+  // collision
+  if (gameState.invincible <= 0) {
+    for (const o of obstacles) {
+      if (player.x < o.x + o.w && player.x + player.w > o.x &&
+          player.y < o.y + o.h && player.y + player.h > o.y) {
+        gameState.life--;
+        gameState.invincible = 100;
+        if (gameState.life <= 0) { endGame(false); return; }
+        break;
+      }
+    }
+  } else {
+    gameState.invincible--;
+  }
+
+  // bottom = fall off
+  if (player.y > H + 20) {
+    gameState.life--;
+    if (gameState.life <= 0) { endGame(false); return; }
+    player.y = H - 80;
+    gameState.invincible = 100;
+  }
+
+  // player "climbs" (visual, player stays roughly in lower third)
+  // The world scrolls upward toward the player, so player appears to climb
+
+  // clear
+  if (gameState.scrollY >= CLEAR_HEIGHT) { endGame(true); return; }
+}
+
+function endGame(won) {
+  gameState.running = false;
+  const m = Math.floor(gameState.scrollY);
+  if (won) {
+    document.getElementById('clTime').textContent = `クリアタイム: ${Math.floor(gameState.tick / 60)}秒`;
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goHeight').textContent = `到達高度: ${m}m / 3000m`;
+    document.getElementById('gameoverScreen').style.display = 'flex';
+  }
+}
+
+function draw() {
+  // sky gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  const t = Math.min(gameState.scrollY / CLEAR_HEIGHT, 1);
+  grad.addColorStop(0, `hsl(${220 - t*40},60%,${8 + t*10}%)`);
+  grad.addColorStop(1, `hsl(${200 - t*20},50%,${5 + t*5}%)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // obstacles
+  for (const o of obstacles) {
+    ctx.fillStyle = o.color;
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+  }
+
+  // player
+  const flash = gameState.invincible > 0 && Math.floor(gameState.invincible / 6) % 2 === 0;
+  if (!flash) {
+    ctx.fillStyle = '#22aa66';
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    // direction arrow
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('↑', player.x + player.w/2, player.y + player.h/2 + 5);
+  }
+
+  // HUD
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, W, 54);
+
+  const pct = Math.min(gameState.scrollY / CLEAR_HEIGHT, 1);
+  ctx.fillStyle = '#333';
+  ctx.fillRect(8, 8, W - 16, 10);
+  ctx.fillStyle = '#22aa66';
+  ctx.fillRect(8, 8, (W - 16) * pct, 10);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '13px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(`高度: ${Math.floor(gameState.scrollY)}m / 3000m`, 8, 36);
+  ctx.textAlign = 'right';
+  ctx.fillText(`ライフ: ${'♥'.repeat(gameState.life)}`, W - 8, 36);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font = '12px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('←→ で回避', W/2, H - 8);
+  ctx.textAlign = 'left';
+
+  // speed indicator
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillText(`速度×${gameState.scrollSpeed.toFixed(1)}`, 8, 50);
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  update();
+  draw();
+}
+</script>
+</body>
+</html>

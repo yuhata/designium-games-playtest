@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAST FISHING</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #080c14; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+canvas { display: block; border: 2px solid #222; cursor: crosshair; }
+#hud { margin-top: 8px; display: flex; gap: 24px; font-size: 14px; color: #ccc; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; text-align: center; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #224488; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #3366bb; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>CAST FISHING</h1>
+  <p>長押しでパワーチャージ！</p>
+  <p>リリースして釣り糸を投げる。</p>
+  <p>魚のいる場所に着水させてキャッチ！</p>
+  <p style="color:#666;font-size:13px;">目標: 5匹釣る</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>FULL CATCH!</h1>
+  <p>5匹釣り上げた！</p>
+  <p id="clCast"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<div id="gameoverScreen" class="screen" style="display:none;">
+  <h1>TIME UP!</h1>
+  <p id="goFish"></p>
+  <button onclick="retryGame()">RETRY</button>
+</div>
+
+<canvas id="gameCanvas" width="480" height="360"></canvas>
+<div id="hud">
+  <span>釣果: <span id="catchHud">0</span>/5匹</span>
+  <span>投げた回数: <span id="castHud">0</span></span>
+  <span>時間: <span id="timeHud">60</span>s</span>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const WATER_Y = 120;
+const PIER_X = 40;
+const PIER_Y = WATER_Y - 20;
+
+let loopId = null;
+let gameState = {
+  running: false,
+  caught: 0,
+  casts: 0,
+  tick: 0,
+  timeLeft: 60 * 60,
+  // cast state
+  pressing: false,
+  pressStart: 0,
+  castPower: 0,
+  castAngle: -0.6, // radians, upward
+  // line state
+  lineActive: false,
+  lineX: 0, lineY: 0,
+  lineVx: 0, lineVy: 0,
+  landX: 0,
+  hitResult: 'none', // none | catch | miss
+  hitTimer: 0,
+  // fish
+  fish: []
+};
+
+const FISH_TYPES = [
+  { color: '#ff8844', name: 'フグ',   score: 1, size: 14 },
+  { color: '#44aaff', name: 'マグロ', score: 2, size: 18 },
+  { color: '#ffdd22', name: 'タイ',   score: 3, size: 16 },
+  { color: '#88ff44', name: 'カレイ', score: 1, size: 12 },
+  { color: '#ff44aa', name: 'サーモン',score: 2, size: 15 },
+];
+
+function spawnFish() {
+  const fish = [];
+  for (let i = 0; i < 6; i++) {
+    const type = FISH_TYPES[Math.floor(Math.random() * FISH_TYPES.length)];
+    fish.push({
+      x: 100 + Math.random() * (W - 140),
+      y: WATER_Y + 30 + Math.random() * (H - WATER_Y - 70),
+      vx: (Math.random() - 0.5) * 1.2,
+      type,
+      catchTimer: 0
+    });
+  }
+  return fish;
+}
+
+function initGame() {
+  gameState.caught = 0;
+  gameState.casts = 0;
+  gameState.tick = 0;
+  gameState.timeLeft = 60 * 60;
+  gameState.pressing = false;
+  gameState.lineActive = false;
+  gameState.hitResult = 'none';
+  gameState.hitTimer = 0;
+  gameState.fish = spawnFish();
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('gameoverScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (!gameState.running || gameState.lineActive) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  // aim angle from pier toward click
+  const dx = mx - PIER_X;
+  gameState.castAngle = Math.atan2(-(WATER_Y - PIER_Y + 10), Math.max(40, dx));
+  gameState.pressing = true;
+  gameState.pressStart = Date.now();
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (!gameState.running || !gameState.pressing) return;
+  const elapsed = Math.min(Date.now() - gameState.pressStart, 1500);
+  gameState.castPower = elapsed / 1500;
+  gameState.pressing = false;
+  docast();
+});
+
+canvas.addEventListener('mouseleave', e => {
+  // cancel press if mouse leaves
+  if (gameState.pressing) {
+    gameState.pressing = false;
+  }
+});
+
+function docast() {
+  if (gameState.lineActive) return;
+  const speed = 8 + gameState.castPower * 14;
+  const angle = -0.5 + gameState.castPower * (-0.3);
+  gameState.lineActive = true;
+  gameState.lineX = PIER_X;
+  gameState.lineY = PIER_Y;
+  gameState.lineVx = speed * Math.cos(angle);
+  gameState.lineVy = speed * Math.sin(angle);
+  gameState.casts++;
+  gameState.hitResult = 'none';
+}
+
+function update() {
+  gameState.tick++;
+  gameState.timeLeft--;
+
+  if (gameState.timeLeft <= 0) { endGame(false); return; }
+
+  // fish swim
+  for (const f of gameState.fish) {
+    f.x += f.vx;
+    if (f.x < 80 || f.x > W - 40) f.vx *= -1;
+    // random direction change
+    if (Math.random() < 0.005) f.vx *= -1;
+  }
+
+  // re-spawn fish occasionally
+  if (gameState.tick % 300 === 0 && gameState.fish.length < 6) {
+    gameState.fish.push(...spawnFish().slice(0, 1));
+  }
+
+  // hit result timer
+  if (gameState.hitTimer > 0) gameState.hitTimer--;
+
+  // line movement
+  if (gameState.lineActive) {
+    gameState.lineVy += 0.3; // gravity
+    gameState.lineX += gameState.lineVx;
+    gameState.lineY += gameState.lineVy;
+
+    // hit water surface
+    if (gameState.lineY >= WATER_Y && gameState.lineVy > 0) {
+      gameState.landX = gameState.lineX;
+      // check fish at landing
+      let hitFish = null;
+      for (let i = gameState.fish.length - 1; i >= 0; i--) {
+        const f = gameState.fish[i];
+        const dist = Math.abs(f.x - gameState.landX);
+        if (dist < 30) { hitFish = f; gameState.fish.splice(i, 1); break; }
+      }
+      if (hitFish) {
+        gameState.caught++;
+        gameState.hitResult = 'catch';
+        gameState.hitTimer = 90;
+        if (gameState.caught >= 5) { gameState.lineActive = false; endGame(true); return; }
+      } else {
+        gameState.hitResult = 'miss';
+        gameState.hitTimer = 60;
+      }
+      gameState.lineActive = false;
+    }
+
+    // out of bounds
+    if (gameState.lineX > W + 50 || gameState.lineX < -50) gameState.lineActive = false;
+  }
+
+  document.getElementById('catchHud').textContent = gameState.caught;
+  document.getElementById('castHud').textContent = gameState.casts;
+  document.getElementById('timeHud').textContent = Math.ceil(gameState.timeLeft / 60);
+}
+
+function endGame(won) {
+  gameState.running = false;
+  if (won) {
+    document.getElementById('clCast').textContent = `${gameState.casts}投で達成！`;
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goFish').textContent = `釣果: ${gameState.caught}/5匹`;
+    document.getElementById('gameoverScreen').style.display = 'flex';
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#080c14';
+  ctx.fillRect(0, 0, W, H);
+
+  // sky
+  const sky = ctx.createLinearGradient(0, 0, 0, WATER_Y);
+  sky.addColorStop(0, '#0a1828');
+  sky.addColorStop(1, '#1a3050');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, WATER_Y);
+
+  // water
+  const water = ctx.createLinearGradient(0, WATER_Y, 0, H);
+  water.addColorStop(0, '#0a2840');
+  water.addColorStop(1, '#041220');
+  ctx.fillStyle = water;
+  ctx.fillRect(0, WATER_Y, W, H - WATER_Y);
+
+  // water surface shimmer
+  ctx.strokeStyle = 'rgba(100,180,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x < W; x += 30) {
+    const wave = Math.sin(x * 0.05 + gameState.tick * 0.04) * 3;
+    if (x === 0) ctx.moveTo(x, WATER_Y + wave);
+    else ctx.lineTo(x, WATER_Y + wave);
+  }
+  ctx.stroke();
+
+  // pier / dock
+  ctx.fillStyle = '#6b4423';
+  ctx.fillRect(0, PIER_Y, PIER_X + 10, 14);
+  ctx.fillStyle = '#7b5433';
+  ctx.fillRect(PIER_X - 5, PIER_Y, 16, 14);
+
+  // fishing rod (static from pier)
+  ctx.strokeStyle = '#886633';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(PIER_X, PIER_Y);
+  ctx.lineTo(PIER_X + 30, PIER_Y - 40);
+  ctx.stroke();
+
+  // power bar (when pressing)
+  if (gameState.pressing) {
+    const elapsed = Math.min((Date.now() - gameState.pressStart) / 1500, 1);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(PIER_X + 40, PIER_Y - 10, 80, 12);
+    ctx.fillStyle = elapsed > 0.7 ? '#ff4444' : '#44cc88';
+    ctx.fillRect(PIER_X + 40, PIER_Y - 10, 80 * elapsed, 12);
+    ctx.fillStyle = '#fff';
+    ctx.font = '11px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('パワー', PIER_X + 40, PIER_Y - 14);
+  }
+
+  // fish
+  for (const f of gameState.fish) {
+    ctx.fillStyle = f.type.color;
+    const s = f.type.size;
+    // simple fish shape
+    ctx.beginPath();
+    ctx.ellipse(f.x, f.y, s, s * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // tail
+    ctx.beginPath();
+    ctx.moveTo(f.x - s, f.y);
+    ctx.lineTo(f.x - s - 8, f.y - 6);
+    ctx.lineTo(f.x - s - 8, f.y + 6);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // cast line
+  if (gameState.lineActive) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(PIER_X + 30, PIER_Y - 40);
+    ctx.lineTo(gameState.lineX, gameState.lineY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // hook
+    ctx.fillStyle = '#ccc';
+    ctx.beginPath();
+    ctx.arc(gameState.lineX, gameState.lineY, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // hit result
+  if (gameState.hitTimer > 0 && gameState.hitResult !== 'none') {
+    const alpha = Math.min(1, gameState.hitTimer / 30);
+    if (gameState.hitResult === 'catch') {
+      ctx.fillStyle = `rgba(100,255,120,${alpha})`;
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🐟 GET!', gameState.landX, WATER_Y - 20);
+    } else {
+      ctx.fillStyle = `rgba(255,120,80,${alpha})`;
+      ctx.font = 'bold 22px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('MISS...', gameState.landX, WATER_Y - 20);
+    }
+  }
+
+  // catch progress
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.font = '13px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText('長押し→リリースでキャスト', W - 8, H - 8);
+  ctx.textAlign = 'left';
+
+  // fish icons top
+  ctx.font = '16px Arial';
+  ctx.fillStyle = '#ccc';
+  for (let i = 0; i < 5; i++) {
+    ctx.globalAlpha = i < gameState.caught ? 1 : 0.25;
+    ctx.fillText('🐟', W - 130 + i * 24, 22);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  update();
+  draw();
+}
+</script>
+</body>
+</html>

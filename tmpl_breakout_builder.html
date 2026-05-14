@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLOCK BUILDER BREAKOUT</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a18; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+canvas { display: block; border: 2px solid #333; cursor: crosshair; }
+#hud { margin-top: 8px; display: flex; gap: 20px; font-size: 14px; color: #ccc; }
+#phaseLabel { margin-top: 4px; font-size: 13px; color: #888; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 40px; margin-bottom: 14px; }
+.screen p { font-size: 15px; color: #999; margin-bottom: 6px; text-align: center; max-width: 400px; }
+.screen button { margin-top: 22px; padding: 12px 36px; font-size: 18px; background: #885500; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #aa6600; }
+#launchBtn { padding: 9px 26px; font-size: 15px; background: #cc5500; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+#launchBtn:hover { background: #ee6600; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>BLOCK BUILDER</h1>
+  <p>クリックでブロックを配置してから「ボール発射」！</p>
+  <p>ボールが自動バウンスして全ブロックを破壊すればクリア。</p>
+  <p style="color:#666;font-size:13px;">配置フェーズ: 上半分にクリックでブロック設置 / 最大30個</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="gameoverScreen" class="screen" style="display:none;">
+  <h1>BALL LOST</h1>
+  <p id="goBlocks"></p>
+  <button onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>ALL CLEAR!</h1>
+  <p id="clInfo"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<canvas id="gameCanvas" width="480" height="480"></canvas>
+<div id="hud">
+  <span>ブロック: <span id="blockHud">0</span></span>
+  <span>壊した: <span id="destroyHud">0</span></span>
+  <span id="ballState"></span>
+</div>
+<div id="phaseLabel">
+  配置フェーズ: 上半分をクリックしてブロックを置く
+  <button id="launchBtn" onclick="launchBall()" style="margin-left:12px; display:none;">🎾 ボール発射</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const BBLOCK = 40; // block size
+const COLS = Math.floor(W / BBLOCK);
+
+let loopId = null;
+let gameState = {
+  running: false,
+  phase: 'setup', // setup | play
+  blocks: [],
+  ball: { x: W/2, y: H - 60, vx: 3, vy: -3.5, r: 7 },
+  destroyed: 0,
+  tick: 0
+};
+
+function initGame() {
+  gameState.blocks = [];
+  gameState.destroyed = 0;
+  gameState.tick = 0;
+  gameState.phase = 'setup';
+  gameState.ball = { x: W/2, y: H - 60, vx: 3.5, vy: -3.5, r: 7 };
+  document.getElementById('launchBtn').style.display = 'none';
+  document.getElementById('phaseLabel').firstChild.textContent = '配置フェーズ: 上半分をクリックしてブロックを置く';
+  updateHud();
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  document.getElementById('gameoverScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+function launchBall() {
+  if (gameState.phase !== 'setup' || gameState.blocks.length === 0) return;
+  gameState.phase = 'play';
+  document.getElementById('launchBtn').style.display = 'none';
+  document.getElementById('phaseLabel').firstChild.textContent = 'プレイ中: ボール自動バウンス中';
+}
+
+function updateHud() {
+  document.getElementById('blockHud').textContent = gameState.blocks.length;
+  document.getElementById('destroyHud').textContent = gameState.destroyed;
+}
+
+const BLOCK_COLORS = ['#e04040','#e08020','#e0c020','#40a040','#4080e0','#8040c0'];
+const MAX_BLOCKS = 30;
+const PLACE_AREA_H = H * 0.55; // upper 55% for block placement
+
+canvas.addEventListener('click', e => {
+  if (!gameState.running) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+  if (gameState.phase === 'setup') {
+    if (my > PLACE_AREA_H) return; // only upper area
+    if (gameState.blocks.length >= MAX_BLOCKS) return;
+    const gx = Math.floor(mx / BBLOCK) * BBLOCK;
+    const gy = Math.floor(my / BBLOCK) * BBLOCK;
+    // toggle
+    const existing = gameState.blocks.findIndex(b => b.x === gx && b.y === gy);
+    if (existing >= 0) {
+      gameState.blocks.splice(existing, 1);
+    } else {
+      const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
+      gameState.blocks.push({ x: gx, y: gy, w: BBLOCK, h: BBLOCK, color, hp: 2 });
+    }
+    // show launch button if blocks placed
+    document.getElementById('launchBtn').style.display = gameState.blocks.length > 0 ? 'inline-block' : 'none';
+    updateHud();
+  }
+});
+
+function update() {
+  gameState.tick++;
+  if (gameState.phase !== 'play') return;
+
+  const ball = gameState.ball;
+
+  // move ball
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // wall bounce
+  if (ball.x - ball.r < 0)      { ball.x = ball.r;      ball.vx = Math.abs(ball.vx); }
+  if (ball.x + ball.r > W)      { ball.x = W - ball.r;  ball.vx = -Math.abs(ball.vx); }
+  if (ball.y - ball.r < 0)      { ball.y = ball.r;       ball.vy = Math.abs(ball.vy); }
+
+  // ball falls below
+  if (ball.y - ball.r > H + 20) {
+    endGame(false);
+    return;
+  }
+
+  // block collision
+  for (let i = gameState.blocks.length - 1; i >= 0; i--) {
+    const b = gameState.blocks[i];
+    if (!b) continue;
+    if (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w &&
+        ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h) {
+      // which side
+      const overlapL = (ball.x + ball.r) - b.x;
+      const overlapR = (b.x + b.w) - (ball.x - ball.r);
+      const overlapT = (ball.y + ball.r) - b.y;
+      const overlapB = (b.y + b.h) - (ball.y - ball.r);
+      const minH = Math.min(overlapL, overlapR);
+      const minV = Math.min(overlapT, overlapB);
+      if (minH < minV) { ball.vx *= -1; ball.x += ball.vx * 2; }
+      else             { ball.vy *= -1; ball.y += ball.vy * 2; }
+      b.hp--;
+      if (b.hp <= 0) {
+        gameState.blocks.splice(i, 1);
+        gameState.destroyed++;
+      }
+      break;
+    }
+  }
+
+  // all blocks gone
+  if (gameState.blocks.length === 0) { endGame(true); return; }
+
+  updateHud();
+  document.getElementById('ballState').textContent = `速度: ${Math.sqrt(ball.vx*ball.vx+ball.vy*ball.vy).toFixed(1)}`;
+}
+
+function endGame(won) {
+  gameState.running = false;
+  if (won) {
+    document.getElementById('clInfo').textContent = `${gameState.destroyed}ブロック破壊！ タイム: ${Math.floor(gameState.tick/60)}秒`;
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goBlocks').textContent = `${gameState.destroyed}ブロック破壊 / 残${gameState.blocks.length}個`;
+    document.getElementById('gameoverScreen').style.display = 'flex';
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#0a0a18';
+  ctx.fillRect(0, 0, W, H);
+
+  // placement zone guide
+  if (gameState.phase === 'setup') {
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(0, 0, W, PLACE_AREA_H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, PLACE_AREA_H);
+    ctx.lineTo(W, PLACE_AREA_H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('↑ ブロック配置エリア', W/2, PLACE_AREA_H - 8);
+    ctx.fillText('↓ ボールゾーン', W/2, PLACE_AREA_H + 20);
+  }
+
+  // blocks
+  for (const b of gameState.blocks) {
+    const alpha = b.hp === 2 ? 1.0 : 0.55;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = b.color;
+    ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+    if (b.hp === 2) {
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, 4);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ball
+  if (gameState.phase === 'play') {
+    const ball = gameState.ball;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    // trail
+    ctx.beginPath();
+    ctx.arc(ball.x - ball.vx * 2, ball.y - ball.vy * 2, ball.r * 0.6, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fill();
+  } else {
+    // preview ball
+    const ball = gameState.ball;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // block count label
+  if (gameState.phase === 'setup') {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${gameState.blocks.length}/${MAX_BLOCKS}`, W - 8, H - 8);
+  }
+  ctx.textAlign = 'left';
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  update();
+  draw();
+}
+</script>
+</body>
+</html>

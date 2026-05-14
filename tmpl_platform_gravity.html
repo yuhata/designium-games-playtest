@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRAVITY FLIP</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d0d1a; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; }
+canvas { display: block; border: 2px solid #333; }
+#hud { margin-top: 10px; display: flex; gap: 24px; font-size: 15px; color: #ccc; }
+.screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.88); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: #fff; z-index: 10;
+}
+.screen h1 { font-size: 42px; margin-bottom: 16px; }
+.screen p { font-size: 16px; color: #aaa; margin-bottom: 8px; text-align: center; }
+.screen button { margin-top: 20px; padding: 12px 36px; font-size: 18px; background: #5b4fff; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.screen button:hover { background: #7a6fff; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen" style="display:flex;">
+  <h1>GRAVITY FLIP</h1>
+  <p>スペースキーで重力を反転！</p>
+  <p>← → で左右移動 / コインを全部集めてクリア</p>
+  <p style="color:#888;font-size:13px;">敵に触れるとミス（ライフ3）</p>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="gameoverScreen" class="screen" style="display:none;">
+  <h1>GAME OVER</h1>
+  <p id="goScore"></p>
+  <button onclick="retryGame()">RETRY</button>
+</div>
+
+<div id="clearScreen" class="screen" style="display:none;">
+  <h1>CLEAR!</h1>
+  <p id="clScore"></p>
+  <button onclick="retryGame()">もう一度</button>
+</div>
+
+<canvas id="gameCanvas" width="560" height="420"></canvas>
+<div id="hud">
+  <span>コイン: <span id="coinHud">0</span>/8</span>
+  <span>ライフ: <span id="lifeHud">3</span></span>
+  <span>重力: <span id="gravHud">▼ 通常</span></span>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let loopId = null;
+let gameState = {
+  running: false,
+  life: 3,
+  coins: 0,
+  gravDir: 1,
+  invincible: 0
+};
+
+let player = {};
+let platforms = [];
+let enemies = [];
+let coinObjs = [];
+const keys = {};
+
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === ' ' && gameState.running) {
+    e.preventDefault();
+    gameState.gravDir *= -1;
+    player.vy = 0;
+  }
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+function makePlatforms() {
+  return [
+    { x: 0,   y: 400, w: 560, h: 20 },
+    { x: 0,   y:   0, w: 560, h: 20 },
+    { x: 80,  y: 320, w: 120, h: 14 },
+    { x: 280, y: 300, w: 100, h: 14 },
+    { x: 150, y: 220, w: 110, h: 14 },
+    { x: 360, y: 200, w: 130, h: 14 },
+    { x: 60,  y: 140, w: 100, h: 14 },
+    { x: 280, y: 100, w: 110, h: 14 },
+  ];
+}
+
+function makeCoins(plist) {
+  const coins = [];
+  const spots = [
+    { x: 130, y: 300 }, { x: 320, y: 280 }, { x: 195, y: 200 },
+    { x: 410, y: 180 }, { x: 100, y: 120 }, { x: 320, y: 80 },
+    { x: 450, y: 350 }, { x: 30,  y: 370 }
+  ];
+  spots.forEach(s => coins.push({ x: s.x, y: s.y, r: 7, collected: false }));
+  return coins;
+}
+
+function makeEnemies() {
+  return [
+    { x: 90,  y: 306, w: 16, h: 14, vx: 1.2, minX: 80,  maxX: 180 },
+    { x: 290, y: 286, w: 16, h: 14, vx:-1.0, minX: 280, maxX: 360 },
+    { x: 165, y: 206, w: 16, h: 14, vx: 0.9, minX: 150, maxX: 240 },
+  ];
+}
+
+function initGame() {
+  platforms = makePlatforms();
+  coinObjs  = makeCoins(platforms);
+  enemies   = makeEnemies();
+  player = { x: 50, y: 370, w: 18, h: 18, vx: 0, vy: 0 };
+  gameState.life = 3;
+  gameState.coins = 0;
+  gameState.gravDir = 1;
+  gameState.invincible = 0;
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  initGame();
+  gameState.running = true;
+  if (loopId) clearInterval(loopId);
+  loopId = setInterval(gameLoop, 16);
+}
+
+function retryGame() {
+  gameState.running = false;
+  document.getElementById('gameoverScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+function rectOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update() {
+  const SPEED = 3.5;
+  const GRAV  = 0.5;
+
+  // horizontal move
+  player.vx = 0;
+  if (keys['ArrowLeft']  || keys['a']) player.vx = -SPEED;
+  if (keys['ArrowRight'] || keys['d']) player.vx =  SPEED;
+  player.x += player.vx;
+  player.x = Math.max(2, Math.min(W - player.w - 2, player.x));
+
+  // gravity
+  player.vy += GRAV * gameState.gravDir;
+  player.y  += player.vy;
+
+  // platform collision
+  for (const p of platforms) {
+    if (player.x + player.w > p.x && player.x < p.x + p.w) {
+      if (gameState.gravDir === 1) {
+        // falling down: land on top
+        if (player.vy >= 0 && player.y + player.h >= p.y && player.y + player.h <= p.y + p.h + 8) {
+          player.y = p.y - player.h;
+          player.vy = 0;
+        }
+      } else {
+        // falling up: land on bottom
+        if (player.vy <= 0 && player.y <= p.y + p.h && player.y >= p.y - 8) {
+          player.y = p.y + p.h;
+          player.vy = 0;
+        }
+      }
+    }
+  }
+
+  // coin collection
+  for (const c of coinObjs) {
+    if (!c.collected) {
+      const dx = (player.x + player.w/2) - c.x;
+      const dy = (player.y + player.h/2) - c.y;
+      if (Math.sqrt(dx*dx + dy*dy) < c.r + 10) {
+        c.collected = true;
+        gameState.coins++;
+      }
+    }
+  }
+
+  // enemy move
+  for (const e of enemies) {
+    e.x += e.vx;
+    if (e.x < e.minX || e.x + e.w > e.maxX) e.vx *= -1;
+  }
+
+  // enemy collision
+  if (gameState.invincible <= 0) {
+    for (const e of enemies) {
+      if (rectOverlap(player, e)) {
+        gameState.life--;
+        gameState.invincible = 90;
+        player.x = 50; player.y = 370; player.vy = 0; gameState.gravDir = 1;
+        if (gameState.life <= 0) endGame(false);
+        return;
+      }
+    }
+  } else {
+    gameState.invincible--;
+  }
+
+  // fall off bottom
+  if (player.y > H + 20 || player.y < -40) {
+    gameState.life--;
+    if (gameState.life <= 0) { endGame(false); return; }
+    player.x = 50; player.y = 370; player.vy = 0; gameState.gravDir = 1;
+    gameState.invincible = 90;
+  }
+
+  // win
+  if (gameState.coins >= 8) { endGame(true); return; }
+
+  // HUD
+  document.getElementById('coinHud').textContent = gameState.coins;
+  document.getElementById('lifeHud').textContent = gameState.life;
+  document.getElementById('gravHud').textContent = gameState.gravDir === 1 ? '▼ 通常' : '▲ 反転';
+}
+
+function endGame(won) {
+  gameState.running = false;
+  if (won) {
+    document.getElementById('clScore').textContent = `コイン ${gameState.coins}/8 全収集！`;
+    document.getElementById('clearScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goScore').textContent = `コイン ${gameState.coins}/8 収集`;
+    document.getElementById('gameoverScreen').style.display = 'flex';
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fillRect(0, 0, W, H);
+
+  // platforms
+  ctx.fillStyle = '#3a5a3a';
+  for (const p of platforms) ctx.fillRect(p.x, p.y, p.w, p.h);
+
+  // coins
+  for (const c of coinObjs) {
+    if (!c.collected) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#f0c040';
+      ctx.fill();
+    }
+  }
+
+  // enemies
+  ctx.fillStyle = '#e04040';
+  for (const e of enemies) ctx.fillRect(e.x, e.y, e.w, e.h);
+
+  // player
+  const flash = gameState.invincible > 0 && Math.floor(gameState.invincible / 8) % 2 === 0;
+  if (!flash) {
+    ctx.fillStyle = '#5b4fff';
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    // gravity indicator arrow on player
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(gameState.gravDir === 1 ? '▼' : '▲', player.x + player.w/2, player.y + player.h/2 + 4);
+  }
+
+  // hint text
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = '13px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('SPACE: 重力反転 / ←→: 移動', 8, 18);
+}
+
+function gameLoop() {
+  if (!gameState.running) return;
+  update();
+  draw();
+}
+</script>
+</body>
+</html>
