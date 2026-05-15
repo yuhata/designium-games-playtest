@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html>
+<!--GAME_SPEC
+{
+  "win_condition": "level >= 10",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["level", "trainCount", "strength", "speed", "score", "phase"],
+  "core_loop": "click TRAIN → trainCount++ → every 5 trains: level++ → visual evolution → check win",
+  "clear_trigger": "level >= 10",
+  "gameover_trigger": "none"
+}
+-->
+<head>
+  <title>CREATURE TRAINER</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #0a0e27;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+    }
+    canvas {
+      display: block;
+      border: 3px solid #00d4ff;
+      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 14, 39, 0.98);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #00d4ff;
+      font-size: 56px;
+      margin-bottom: 40px;
+      text-shadow: 0 0 20px #00d4ff;
+    }
+    #startScreen p {
+      color: #00ff88;
+      font-size: 18px;
+      margin-bottom: 40px;
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 14, 39, 0.98);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #clearScreen h1 {
+      color: #ffd700;
+      font-size: 56px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #ffd700;
+      animation: pulse 0.6s infinite;
+    }
+    #clearScreen p {
+      color: #00d4ff;
+      font-size: 20px;
+      margin-bottom: 40px;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    button {
+      padding: 12px 30px;
+      font-size: 18px;
+      background: linear-gradient(135deg, #00d4ff, #0099cc);
+      border: 2px solid #00d4ff;
+      color: #0a0e27;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+    button:hover {
+      background: linear-gradient(135deg, #00ffff, #00d4ff);
+      box-shadow: 0 0 20px #00d4ff;
+      transform: scale(1.05);
+    }
+    button:active {
+      transform: scale(0.95);
+    }
+    #trainBtn {
+      position: absolute;
+      bottom: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 50px;
+      display: none;
+      z-index: 50;
+    }
+    #retryBtn {
+      width: 120px;
+      height: 50px;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="startScreen">
+      <h1>CREATURE TRAINER</h1>
+      <p>Train your creature to evolve it!</p>
+      <button id="startBtn">START</button>
+    </div>
+    <div id="clearScreen">
+      <h1>LEVEL MAX!</h1>
+      <p>Your creature has fully evolved!</p>
+      <button id="retryBtn">RETRY</button>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <button id="trainBtn">TRAIN</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const clearScreen = document.getElementById('clearScreen');
+    const startBtn = document.getElementById('startBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const trainBtn = document.getElementById('trainBtn');
+
+    const gameState = {
+      level: 1,
+      strength: 10,
+      speed: 10,
+      score: 0,
+      phase: 'start',
+      trainCount: 0,
+      particles: [],
+      time: 0,
+      clearTime: -1
+    };
+
+    startBtn.addEventListener('click', function() {
+      gameState.phase = 'play';
+      startScreen.style.display = 'none';
+      trainBtn.style.display = 'block';
+    });
+
+    retryBtn.addEventListener('click', function() {
+      gameState.level = 1;
+      gameState.strength = 10;
+      gameState.speed = 10;
+      gameState.score = 0;
+      gameState.phase = 'start';
+      gameState.trainCount = 0;
+      gameState.particles = [];
+      gameState.time = 0;
+      gameState.clearTime = -1;
+      clearScreen.style.display = 'none';
+      startScreen.style.display = 'flex';
+      trainBtn.style.display = 'none';
+    });
+
+    trainBtn.addEventListener('click', function() {
+      if (gameState.phase === 'play') {
+        gameState.trainCount++;
+        gameState.score += 10;
+        createTrainParticles();
+        if (gameState.trainCount % 5 === 0) {
+          levelUp();
+        }
+      }
+    });
+
+    canvas.addEventListener('click', function(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mousedown', function(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+      // Don't trigger game logic on mousemove
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+      // Don't trigger game logic on mouseup
+    });
+
+    function levelUp() {
+      gameState.level++;
+      gameState.strength = 10 + (gameState.level - 1) * 8;
+      gameState.speed = 10 + (gameState.level - 1) * 8;
+      createLevelUpParticles();
+      checkWin();
+    }
+
+    function checkWin() {
+      if (gameState.level >= 10) {
+        gameState.phase = 'clear';
+        gameState.clearTime = gameState.time;
+        clearScreen.style.display = 'flex';
+        trainBtn.style.display = 'none';
+      }
+    }
+
+    function createTrainParticles() {
+      for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI * 2 * i) / 12;
+        gameState.particles.push({
+          x: 300,
+          y: 280,
+          vx: Math.cos(angle) * 2,
+          vy: Math.sin(angle) * 2,
+          life: 1,
+          type: 'train'
+        });
+      }
+    }
+
+    function createLevelUpParticles() {
+      for (let i = 0; i < 40; i++) {
+        const angle = (Math.PI * 2 * i) / 40;
+        const speed = 2 + Math.random() * 2.5;
+        gameState.particles.push({
+          x: 300,
+          y: 280,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          type: 'levelup'
+        });
+      }
+    }
+
+    function drawCreature(level) {
+      const x = 300;
+      const y = 280;
+      const baseSize = 20 + (level - 1) * 5;
+      const hue = 180 + (level - 1) * 2;
+
+      // Body
+      ctx.fillStyle = 'hsl(' + hue + ', 85%, 45%)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, baseSize * 1.2, baseSize * 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'hsl(' + hue + ', 100%, 35%)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Eyes
+      const eyeY = y - baseSize * 0.5;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x - 12, eyeY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x + 12, eyeY, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(x - 12, eyeY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x + 12, eyeY, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Mouth
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y + 5, 8, 0, Math.PI);
+      ctx.stroke();
+
+      // Spikes (evolve indicator)
+      if (level >= 2) {
+        const spikeCount = Math.min(level, 10);
+        for (let i = 0; i < spikeCount; i++) {
+          const angle = (Math.PI * 2 * i) / spikeCount;
+          const spikeLen = 8 + level * 2;
+          const sx = x + Math.cos(angle) * (baseSize + 5);
+          const sy = y + Math.sin(angle) * (baseSize + 5);
+          const ex = x + Math.cos(angle) * (baseSize + spikeLen);
+          const ey = y + Math.sin(angle) * (baseSize + spikeLen);
+
+          ctx.strokeStyle = 'hsl(' + hue + ', 100%, 60%)';
+          ctx.lineWidth = 2 + level * 0.2;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+        }
+      }
+
+      // Level display
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold ' + (10 + level) + 'px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(level, x, y + baseSize * 0.8);
+    }
+
+    function drawUI() {
+      ctx.fillStyle = '#00d4ff';
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('LEVEL: ' + gameState.level, 20, 20);
+
+      ctx.font = 'bold 18px Arial';
+      ctx.fillText('STRENGTH: ' + gameState.strength, 20, 60);
+      ctx.fillText('SPEED: ' + gameState.speed, 20, 90);
+      ctx.fillText('SCORE: ' + gameState.score, 20, 120);
+      ctx.fillText('TRAINS: ' + gameState.trainCount, 20, 150);
+
+      // Instructions
+      ctx.fillStyle = '#00ff88';
+      ctx.font = '16px Arial';
+      ctx.fillText('Click TRAIN button to train your creature', 20, 565);
+
+      // Gauges
+      drawGauges();
+    }
+
+    function drawGauges() {
+      const gx = 700;
+      const gy = 100;
+      const gw = 35;
+      const gh = 120;
+
+      // Strength gauge
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(gx, gy, gw, gh);
+      const strPercent = Math.min(gameState.strength / 80, 1);
+      ctx.fillStyle = '#ff4444';
+      ctx.fillRect(gx, gy + gh - gh * strPercent, gw, gh * strPercent);
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(gx, gy, gw, gh);
+
+      ctx.fillStyle = '#ff4444';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('STR', gx + gw / 2, gy + gh + 8);
+
+      // Speed gauge
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(gx + 50, gy, gw, gh);
+      const spdPercent = Math.min(gameState.speed / 80, 1);
+      ctx.fillStyle = '#44ff44';
+      ctx.fillRect(gx + 50, gy + gh - gh * spdPercent, gw, gh * spdPercent);
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(gx + 50, gy, gw, gh);
+
+      ctx.fillStyle = '#44ff44';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('SPD', gx + 50 + gw / 2, gy + gh + 8);
+    }
+
+    function drawParticles() {
+      for (let i = gameState.particles.length - 1; i >= 0; i--) {
+        const p = gameState.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.12;
+        p.life -= 0.03;
+
+        if (p.life <= 0) {
+          gameState.particles.splice(i, 1);
+          continue;
+        }
+
+        const alpha = Math.max(0, p.life);
+        if (p.type === 'train') {
+          ctx.fillStyle = 'hsla(120, 100%, 50%, ' + (alpha * 0.8) + ')';
+        } else {
+          ctx.fillStyle = 'hsla(60, 100%, 50%, ' + (alpha * 0.9) + ')';
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawClearEffect() {
+      if (gameState.phase === 'clear') {
+        const elapsed = gameState.time - gameState.clearTime;
+        const progress = Math.min(elapsed / 100, 1);
+
+        const x = 300;
+        const y = 280;
+
+        // Radial rings
+        ctx.strokeStyle = 'hsla(60, 100%, 50%, ' + ((1 - progress) * 0.4) + ')';
+        ctx.lineWidth = 2;
+        for (let r = 30; r < 150; r += 25) {
+          ctx.beginPath();
+          ctx.arc(x, y, r + progress * 80, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Glow effect
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, 200);
+        grad.addColorStop(0, 'hsla(60, 100%, 70%, 0.4)');
+        grad.addColorStop(1, 'hsla(60, 100%, 70%, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(x - 200, y - 200, 400, 400);
+      }
+    }
+
+    function gameLoop() {
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, 600);
+      bgGrad.addColorStop(0, '#0f3460');
+      bgGrad.addColorStop(1, '#16213e');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, 800, 600);
+
+      if (gameState.phase === 'play' || gameState.phase === 'clear') {
+        drawCreature(gameState.level);
+        drawParticles();
+        drawUI();
+        drawClearEffect();
+        gameState.time++;
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

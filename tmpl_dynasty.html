@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<!--GAME_SPEC
+{
+  "win_condition": "generation >= 5",
+  "fail_condition": "none (no fail state)",
+  "input_types": ["click"],
+  "state_vars": ["generation", "population", "resources", "score", "phase"],
+  "core_loop": "click BUILD to grow population→resources; click NEXT GEN to advance generation; reach generation 5 to win",
+  "clear_trigger": "generation >= 5",
+  "gameover_trigger": "none"
+}
+-->
+<head>
+    <meta charset="UTF-8">
+    <title>DYNASTY</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #222;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            border: 2px solid #666;
+        }
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startScreen h1 {
+            color: #ffd700;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #startBtn {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #0066ff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #startBtn:hover {
+            background: #0052cc;
+        }
+        #clearScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #clearScreen h2 {
+            color: #ffd700;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #clearScreen p {
+            color: white;
+            font-size: 20px;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="startScreen">
+    <h1>DYNASTY</h1>
+    <p style="color: #00ff00; font-size: 20px; margin-bottom: 30px;">Build your empire through 5 generations!</p>
+    <button id="startBtn">START</button>
+</div>
+
+<div id="clearScreen">
+    <h2>GENERATION 5 ACHIEVED!</h2>
+    <p id="finalText"></p>
+    <p style="color: #00ff00; margin-top: 30px;">Click to restart</p>
+</div>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const startBtn = document.getElementById('startBtn');
+
+let gameState = {
+    generation: 1,
+    population: 100,
+    resources: 50,
+    score: 0,
+    phase: 'start'
+};
+
+const genColors = ['#001a4d', '#0033ff', '#00ffff', '#00ff00', '#ffd700'];
+let buildings = [];
+let particles = [];
+
+startBtn.addEventListener('click', function() {
+    startScreen.style.display = 'none';
+    gameState.phase = 'play';
+});
+
+canvas.addEventListener('click', function(e) {
+    if (gameState.phase !== 'play') return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    if (x >= 50 && x <= 450 && y >= 100 && y <= 300) {
+        buildStructure();
+    }
+    
+    if (y >= 440 && y <= 480 && x >= 300 && x <= 500) {
+        nextGeneration();
+    }
+});
+
+function buildStructure() {
+    if (gameState.resources < 10) return;
+    
+    gameState.resources -= 10;
+    gameState.population += 20;
+    gameState.score += 10;
+    
+    buildings.push({
+        x: 50 + Math.random() * 400,
+        y: 100 + Math.random() * 200,
+        size: 15 + Math.random() * 10,
+        color: genColors[gameState.generation - 1]
+    });
+    
+    for (let i = 0; i < 8; i++) {
+        particles.push({
+            x: 50 + Math.random() * 400,
+            y: 100 + Math.random() * 200,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            life: 30,
+            color: genColors[gameState.generation - 1]
+        });
+    }
+}
+
+function nextGeneration() {
+    if (gameState.generation < 5) {
+        const multipliers = [
+            { pop: 1.5, res: 1.3 },
+            { pop: 1.5, res: 1.3 },
+            { pop: 1.5, res: 1.3 },
+            { pop: 1.5, res: 1.3 }
+        ];
+        
+        const mult = multipliers[gameState.generation - 1] || { pop: 1.5, res: 1.3 };
+        gameState.generation += 1;
+        gameState.population = Math.floor(gameState.population * mult.pop);
+        gameState.resources = Math.floor(gameState.resources * mult.res);
+        gameState.score += 100;
+        buildings = [];
+        
+        checkWin();
+    }
+}
+
+function checkWin() {
+    if (gameState.generation >= 5) {
+        gameState.phase = 'clear';
+        clearScreen.style.display = 'flex';
+        document.getElementById('finalText').innerHTML = 
+            `<strong>Population: ${gameState.population}</strong><br>` +
+            `<strong>Resources: ${gameState.resources}</strong><br>` +
+            `<strong>Final Score: ${gameState.score}</strong>`;
+    }
+}
+
+function draw() {
+    ctx.fillStyle = genColors[Math.min(gameState.generation - 1, 4)];
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '40px Arial';
+    ctx.fillText(`Gen: ${gameState.generation}  Pop: ${gameState.population}  Res: ${gameState.resources}`, 30, 50);
+    
+    ctx.font = '16px Arial';
+    ctx.fillText('Click BUILD area to construct buildings  |  Click NEXT GEN to advance', 30, 560);
+    
+    ctx.fillStyle = '#0066ff';
+    ctx.fillRect(50, 100, 400, 200);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('BUILD', 250, 210);
+    ctx.fillText('(Cost: 10 Res)', 250, 250);
+    ctx.textAlign = 'left';
+    
+    buildings.forEach(b => {
+        ctx.fillStyle = b.color;
+        ctx.globalAlpha = 0.8;
+        ctx.fillRect(b.x - b.size/2, b.y - b.size/2, b.size, b.size);
+        ctx.globalAlpha = 1;
+    });
+    
+    particles.forEach((p, idx) => {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life / 30 * 0.8;
+        ctx.fillRect(p.x, p.y, 4, 4);
+        ctx.globalAlpha = 1;
+        
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+    });
+    particles = particles.filter(p => p.life > 0);
+    
+    if (gameState.generation < 5) {
+        ctx.fillStyle = '#00aa00';
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(300, 450, 200, 40);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('NEXT GEN', 400, 477);
+        ctx.textAlign = 'left';
+    }
+}
+
+function gameLoop() {
+    if (gameState.phase === 'play') {
+        draw();
+    }
+    requestAnimationFrame(gameLoop);
+}
+
+clearScreen.addEventListener('click', function() {
+    clearScreen.style.display = 'none';
+    gameState = {
+        generation: 1,
+        population: 100,
+        resources: 50,
+        score: 0,
+        phase: 'play'
+    };
+    buildings = [];
+    particles = [];
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>

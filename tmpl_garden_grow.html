@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GARDEN GROW</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #f0f0f0;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #87CEEB;
+      transition: background 0.3s;
+      border: 3px solid #333;
+      overflow: hidden;
+    }
+    #gameContainer.night {
+      background: #1a1a2e;
+    }
+    canvas {
+      display: block;
+      cursor: pointer;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #90EE90;
+      font-size: 52px;
+      margin: 0 0 20px 0;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    #startScreen p {
+      color: #ddd;
+      font-size: 15px;
+      margin: 8px 0;
+    }
+    #startBtn {
+      margin-top: 30px;
+      padding: 15px 50px;
+      font-size: 24px;
+      font-weight: bold;
+      background: #90EE90;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.1s;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    #startBtn:hover {
+      background: #7DD77D;
+    }
+    #startBtn:active {
+      transform: scale(0.95);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.92);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 101;
+    }
+    #clearScreen h2 {
+      color: #FFD700;
+      font-size: 56px;
+      margin: 0 0 20px 0;
+      text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+      animation: victoryBounce 0.6s ease-out;
+    }
+    @keyframes victoryBounce {
+      0% { transform: translateY(-50px); opacity: 0; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+    #clearScreen p {
+      color: white;
+      font-size: 18px;
+      margin: 10px 0;
+    }
+    #finalScore {
+      color: #FFD700;
+      font-size: 24px !important;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  
+  <div id="startScreen">
+    <h1>🌱 GARDEN GROW 🌱</h1>
+    <p>Water plants and give them sunlight to help them evolve</p>
+    <p>Harvest 5 fully grown plants to win!</p>
+    <button id="startBtn">START</button>
+  </div>
+  
+  <div id="clearScreen">
+    <h2>✨ VICTORY ✨</h2>
+    <p id="finalScore">Final Score: 0</p>
+    <p style="color: #FFD700; font-size: 16px; margin-top: 20px;">Your garden has fully evolved!</p>
+    <p style="color: #ccc; font-size: 14px; margin-top: 30px;">Click to plant a new garden</p>
+  </div>
+</div>
+
+<script>
+/*GAME_SPEC
+{
+  "win_condition": "score >= 5",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["score", "waterLevel", "sunLevel", "plants"],
+  "core_loop": "click WATER to water plants; toggle SUN for sunlight; plants grow stages 1-5 visually; harvest stage 5 plants → score++; reach score=5 → victory",
+  "clear_trigger": "score >= 5",
+  "gameover_trigger": "none"
+}
+*/
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const gameContainer = document.getElementById('gameContainer');
+
+let gameState = {
+  phase: 'start',
+  score: 0,
+  waterLevel: 0,
+  sunLevel: 1,
+  plants: [],
+  particles: [],
+  floatingTexts: [],
+  gameTime: 0,
+  loopId: null
+};
+
+const GRID_COLS = 5;
+const GRID_ROWS = 3;
+const GRID_SPACING = 120;
+const GRID_START_X = 60;
+const GRID_START_Y = 100;
+
+class Plant {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.growthProgress = 0;
+    this.stage = 1;
+  }
+  
+  update(waterLevel, sunLevel) {
+    if (this.stage < 5) {
+      this.growthProgress += (waterLevel + sunLevel) * 0.05;
+      const newStage = Math.min(5, Math.floor(this.growthProgress / 0.2) + 1);
+      if (newStage !== this.stage) {
+        this.stage = newStage;
+      }
+    }
+  }
+  
+  getColor() {
+    const colors = ['#90EE90', '#7CB342', '#558B2F', '#33691E', '#004d00'];
+    return colors[Math.min(4, this.stage - 1)];
+  }
+  
+  getHeight() {
+    return 20 + (this.stage - 1) * 16;
+  }
+  
+  draw(ctx) {
+    const height = this.getHeight();
+    const color = this.getColor();
+    
+    // Stem
+    ctx.strokeStyle = '#8B7355';
+    ctx.lineWidth = 2 + this.stage * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(this.x, this.y - height);
+    ctx.stroke();
+    
+    // Leaves - evolve with stages
+    ctx.fillStyle = color;
+    const leafW = 6 + this.stage * 2;
+    const leafH = 4 + this.stage * 1.5;
+    
+    ctx.beginPath();
+    ctx.ellipse(this.x - leafW, this.y - height * 0.4, leafW, leafH, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.ellipse(this.x + leafW, this.y - height * 0.4, leafW, leafH, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (this.stage >= 3) {
+      ctx.beginPath();
+      ctx.ellipse(this.x - leafW * 0.7, this.y - height * 0.7, leafW * 0.8, leafH, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(this.x + leafW * 0.7, this.y - height * 0.7, leafW * 0.8, leafH, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // Flower - evolves from bud to bloom
+    if (this.stage >= 2) {
+      const flowerColors = ['#FFB6C1', '#FF69B4', '#FF1493', '#C71585', '#8B0000'];
+      const flowerColor = flowerColors[Math.min(4, this.stage - 2)];
+      ctx.fillStyle = flowerColor;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - height - 2, 4 + (this.stage - 1) * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFF00';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - height - 2, 2 + (this.stage - 2) * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+class Particle {
+  constructor(x, y, vx, vy, color, life = 30) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.color = color;
+    this.life = life;
+    this.maxLife = life;
+  }
+  
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.15;
+    this.life--;
+  }
+  
+  draw(ctx) {
+    const opacity = Math.max(0, this.life / this.maxLife);
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = opacity;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+class FloatingText {
+  constructor(x, y, text, color = '#FFD700', duration = 50) {
+    this.x = x;
+    this.y = y;
+    this.text = text;
+    this.color = color;
+    this.duration = duration;
+    this.elapsed = 0;
+  }
+  
+  update() {
+    this.elapsed++;
+    this.y -= 1.5;
+  }
+  
+  draw(ctx) {
+    const opacity = Math.max(0, 1 - (this.elapsed / this.duration));
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = opacity;
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(this.text, this.x, this.y);
+    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha = 1;
+  }
+}
+
+function initPlants() {
+  gameState.plants = [];
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      const x = GRID_START_X + col * GRID_SPACING;
+      const y = GRID_START_Y + row * GRID_SPACING;
+      gameState.plants.push(new Plant(x, y));
+    }
+  }
+}
+
+function gameLoop() {
+  if (gameState.phase !== 'play') return;
+  
+  gameState.gameTime++;
+  
+  gameState.plants.forEach(plant => {
+    plant.update(gameState.waterLevel, gameState.sunLevel);
+  });
+  
+  gameState.particles = gameState.particles.filter(p => {
+    p.update();
+    return p.life > 0;
+  });
+  
+  gameState.floatingTexts = gameState.floatingTexts.filter(t => {
+    t.update();
+    return t.elapsed < t.duration;
+  });
+  
+  draw();
+  checkWin();
+}
+
+function draw() {
+  ctx.fillStyle = gameState.sunLevel ? '#87CEEB' : '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw celestial body
+  if (gameState.phase === 'play') {
+    if (gameState.sunLevel) {
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(750, 50, 30, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#F0F0F0';
+      ctx.beginPath();
+      ctx.arc(750, 50, 25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath();
+      ctx.arc(760, 40, 25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  // Instructions - always visible
+  ctx.fillStyle = gameState.sunLevel ? '#333' : '#aaa';
+  ctx.font = '13px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('Click WATER button or SUN toggle button', 10, 25);
+  
+  // SUN toggle button
+  const sunX = 350, sunY = 30, sunSize = 18;
+  ctx.fillStyle = gameState.sunLevel ? '#FFD700' : '#444';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunSize, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = gameState.sunLevel ? '#FFA500' : '#666';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 10px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('☀', sunX, sunY + 1);
+  
+  // WATER button
+  const waterY = 560;
+  const waterGradient = ctx.createLinearGradient(300, waterY, 500, waterY + 30);
+  waterGradient.addColorStop(0, '#4169E1');
+  waterGradient.addColorStop(1, '#1E90FF');
+  ctx.fillStyle = waterGradient;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+  ctx.shadowBlur = 4;
+  ctx.fillRect(300, waterY, 200, 30);
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('💧 WATER', 400, waterY + 15);
+  
+  // Draw plants
+  gameState.plants.forEach(plant => {
+    plant.draw(ctx);
+  });
+  
+  // Draw particles
+  gameState.particles.forEach(p => {
+    p.draw(ctx);
+  });
+  
+  // Draw floating texts
+  gameState.floatingTexts.forEach(t => {
+    t.draw(ctx);
+  });
+  
+  // Score display
+  ctx.fillStyle = gameState.sunLevel ? '#000' : '#FFD700';
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText('Score: ' + gameState.score + '/5', canvas.width - 20, 550);
+  
+  // Progress info
+  ctx.fillStyle = gameState.sunLevel ? '#333' : '#ccc';
+  ctx.font = '12px Arial';
+  ctx.textAlign = 'right';
+  const harvestedCount = gameState.plants.filter(p => p.stage === 5).length;
+  ctx.fillText('Ready to harvest: ' + harvestedCount, canvas.width - 20, 520);
+}
+
+function checkWin() {
+  if (gameState.score >= 5 && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    showClear();
+  }
+}
+
+function showClear() {
+  if (gameState.loopId) clearInterval(gameState.loopId);
+  clearScreen.style.display = 'flex';
+  document.getElementById('finalScore').textContent = 'Score: ' + gameState.score + ' - Your garden has fully evolved!';
+}
+
+function startGame() {
+  gameState.phase = 'play';
+  gameState.score = 0;
+  gameState.waterLevel = 0;
+  gameState.sunLevel = 1;
+  gameState.gameTime = 0;
+  gameState.particles = [];
+  gameState.floatingTexts = [];
+  initPlants();
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  gameContainer.classList.remove('night');
+  
+  if (gameState.loopId) clearInterval(gameState.loopId);
+  gameState.loopId = setInterval(gameLoop, 16);
+}
+
+function restartGame() {
+  gameState.phase = 'start';
+  gameState.score = 0;
+  gameState.waterLevel = 0;
+  gameState.sunLevel = 1;
+  if (gameState.loopId) clearInterval(gameState.loopId);
+  startScreen.style.display = 'flex';
+  clearScreen.style.display = 'none';
+  gameContainer.classList.remove('night');
+  draw();
+}
+
+startBtn.addEventListener('click', startGame);
+
+clearScreen.addEventListener('click', (e) => {
+  if (gameState.phase === 'clear') {
+    restartGame();
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  // SUN toggle
+  const sunX = 350, sunY = 30, sunSize = 18;
+  if (Math.hypot(x - sunX, y - sunY) < sunSize + 12) {
+    gameState.sunLevel = gameState.sunLevel ? 0 : 1;
+    gameContainer.classList.toggle('night', !gameState.sunLevel);
+    return;
+  }
+  
+  // WATER button
+  const waterY = 560;
+  if (y > waterY && y < waterY + 30 && x > 300 && x < 500) {
+    gameState.waterLevel = 1;
+    
+    for (let i = 0; i < 12; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 2;
+      const vx = Math.cos(angle) * speed;
+      const vy = (Math.sin(angle) - 0.5) * speed;
+      gameState.particles.push(new Particle(400 + (Math.random() - 0.5) * 60, waterY - 20, vx, vy, '#4169E1', 35));
+    }
+    
+    let harvestedAny = false;
+    gameState.plants.forEach((plant) => {
+      if (plant.stage === 5) {
+        for (let i = 0; i < 25; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 2.5 + Math.random() * 3;
+          const vx = Math.cos(angle) * speed;
+          const vy = Math.sin(angle) * speed - 2;
+          gameState.particles.push(new Particle(plant.x, plant.y - plant.getHeight(), vx, vy, '#FFD700', 50));
+        }
+        
+        gameState.floatingTexts.push(new FloatingText(plant.x, plant.y - 60, '✨ HARVEST ✨', '#FFD700', 50));
+        gameState.score++;
+        
+        plant.growthProgress = 0;
+        plant.stage = 1;
+        harvestedAny = true;
+      }
+    });
+    
+    setTimeout(() => {
+      gameState.waterLevel = 0;
+    }, 50);
+  }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (gameState.phase === 'play') {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  // Track only, don't affect logic
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  // Track only, don't affect logic
+});
+
+draw();
+</script>
+
+</body>
+</html>
