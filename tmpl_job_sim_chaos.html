@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CHAOS JOB</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #1a1a2e;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 800px;
+      height: 600px;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      font-size: 60px;
+      margin: 0 0 20px 0;
+      text-shadow: 0 0 20px rgba(255, 100, 100, 0.8);
+    }
+    #startScreen p {
+      font-size: 20px;
+      margin-bottom: 40px;
+      opacity: 0.9;
+    }
+    #startBtn {
+      padding: 15px 50px;
+      font-size: 28px;
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.1s;
+    }
+    #startBtn:hover {
+      transform: scale(1.05);
+    }
+    #startBtn:active {
+      transform: scale(0.98);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 800px;
+      height: 600px;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      z-index: 100;
+    }
+    #clearScreen h1 {
+      font-size: 72px;
+      margin: 0 0 30px 0;
+      text-shadow: 0 0 30px rgba(100, 255, 100, 0.8);
+    }
+    #clearScreen p {
+      font-size: 28px;
+      margin: 10px 0;
+    }
+    #finalScore {
+      color: #90ee90;
+      margin: 20px 0 40px 0 !important;
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "jobsDone >= 10",
+  "fail_condition": "timer <= 0 and jobsDone < 10",
+  "input_types": ["click"],
+  "state_vars": ["jobsDone", "score", "timer"],
+  "core_loop": "Click moving targets → jobsDone++, score++, target respawn → check win/fail",
+  "clear_trigger": "jobsDone >= totalJobs",
+  "gameover_trigger": "timer <= 0 && jobsDone < totalJobs"
+}
+-->
+
+<div id="startScreen">
+  <h1>CHAOS JOB</h1>
+  <p>Click rapidly on moving targets to complete jobs!</p>
+  <p style="font-size: 18px; opacity: 0.7;">🍔 Food  🏥 Patients  📦 Packages</p>
+  <button id="startBtn">START</button>
+</div>
+
+<div id="clearScreen">
+  <h1 id="clearText">🎉 WIN! 🎉</h1>
+  <p id="finalScore"></p>
+  <p style="font-size: 20px; opacity: 0.8;">Click anywhere to restart</p>
+</div>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const startBtn = document.getElementById('startBtn');
+
+const gameState = {
+  jobsDone: 0,
+  totalJobs: 10,
+  score: 0,
+  phase: 'start',
+  timer: 60,
+  targets: [],
+  particles: [],
+  lastUpdateTime: Date.now()
+};
+
+const TARGET_RADIUS = 40;
+const EMOJIS = ['🍔', '🏥', '📦'];
+
+function initTargets() {
+  gameState.targets = [];
+  for (let i = 0; i < 3; i++) {
+    gameState.targets.push({
+      x: Math.random() * (canvas.width - 100) + 50,
+      y: Math.random() * (canvas.height - 120) + 60,
+      vx: (Math.random() - 0.5) * 280,
+      vy: (Math.random() - 0.5) * 280,
+      emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
+      directionChangeTimer: Math.random() * 1500 + 500,
+      bounceScale: 1
+    });
+  }
+}
+
+function spawnConfetti() {
+  for (let i = 0; i < 120; i++) {
+    gameState.particles.push({
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      vx: (Math.random() - 0.5) * 450,
+      vy: (Math.random() - 0.5) * 450 - 100,
+      life: 1.2,
+      maxLife: 1.2,
+      emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
+      rotation: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+function updateTargets(deltaTime) {
+  for (let i = 0; i < gameState.targets.length; i++) {
+    const target = gameState.targets[i];
+    
+    target.directionChangeTimer -= deltaTime * 1000;
+    if (target.directionChangeTimer <= 0) {
+      target.vx = (Math.random() - 0.5) * 280;
+      target.vy = (Math.random() - 0.5) * 280;
+      target.directionChangeTimer = Math.random() * 1500 + 500;
+    }
+
+    target.x += target.vx * deltaTime;
+    target.y += target.vy * deltaTime;
+
+    if (target.x - TARGET_RADIUS < 0 || target.x + TARGET_RADIUS > canvas.width) {
+      target.vx *= -1;
+      target.x = Math.max(TARGET_RADIUS, Math.min(canvas.width - TARGET_RADIUS, target.x));
+    }
+    if (target.y - TARGET_RADIUS < 30 || target.y + TARGET_RADIUS > canvas.height - 30) {
+      target.vy *= -1;
+      target.y = Math.max(TARGET_RADIUS + 30, Math.min(canvas.height - TARGET_RADIUS - 30, target.y));
+    }
+
+    target.bounceScale = 1 + Math.sin(Date.now() * 0.008 + i) * 0.15;
+  }
+}
+
+function updateParticles(deltaTime) {
+  gameState.particles = gameState.particles.filter(p => p.life > 0);
+  for (let i = 0; i < gameState.particles.length; i++) {
+    const p = gameState.particles[i];
+    p.x += p.vx * deltaTime;
+    p.y += p.vy * deltaTime;
+    p.vy += 250 * deltaTime;
+    p.life -= deltaTime;
+    p.rotation += deltaTime * 4;
+  }
+}
+
+function drawTargets() {
+  for (let i = 0; i < gameState.targets.length; i++) {
+    const target = gameState.targets[i];
+    
+    ctx.fillStyle = 'rgba(70, 180, 255, 0.4)';
+    ctx.beginPath();
+    ctx.arc(target.x, target.y, TARGET_RADIUS * target.bounceScale, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = 'rgba(100, 200, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(target.x, target.y);
+    ctx.rotate(Date.now() * 0.003 + i);
+    ctx.font = 'bold ' + (45 * target.bounceScale) + 'px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(target.emoji, 0, 0);
+    ctx.restore();
+  }
+}
+
+function drawParticles() {
+  for (let i = 0; i < gameState.particles.length; i++) {
+    const p = gameState.particles[i];
+    const alpha = (p.life / p.maxLife) * 0.9;
+    ctx.globalAlpha = alpha;
+    
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.emoji, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawUI() {
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 18px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('⚡ Click targets rapidly!', 20, 15);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.font = 'bold 16px Arial';
+  ctx.fillText(`Score: ${gameState.score}`, 20, 40);
+  ctx.fillText(`Jobs: ${gameState.jobsDone}/${gameState.totalJobs}`, 20, 60);
+
+  ctx.fillStyle = gameState.timer <= 10 ? '#ff6b6b' : 'white';
+  ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText(`⏱ ${Math.max(0, Math.ceil(gameState.timer))}s`, canvas.width - 20, 20);
+}
+
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(255, 50, 50, 0.4)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.fillStyle = '#ff6b6b';
+  ctx.shadowColor = 'rgba(255, 100, 100, 0.8)';
+  ctx.shadowBlur = 30;
+  ctx.font = 'bold 70px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
+  
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 20px Arial';
+  ctx.fillText(`Final Score: ${gameState.score} | Jobs: ${gameState.jobsDone}/10`, canvas.width / 2, canvas.height / 2 + 60);
+  ctx.font = '18px Arial';
+  ctx.fillText('Click to restart', canvas.width / 2, canvas.height / 2 + 100);
+}
+
+function checkWin() {
+  if (gameState.jobsDone >= gameState.totalJobs && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    spawnConfetti();
+    showClear();
+  }
+}
+
+function checkFail() {
+  if (gameState.timer <= 0 && gameState.jobsDone < gameState.totalJobs && gameState.phase === 'play') {
+    gameState.phase = 'over';
+    showGameOver();
+  }
+}
+
+function showClear() {
+  clearScreen.style.display = 'flex';
+  document.getElementById('clearText').textContent = '🎉 ALL JOBS COMPLETE! 🎉';
+  document.getElementById('finalScore').textContent = `Final Score: ${gameState.score}  |  Jobs Completed: ${gameState.jobsDone}/10`;
+}
+
+function showGameOver() {
+  clearScreen.style.display = 'flex';
+  document.getElementById('clearText').textContent = 'TIME\'S UP!';
+  document.getElementById('finalScore').textContent = `Final Score: ${gameState.score}  |  Jobs Completed: ${gameState.jobsDone}/10`;
+}
+
+function resetGame() {
+  gameState.jobsDone = 0;
+  gameState.score = 0;
+  gameState.phase = 'play';
+  gameState.timer = 60;
+  gameState.targets = [];
+  gameState.particles = [];
+  gameState.lastUpdateTime = Date.now();
+  clearScreen.style.display = 'none';
+  initTargets();
+}
+
+function onCanvasClick(e) {
+  if (gameState.phase !== 'play') return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  for (let i = 0; i < gameState.targets.length; i++) {
+    const target = gameState.targets[i];
+    const dist = Math.sqrt((x - target.x) ** 2 + (y - target.y) ** 2);
+    
+    if (dist < TARGET_RADIUS * 1.3) {
+      gameState.jobsDone++;
+      gameState.score += 10;
+
+      target.x = Math.random() * (canvas.width - 100) + 50;
+      target.y = Math.random() * (canvas.height - 120) + 60;
+      target.emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+
+      for (let j = 0; j < 15; j++) {
+        gameState.particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 500,
+          vy: (Math.random() - 0.5) * 500 - 100,
+          life: 0.6,
+          maxLife: 0.6,
+          emoji: j % 3 === 0 ? '✨' : (j % 3 === 1 ? '⭐' : '💫'),
+          rotation: Math.random() * Math.PI * 2
+        });
+      }
+
+      checkWin();
+      break;
+    }
+  }
+}
+
+function gameLoop() {
+  const now = Date.now();
+  const deltaTime = Math.min((now - gameState.lastUpdateTime) / 1000, 0.016);
+  gameState.lastUpdateTime = now;
+
+  if (gameState.phase === 'play') {
+    gameState.timer -= deltaTime;
+    updateTargets(deltaTime);
+    updateParticles(deltaTime);
+    checkFail();
+  }
+
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (gameState.phase === 'play' || gameState.phase === 'clear') {
+    drawTargets();
+    drawParticles();
+    drawUI();
+  } else if (gameState.phase === 'over') {
+    drawTargets();
+    drawParticles();
+    drawGameOver();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', () => {
+  gameState.phase = 'play';
+  gameState.timer = 60;
+  gameState.jobsDone = 0;
+  gameState.score = 0;
+  gameState.lastUpdateTime = Date.now();
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  gameState.targets = [];
+  gameState.particles = [];
+  initTargets();
+});
+
+canvas.addEventListener('mousedown', () => {});
+canvas.addEventListener('mousemove', () => {});
+canvas.addEventListener('mouseup', () => {});
+canvas.addEventListener('click', onCanvasClick);
+
+clearScreen.addEventListener('click', resetGame);
+
+initTargets();
+requestAnimationFrame(gameLoop);
+</script>
+
+</body>
+</html>

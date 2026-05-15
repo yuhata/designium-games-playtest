@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ABSURD QUEST</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; overflow: hidden; }
+    #gameContainer { position: relative; width: 100vw; height: 100vh; }
+    canvas { display: block; width: 100%; height: 100%; background: #f0f8ff; }
+    .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; }
+    #startScreen { background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    #clearScreen, #overScreen { background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; flex-direction: column; }
+    .screen-content { text-align: center; color: white; }
+    .screen-content h1 { font-size: 60px; margin-bottom: 20px; }
+    .screen-content p { font-size: 24px; margin: 10px 0; }
+    #startBtn { padding: 20px 50px; font-size: 28px; font-weight: bold; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 30px; transition: transform 0.1s; }
+    #startBtn:hover { transform: scale(1.1); }
+    #startBtn:active { transform: scale(0.95); }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "collected >= 1000",
+  "fail_condition": "timer <= 0 and phase === play",
+  "input_types": ["click"],
+  "state_vars": ["collected", "timer", "phase"],
+  "core_loop": "click canvas -> spawn absurd item -> score++ -> visual feedback -> loop or win",
+  "clear_trigger": "collected >= 1000",
+  "gameover_trigger": "timer <= 0"
+}
+-->
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  
+  <div id="startScreen" class="overlay">
+    <div class="screen-content">
+      <h1>🎭 ABSURD QUEST 🎭</h1>
+      <p style="font-size: 20px; color: #aaa;">Collect 1000 hilarious items before time runs out!</p>
+      <p style="font-size: 18px;">🐄 Cows • 🍕 Pizza • 👽 Aliens</p>
+      <button id="startBtn">START QUEST</button>
+      <p style="font-size: 14px; color: #666; margin-top: 20px;">⬅️ Click the canvas to collect items ➡️</p>
+    </div>
+  </div>
+
+  <div id="clearScreen" class="overlay">
+    <div class="screen-content">
+      <h1 style="color: #ffd700;">✨ QUEST COMPLETE! ✨</h1>
+      <p style="font-size: 32px; margin: 20px 0;">You collected <span id="finalScore" style="color: #ffd700;">0</span> items!</p>
+      <p style="font-size: 20px; color: #90EE90;">That's absolutely ABSURD! 🎉</p>
+      <p style="font-size: 16px; color: #aaa; margin-top: 30px;">Click anywhere to play again</p>
+    </div>
+  </div>
+
+  <div id="overScreen" class="overlay">
+    <div class="screen-content">
+      <h1 style="color: #ff6b6b;">⏰ TIME'S UP! ⏰</h1>
+      <p style="font-size: 32px; margin: 20px 0;">You collected <span id="finalOver" style="color: #ff6b6b;">0</span> items</p>
+      <p style="font-size: 18px; color: #ffb3b3;">Try again to reach 1000!</p>
+      <p style="font-size: 16px; color: #aaa; margin-top: 30px;">Click anywhere to retry</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const overScreen = document.getElementById('overScreen');
+
+// Canvas サイズ設定
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const ITEMS = ['🐄', '🍕', '👽'];
+const FUNNY_TEXTS = ['BOOM!', 'POW!', 'SPLAT!', 'BONK!', 'POP!', 'WHOOSH!'];
+
+let gameState = {
+  collected: 0,
+  goalAmount: 1000,
+  phase: 'start',
+  timer: 60,
+  gameStartTime: 0
+};
+
+let particles = [];
+let floatingTexts = [];
+let lastFrameTime = Date.now();
+let mousePos = { x: 0, y: 0 };
+
+class Particle {
+  constructor(x, y, type = ITEMS[Math.floor(Math.random() * ITEMS.length)]) {
+    this.x = x;
+    this.y = y;
+    this.vx = (Math.random() - 0.5) * 400;
+    this.vy = (Math.random() - 0.5) * 400 - 100;
+    this.type = type;
+    this.rotation = Math.random() * Math.PI * 2;
+    this.rotSpeed = (Math.random() - 0.5) * 20;
+    this.scale = 0.8;
+    this.age = 0;
+    this.lifetime = 0.3 + Math.random() * 0.3;
+  }
+
+  update(dt) {
+    this.age += dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.vy += 200 * dt;
+    this.rotation += this.rotSpeed * dt;
+    const progress = this.age / this.lifetime;
+    this.scale = 0.8 * (1 - progress * 0.5);
+  }
+
+  draw(ctx) {
+    if (this.age > this.lifetime) return;
+    const alpha = Math.max(0, 1 - this.age / this.lifetime);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
+    const size = Math.round(50 * this.scale);
+    ctx.font = `${size}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.type, 0, 0);
+    ctx.restore();
+  }
+
+  isAlive() {
+    return this.age <= this.lifetime;
+  }
+}
+
+class FloatingText {
+  constructor(x, y, text) {
+    this.x = x;
+    this.y = y;
+    this.text = text;
+    this.age = 0;
+    this.lifetime = 0.5;
+    this.vy = -80;
+  }
+
+  update(dt) {
+    this.age += dt;
+    this.y += this.vy * dt;
+  }
+
+  draw(ctx) {
+    if (this.age > this.lifetime) return;
+    const alpha = Math.max(0, 1 - this.age / this.lifetime);
+    const scale = 0.8 + this.age / this.lifetime * 0.4;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${Math.round(32 * scale)}px Arial`;
+    ctx.fillStyle = this.text === '+1' ? '#ff9500' : '#ff6b6b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(this.text, this.x, this.y);
+    ctx.restore();
+  }
+
+  isAlive() {
+    return this.age <= this.lifetime;
+  }
+}
+
+function collectItem(x, y) {
+  if (gameState.phase !== 'play') return;
+  
+  gameState.collected++;
+  const randomItem = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+  
+  // パーティクル生成
+  for (let i = 0; i < 6; i++) {
+    particles.push(new Particle(x, y, randomItem));
+  }
+  
+  // スコアテキスト
+  floatingTexts.push(new FloatingText(x, y, '+1'));
+  
+  // ランダムに面白いテキストを表示
+  if (gameState.collected % 50 === 0) {
+    floatingTexts.push(new FloatingText(x, y - 40, FUNNY_TEXTS[Math.floor(Math.random() * FUNNY_TEXTS.length)]));
+  }
+  
+  checkWin();
+}
+
+function checkWin() {
+  if (gameState.collected >= gameState.goalAmount && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    document.getElementById('finalScore').textContent = gameState.collected;
+    clearScreen.style.display = 'flex';
+    playWinAnimation();
+  }
+}
+
+function checkFail() {
+  if (gameState.timer <= 0 && gameState.phase === 'play') {
+    gameState.phase = 'over';
+    document.getElementById('finalOver').textContent = gameState.collected;
+    overScreen.style.display = 'flex';
+  }
+}
+
+function playWinAnimation() {
+  // 勝利時に大量パーティクル生成
+  for (let i = 0; i < 30; i++) {
+    const x = canvas.width / 2 + (Math.random() - 0.5) * 200;
+    const y = canvas.height / 2 + (Math.random() - 0.5) * 200;
+    particles.push(new Particle(x, y));
+  }
+}
+
+function drawUI() {
+  // スコア表示
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 36px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('Items: ' + gameState.collected + '/1000', 20, 50);
+  
+  // タイマー表示
+  ctx.textAlign = 'right';
+  const timeDisplay = Math.max(0, Math.ceil(gameState.timer));
+  ctx.fillStyle = gameState.timer < 10 ? '#ff4444' : '#333';
+  ctx.fillText('TIME: ' + timeDisplay + 's', canvas.width - 20, 50);
+  
+  // プログレスバー
+  const barWidth = 300;
+  const barHeight = 20;
+  const progress = Math.min(1, gameState.collected / gameState.goalAmount);
+  ctx.fillStyle = '#ddd';
+  ctx.fillRect(canvas.width / 2 - barWidth / 2, 80, barWidth, barHeight);
+  ctx.fillStyle = progress >= 1 ? '#00dd00' : '#667eea';
+  ctx.fillRect(canvas.width / 2 - barWidth / 2, 80, barWidth * progress, barHeight);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(canvas.width / 2 - barWidth / 2, 80, barWidth, barHeight);
+  
+  // 操作説明
+  ctx.fillStyle = '#555';
+  ctx.font = '18px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('🖱️ Click the canvas to collect absurd items!', canvas.width / 2, canvas.height - 30);
+}
+
+function draw() {
+  // 背景
+  ctx.fillStyle = '#f0f8ff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // パーティクル描画
+  particles.forEach(p => p.draw(ctx));
+  floatingTexts.forEach(t => t.draw(ctx));
+  
+  drawUI();
+  
+  // win時の白フラッシュ
+  if (gameState.phase === 'clear') {
+    const flashAlpha = Math.abs(Math.sin(Date.now() * 0.01)) * 0.15;
+    ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function update(dt) {
+  if (gameState.phase === 'play') {
+    gameState.timer -= dt;
+    if (gameState.timer <= 0) {
+      gameState.timer = 0;
+      checkFail();
+    }
+  }
+  
+  // パーティクル更新
+  particles = particles.filter(p => {
+    p.update(dt);
+    return p.isAlive();
+  });
+  
+  floatingTexts = floatingTexts.filter(t => {
+    t.update(dt);
+    return t.isAlive();
+  });
+}
+
+function gameLoop() {
+  const now = Date.now();
+  const dt = Math.min((now - lastFrameTime) / 1000, 0.016);
+  lastFrameTime = now;
+  
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// イベントリスナー登録
+startBtn.addEventListener('click', () => {
+  gameState.phase = 'play';
+  gameState.timer = 60;
+  gameState.collected = 0;
+  gameState.gameStartTime = Date.now();
+  particles = [];
+  floatingTexts = [];
+  startScreen.style.display = 'none';
+});
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    // リスタート
+    gameState.phase = 'start';
+    gameState.collected = 0;
+    gameState.timer = 60;
+    particles = [];
+    floatingTexts = [];
+    clearScreen.style.display = 'none';
+    overScreen.style.display = 'none';
+    startScreen.style.display = 'flex';
+    return;
+  }
+  
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+    collectItem(x, y);
+  }
+});
+
+clearScreen.addEventListener('click', () => {
+  gameState.phase = 'start';
+  gameState.collected = 0;
+  gameState.timer = 60;
+  particles = [];
+  floatingTexts = [];
+  clearScreen.style.display = 'none';
+  overScreen.style.display = 'none';
+  startScreen.style.display = 'flex';
+});
+
+overScreen.addEventListener('click', () => {
+  gameState.phase = 'start';
+  gameState.collected = 0;
+  gameState.timer = 60;
+  particles = [];
+  floatingTexts = [];
+  clearScreen.style.display = 'none';
+  overScreen.style.display = 'none';
+  startScreen.style.display = 'flex';
+});
+
+// マウスイベント追跡
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mousePos.x = e.clientX - rect.left;
+  mousePos.y = e.clientY - rect.top;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mousePos.x = e.clientX - rect.left;
+  mousePos.y = e.clientY - rect.top;
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mousePos.x = e.clientX - rect.left;
+  mousePos.y = e.clientY - rect.top;
+});
+
+gameLoop();
+</script>
+</body>
+</html>

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WEIRD WORLD</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+        }
+        canvas {
+            display: block;
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            cursor: crosshair;
+            border: 2px solid #e94560;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 52, 96, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startScreen h1 {
+            color: #e94560;
+            font-size: 48px;
+            margin-bottom: 40px;
+            text-shadow: 0 0 10px #e94560;
+        }
+        #startScreen p {
+            color: #e0e0e0;
+            font-size: 16px;
+            margin: 8px;
+            text-align: center;
+            max-width: 450px;
+        }
+        #startBtn {
+            margin-top: 40px;
+            padding: 15px 50px;
+            font-size: 24px;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        #startBtn:hover {
+            background: #f05a80;
+            transform: scale(1.05);
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 101;
+        }
+        #clearScreen h2 {
+            color: #00ff00;
+            font-size: 52px;
+            margin: 0;
+            text-shadow: 0 0 20px #00ff00;
+            animation: pulse 0.5s infinite;
+        }
+        #clearScreen.fail h2 {
+            color: #ff4444;
+            text-shadow: 0 0 20px #ff4444;
+        }
+        #clearScreen p {
+            color: #e0e0e0;
+            font-size: 18px;
+            margin: 15px 0;
+        }
+        #clearScreen .score {
+            color: #ffff00;
+            font-size: 32px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+    </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "score >= 15",
+  "fail_condition": "timer <= 0",
+  "input_types": ["click", "mousedown", "mousemove", "mouseup"],
+  "state_vars": ["score", "phase", "gravityDir", "friction", "timer"],
+  "core_loop": "click canvas to spawn objects in opposite direction → inverted physics simulation → objects reach goal zone (bottom-right) → score increases → win at 15 or fail at 60s timeout",
+  "clear_trigger": "gameState.score >= 15",
+  "gameover_trigger": "gameState.timer <= 0"
+}
+-->
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="startScreen">
+        <h1>WEIRD WORLD</h1>
+        <p>⚠️ WARNING: GRAVITY INVERTED ⚠️</p>
+        <p>Click the canvas to launch objects in the OPPOSITE direction!</p>
+        <p>Get 15 objects to the Goal Zone (bottom-right corner)</p>
+        <p>⬆️ Upside-down gravity • ❄️ Zero friction = Pure chaos</p>
+        <button id="startBtn">START</button>
+    </div>
+    <div id="clearScreen">
+        <h2>VICTORY!</h2>
+        <p>You conquered the WEIRD WORLD!</p>
+        <div class="score">Score: <span id="finalScore">0</span>/15</div>
+        <p style="font-size: 16px; color: #aaa;">Click to play again</p>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const finalScoreSpan = document.getElementById('finalScore');
+
+// Game state
+const gameState = {
+    score: 0,
+    phase: 'start',
+    gravityDir: -1,
+    friction: 0,
+    timer: 60,
+    objects: [],
+    particles: [],
+    arrowIndicator: null,
+    flashes: 0,
+    textPopups: []
+};
+
+// GameObject class
+class GameObject {
+    constructor(x, y, vx, vy) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = 8;
+        const hue = Math.random() * 360;
+        this.color = `hsl(${hue}, 75%, 55%)`;
+        this.reached = false;
+        this.age = 0;
+    }
+
+    update() {
+        this.age++;
+        // Inverted gravity (upward acceleration)
+        this.vy += gameState.gravityDir * 0.35;
+        
+        // Zero friction = velocity stays high
+        this.vx *= (1 - gameState.friction * 0.01);
+        this.vy *= (1 - gameState.friction * 0.01);
+        
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        // Boundary collisions with damping
+        if (this.x - this.radius < 0 || this.x + this.radius > canvas.width) {
+            this.vx *= -0.75;
+            this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+        }
+        if (this.y - this.radius < 0 || this.y + this.radius > canvas.height) {
+            this.vy *= -0.75;
+            this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+        }
+        
+        // Goal zone check (bottom-right: 650-750, 450-550)
+        if (!this.reached && 
+            this.x >= 650 && this.x <= 750 && 
+            this.y >= 450 && this.y <= 550) {
+            this.reached = true;
+            gameState.score++;
+            
+            // Particle burst for laugh effect
+            for (let i = 0; i < 12; i++) {
+                const angle = (Math.PI * 2 * i) / 12;
+                gameState.particles.push({
+                    x: this.x,
+                    y: this.y,
+                    vx: Math.cos(angle) * (2 + Math.random() * 3),
+                    vy: Math.sin(angle) * (2 + Math.random() * 3),
+                    life: 35,
+                    size: 3 + Math.random() * 2,
+                    color: this.color
+                });
+            }
+            
+            gameState.flashes = 15;
+            
+            // "!?" text popup
+            gameState.textPopups.push({
+                x: this.x,
+                y: this.y - 30,
+                text: '!?',
+                size: 28,
+                life: 50,
+                vx: 0,
+                vy: -1.5,
+                maxSize: 32
+            });
+        }
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        if (this.reached) {
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+    }
+}
+
+// Event: Start button
+startBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    gameState.phase = 'play';
+    gameState.score = 0;
+    gameState.timer = 60;
+    gameState.objects = [];
+    gameState.particles = [];
+    gameState.textPopups = [];
+    gameState.arrowIndicator = null;
+    startScreen.style.display = 'none';
+    clearScreen.style.display = 'none';
+});
+
+// Event: Canvas click
+canvas.addEventListener('click', function(e) {
+    if (gameState.phase !== 'play') return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    
+    // Calculate reverse direction (click direction → opposite)
+    const dx = -(mx - centerX);
+    const dy = -(my - centerY);
+    const len = Math.sqrt(dx * dx + dy * dy);
+    
+    let ndx = 0, ndy = 0;
+    if (len > 0) {
+        ndx = dx / len;
+        ndy = dy / len;
+    }
+    
+    // Spawn object
+    const obj = new GameObject(
+        centerX + ndx * 25,
+        centerY + ndy * 25,
+        ndx * 7,
+        ndy * 7
+    );
+    gameState.objects.push(obj);
+    
+    // Arrow indicator: click → center
+    gameState.arrowIndicator = {
+        fromX: mx,
+        fromY: my,
+        toX: centerX,
+        toY: centerY,
+        life: 18
+    };
+});
+
+// Prevent double trigger on mousedown
+canvas.addEventListener('mousedown', function(e) {
+    if (gameState.phase !== 'play') return;
+    e.preventDefault();
+});
+
+// Restart on clear screen click
+clearScreen.addEventListener('click', function(e) {
+    e.stopPropagation();
+    startScreen.style.display = 'flex';
+    clearScreen.style.display = 'none';
+    gameState.phase = 'start';
+});
+
+// Game loop
+function gameLoop() {
+    // Fade background
+    ctx.fillStyle = 'rgba(15, 52, 96, 0.08)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Update timer
+    if (gameState.phase === 'play') {
+        gameState.timer -= 1/60;
+        if (gameState.timer <= 0) {
+            gameState.timer = 0;
+            gameState.phase = 'over';
+        }
+    }
+    
+    // Update and draw objects
+    for (let i = gameState.objects.length - 1; i >= 0; i--) {
+        const obj = gameState.objects[i];
+        if (gameState.phase === 'play') {
+            obj.update();
+        }
+        obj.draw(ctx);
+    }
+    
+    // Update and draw particles
+    for (let i = gameState.particles.length - 1; i >= 0; i--) {
+        const p = gameState.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.15;
+        p.life--;
+        
+        const alpha = Math.max(0, p.life / 35);
+        ctx.fillStyle = p.color.replace('hsl', 'hsla').replace(')', `, ${alpha})`);
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+        
+        if (p.life <= 0) {
+            gameState.particles.splice(i, 1);
+        }
+    }
+    
+    // Draw text popups
+    for (let i = gameState.textPopups.length - 1; i >= 0; i--) {
+        const tp = gameState.textPopups[i];
+        tp.x += tp.vx;
+        tp.y += tp.vy;
+        tp.life--;
+        
+        const scale = 1 + (1 - tp.life / 50) * 0.6;
+        const size = tp.size * scale;
+        ctx.font = `bold ${Math.floor(size)}px Arial`;
+        ctx.fillStyle = `rgba(255, 255, 100, ${Math.max(0, tp.life / 50)})`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(tp.text, tp.x, tp.y);
+        
+        if (tp.life <= 0) {
+            gameState.textPopups.splice(i, 1);
+        }
+    }
+    
+    // Draw arrow indicator
+    if (gameState.arrowIndicator) {
+        const arrow = gameState.arrowIndicator;
+        arrow.life--;
+        const alpha = arrow.life / 18;
+        
+        ctx.strokeStyle = `rgba(255, 120, 120, ${alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(arrow.fromX, arrow.fromY);
+        ctx.lineTo(arrow.toX, arrow.toY);
+        ctx.stroke();
+        
+        // Arrowhead
+        const angle = Math.atan2(arrow.toY - arrow.fromY, arrow.toX - arrow.fromX);
+        const headlen = 18;
+        ctx.beginPath();
+        ctx.moveTo(arrow.toX, arrow.toY);
+        ctx.lineTo(arrow.toX - headlen * Math.cos(angle - Math.PI / 6), 
+                   arrow.toY - headlen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(arrow.toX, arrow.toY);
+        ctx.lineTo(arrow.toX - headlen * Math.cos(angle + Math.PI / 6), 
+                   arrow.toY - headlen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+        
+        if (arrow.life <= 0) {
+            gameState.arrowIndicator = null;
+        }
+    }
+    
+    // Flash effect when goal reached
+    if (gameState.flashes > 0) {
+        gameState.flashes--;
+        if (gameState.flashes % 3 === 0) {
+            ctx.fillStyle = 'rgba(255, 255, 150, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+    
+    // Draw goal zone
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(650, 450, 100, 100);
+    ctx.setLineDash([]);
+    
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.12)';
+    ctx.fillRect(650, 450, 100, 100);
+    
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('GOAL', 700, 490);
+    ctx.fillText('ZONE', 700, 510);
+    
+    // Draw UI panel
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, canvas.width, 45);
+    
+    // Score
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`Score: ${gameState.score}/15`, 20, 14);
+    
+    // Timer
+    const timerColor = gameState.timer < 10 ? '#ff4444' : '#00ff00';
+    ctx.fillStyle = timerColor;
+    ctx.textAlign = 'right';
+    ctx.fillText(`Time: ${Math.max(0, Math.ceil(gameState.timer))}s`, canvas.width - 20, 14);
+    
+    // Instructions
+    ctx.fillStyle = '#d0d0ff';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Click canvas to launch in OPPOSITE direction ← weird physics →', canvas.width / 2, 27);
+    
+    // Check win
+    checkWin();
+    
+    // Show fail screen
+    if (gameState.phase === 'over' && clearScreen.style.display !== 'block') {
+        showGameOver();
+    }
+    
+    requestAnimationFrame(gameLoop);
+}
+
+function checkWin() {
+    if (gameState.phase === 'play' && gameState.score >= 15) {
+        gameState.phase = 'clear';
+        showClear();
+    }
+}
+
+function showClear() {
+    clearScreen.classList.remove('fail');
+    clearScreen.querySelector('h2').textContent = 'VICTORY!';
+    clearScreen.querySelector('h2').style.color = '#00ff00';
+    clearScreen.querySelector('h2').style.textShadow = '0 0 20px #00ff00';
+    clearScreen.style.display = 'flex';
+    finalScoreSpan.textContent = gameState.score;
+}
+
+function showGameOver() {
+    clearScreen.classList.add('fail');
+    clearScreen.querySelector('h2').textContent = 'TIME\'S UP!';
+    clearScreen.querySelector('h2').style.color = '#ff4444';
+    clearScreen.querySelector('h2').style.textShadow = '0 0 20px #ff4444';
+    clearScreen.style.display = 'flex';
+    finalScoreSpan.textContent = gameState.score;
+}
+
+// Start game loop
+gameLoop();
+</script>
+</body>
+</html>

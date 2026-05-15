@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESCALATION</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Arial', sans-serif;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: #000;
+            border: 3px solid #00ff00;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #startScreen, #clearScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            font-size: 24px;
+            z-index: 10;
+        }
+        #startScreen {
+            display: flex;
+        }
+        #clearScreen {
+            display: none;
+        }
+        #gameOverScreen {
+            display: none;
+        }
+        h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #00ff00;
+            color: #00ff00;
+        }
+        p {
+            margin: 10px 0;
+            font-size: 18px;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: all 0.2s;
+            margin-top: 20px;
+        }
+        button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px #00ff00;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "Complete all 3 stages by clicking targets",
+  "fail_condition": "Score drops below 0 on Stage 3",
+  "input_types": ["click"],
+  "state_vars": ["score", "stage", "targets"],
+  "core_loop": "Click targets to increase score; each stage has more absurd target movements; complete stage by clearing all targets; Stage3 escalates chaos; win after Stage3 complete",
+  "clear_trigger": "gameState.stage > 3",
+  "gameover_trigger": "gameState.stage === 3 && gameState.score < 0"
+}
+-->
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div id="startScreen">
+        <h1>ESCALATION</h1>
+        <p>🎯 Click the spinning targets!</p>
+        <p>✨ Each stage gets MORE CHAOTIC ✨</p>
+        <p style="margin-top: 20px; font-size: 16px;">Stage 1: Boring normal targets</p>
+        <p style="font-size: 16px;">Stage 2: Targets spin & fade 🌀</p>
+        <p style="font-size: 16px;">Stage 3: MADNESS UNLEASHED!!! 💥🎭</p>
+        <button id="startBtn">START CHAOS</button>
+    </div>
+
+    <div id="clearScreen">
+        <h1>🎉 YOU DID IT! 🎉</h1>
+        <p id="finalScore"></p>
+        <p>You survived the ESCALATION!</p>
+        <p style="font-size: 16px; margin-top: 20px; color: #ffff00;">Click to play again...</p>
+    </div>
+
+    <div id="gameOverScreen">
+        <h1>💥 GAME OVER 💥</h1>
+        <p>Your score went NEGATIVE on Stage 3!</p>
+        <p id="finalScoreGameOver"></p>
+        <p style="font-size: 16px; margin-top: 20px; color: #ff0000;">Click to try again...</p>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const startScreen = document.getElementById('startScreen');
+    const clearScreen = document.getElementById('clearScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const startBtn = document.getElementById('startBtn');
+    
+    let gameState = {
+        stage: 1,
+        score: 0,
+        phase: 'start',
+        targets: [],
+        elapsedTime: 0,
+        bgFlashColor: null,
+        bgFlashTimer: 0,
+        comboText: [],
+        particleEffects: [],
+        stage3Chaos: false,
+        missHitX: -1,
+        missHitY: -1,
+        missHitAlpha: 0,
+        confetti: [],
+        shakeAmount: 0
+    };
+    
+    const TARGET_TYPES = {
+        STAGE1_COUNT: 10,
+        STAGE2_COUNT: 15,
+        STAGE3_COUNT: 20
+    };
+    
+    function initTargets() {
+        gameState.targets = [];
+        gameState.confetti = [];
+        gameState.shakeAmount = 0;
+        
+        if (gameState.stage === 1) {
+            const cols = 5, rows = 2;
+            const spacing_x = canvas.width / (cols + 1);
+            const spacing_y = canvas.height / (rows + 1);
+            for (let i = 0; i < TARGET_TYPES.STAGE1_COUNT; i++) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                gameState.targets.push({
+                    x: spacing_x * (col + 1),
+                    y: spacing_y * (row + 1),
+                    radius: 30,
+                    active: true,
+                    rotation: 0,
+                    opacity: 1.0,
+                    scale: 1.0,
+                    bouncePhase: 0
+                });
+            }
+        } else if (gameState.stage === 2) {
+            for (let i = 0; i < TARGET_TYPES.STAGE2_COUNT; i++) {
+                gameState.targets.push({
+                    x: Math.random() * (canvas.width - 100) + 50,
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    radius: 30,
+                    active: true,
+                    rotation: Math.random() * Math.PI * 2,
+                    opacity: 1.0,
+                    scale: 1.0,
+                    fadePhase: Math.random() * Math.PI * 2,
+                    wobblePhase: Math.random() * Math.PI * 2
+                });
+            }
+        } else if (gameState.stage === 3) {
+            for (let i = 0; i < TARGET_TYPES.STAGE3_COUNT; i++) {
+                gameState.targets.push({
+                    x: Math.random() * (canvas.width - 100) + 50,
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    radius: 30,
+                    active: true,
+                    rotation: Math.random() * Math.PI * 2,
+                    opacity: 1.0,
+                    scale: 0.8,
+                    chaosPhase: Math.random() * Math.PI * 2,
+                    spin: (Math.random() - 0.5) * 0.3
+                });
+            }
+        }
+    }
+    
+    function updateTargets() {
+        if (gameState.stage === 1) {
+            // Small bounce animation for laugh
+            for (let t of gameState.targets) {
+                if (t.active) {
+                    t.bouncePhase += 0.03;
+                    t.scale = 1.0 + Math.sin(t.bouncePhase) * 0.15;
+                }
+            }
+        } else if (gameState.stage === 2) {
+            for (let t of gameState.targets) {
+                if (t.active) {
+                    t.rotation += (Math.random() - 0.5) * 6 * (Math.PI / 180);
+                    t.fadePhase += 0.02;
+                    t.opacity = 0.3 + 0.7 * (Math.sin(t.fadePhase) * 0.5 + 0.5);
+                    t.wobblePhase += 0.02;
+                    t.x += Math.sin(t.wobblePhase) * 0.5;
+                }
+            }
+        } else if (gameState.stage === 3) {
+            gameState.bgFlashTimer++;
+            if (gameState.bgFlashTimer > 6) {
+                gameState.bgFlashColor = `rgb(${Math.random() * 200 + 55}, ${Math.random() * 200 + 55}, ${Math.random() * 200 + 55})`;
+                gameState.bgFlashTimer = 0;
+            }
+            
+            const activeCount = gameState.targets.filter(t => t.active).length;
+            gameState.stage3Chaos = activeCount >= 5;
+            
+            for (let t of gameState.targets) {
+                if (t.active) {
+                    t.x += (Math.random() - 0.5) * 12;
+                    t.y += (Math.random() - 0.5) * 12;
+                    
+                    t.x = Math.max(30, Math.min(canvas.width - 30, t.x));
+                    t.y = Math.max(30, Math.min(canvas.height - 30, t.y));
+                    
+                    t.rotation += (Math.random() - 0.5) * 30 * (Math.PI / 180);
+                    t.spin = (Math.random() - 0.5) * 0.5;
+                    
+                    t.chaosPhase += 0.05;
+                    if (gameState.stage3Chaos) {
+                        t.scale = 1.5 + Math.sin(t.chaosPhase) * 0.8;
+                    } else {
+                        t.scale = 0.9 + Math.sin(t.chaosPhase) * 0.2;
+                    }
+                }
+            }
+        }
+    }
+    
+    function handleCanvasClick(e) {
+        if (gameState.phase !== 'play') return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        let hitTarget = null;
+        for (let t of gameState.targets) {
+            if (t.active) {
+                const dist = Math.sqrt((x - t.x) ** 2 + (y - t.y) ** 2);
+                if (dist < t.radius * t.scale) {
+                    hitTarget = t;
+                    break;
+                }
+            }
+        }
+        
+        if (hitTarget) {
+            gameState.score += 1;
+            hitTarget.active = false;
+            createComboText(hitTarget.x, hitTarget.y, '+1 💥', '#00ff00');
+            createParticles(hitTarget.x, hitTarget.y, 15, '#00ff00');
+            gameState.shakeAmount = 3;
+        } else {
+            gameState.score -= 3;
+            gameState.missHitX = x;
+            gameState.missHitY = y;
+            gameState.missHitAlpha = 1.0;
+            createComboText(x, y, '-3 MISS!', '#ff0000');
+            gameState.shakeAmount = 2;
+        }
+        
+        checkWin();
+    }
+    
+    function createComboText(x, y, text, color) {
+        gameState.comboText.push({
+            x: x,
+            y: y,
+            text: text,
+            color: color,
+            alpha: 1.0,
+            lifespan: 60,
+            scale: 1.0
+        });
+    }
+    
+    function createParticles(x, y, count, color) {
+        for (let i = 0; i < count; i++) {
+            gameState.particleEffects.push({
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8 - 2,
+                color: color,
+                alpha: 1.0,
+                lifespan: 50,
+                size: Math.random() * 3 + 2
+            });
+        }
+    }
+    
+    function createConfetti() {
+        for (let i = 0; i < 50; i++) {
+            gameState.confetti.push({
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                vx: (Math.random() - 0.5) * 12,
+                vy: (Math.random() - 0.5) * 12 - 5,
+                color: ['#00ff00', '#ffff00', '#ff00ff', '#00ffff', '#ff0000'][Math.floor(Math.random() * 5)],
+                rotation: Math.random() * Math.PI * 2,
+                spin: (Math.random() - 0.5) * 0.2,
+                alpha: 1.0,
+                lifespan: 120
+            });
+        }
+    }
+    
+    function checkWin() {
+        const allCleared = gameState.targets.every(t => !t.active);
+        
+        if (gameState.stage === 3 && gameState.score < 0) {
+            gameState.phase = 'over';
+            return;
+        }
+        
+        if (allCleared) {
+            gameState.stage++;
+            if (gameState.stage > 3) {
+                createConfetti();
+                gameState.phase = 'clear';
+            } else {
+                initTargets();
+            }
+        }
+    }
+    
+    function update() {
+        gameState.elapsedTime++;
+        gameState.shakeAmount = Math.max(0, gameState.shakeAmount - 0.15);
+        
+        if (gameState.phase === 'play') {
+            updateTargets();
+            
+            gameState.comboText = gameState.comboText.filter(ct => ct.lifespan > 0);
+            for (let ct of gameState.comboText) {
+                ct.y -= 2;
+                ct.alpha = ct.lifespan / 60;
+                ct.scale = 1.0 + (1 - ct.lifespan / 60) * 0.5;
+                ct.lifespan--;
+            }
+            
+            gameState.particleEffects = gameState.particleEffects.filter(p => p.lifespan > 0);
+            for (let p of gameState.particleEffects) {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.25;
+                p.alpha = p.lifespan / 50;
+                p.lifespan--;
+            }
+            
+            if (gameState.missHitAlpha > 0) {
+                gameState.missHitAlpha -= 0.03;
+            }
+        }
+        
+        gameState.confetti = gameState.confetti.filter(c => c.lifespan > 0);
+        for (let c of gameState.confetti) {
+            c.x += c.vx;
+            c.y += c.vy;
+            c.vy += 0.2;
+            c.rotation += c.spin;
+            c.alpha = c.lifespan / 120;
+            c.lifespan--;
+        }
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if (gameState.bgFlashColor && gameState.stage === 3 && gameState.phase === 'play') {
+            ctx.fillStyle = gameState.bgFlashColor;
+            ctx.globalAlpha = 0.2;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0;
+        }
+        
+        const shakeX = (Math.random() - 0.5) * gameState.shakeAmount;
+        const shakeY = (Math.random() - 0.5) * gameState.shakeAmount;
+        ctx.translate(shakeX, shakeY);
+        
+        if (gameState.phase === 'play') {
+            for (let t of gameState.targets) {
+                if (t.active) {
+                    ctx.save();
+                    ctx.translate(t.x, t.y);
+                    ctx.rotate(t.rotation);
+                    ctx.globalAlpha = t.opacity;
+                    
+                    const radius = t.radius * t.scale;
+                    
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#00ff00';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.globalAlpha = 1.0;
+                    ctx.restore();
+                }
+            }
+        }
+        
+        for (let p of gameState.particleEffects) {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.alpha;
+            ctx.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
+        }
+        ctx.globalAlpha = 1.0;
+        
+        for (let c of gameState.confetti) {
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(c.rotation);
+            ctx.globalAlpha = c.alpha;
+            ctx.fillStyle = c.color;
+            ctx.fillRect(-4, -4, 8, 8);
+            ctx.restore();
+        }
+        
+        for (let ct of gameState.comboText) {
+            ctx.fillStyle = ct.color;
+            ctx.globalAlpha = ct.alpha;
+            ctx.font = `bold ${18 * ct.scale}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(ct.text, ct.x, ct.y);
+        }
+        ctx.globalAlpha = 1.0;
+        
+        if (gameState.missHitAlpha > 0) {
+            ctx.fillStyle = `rgba(255, 0, 0, ${gameState.missHitAlpha * 0.5})`;
+            ctx.fillRect(gameState.missHitX - 25, gameState.missHitY - 25, 50, 50);
+        }
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`STAGE: ${gameState.stage}`, 20, 20);
+        
+        ctx.fillStyle = gameState.score < 0 ? '#ff0000' : '#00ff00';
+        ctx.fillText(`SCORE: ${gameState.score}`, 20, 50);
+        
+        const activeCount = gameState.targets.filter(t => t.active).length;
+        ctx.fillStyle = '#00ffff';
+        ctx.fillText(`TARGETS: ${activeCount}/${gameState.stage === 1 ? 10 : gameState.stage === 2 ? 15 : 20}`, 20, 80);
+        
+        ctx.fillStyle = '#00ffff';
+        ctx.font = '16px Arial';
+        ctx.fillText('Click the targets! 🎯', 20, canvas.height - 30);
+        
+        if (gameState.stage === 1) {
+            ctx.fillStyle = '#ffff00';
+            ctx.font = '14px Arial';
+            ctx.fillText('Stage 1: Normal (Easy!)', 20, 110);
+        } else if (gameState.stage === 2) {
+            ctx.fillStyle = '#ff00ff';
+            ctx.font = '14px Arial';
+            ctx.fillText('Stage 2: Getting Weird... 🌀', 20, 110);
+        } else if (gameState.stage === 3) {
+            ctx.fillStyle = '#ff0000';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText('Stage 3: CHAOS!!! 💥🎭🌪️', 20, 110);
+        }
+        
+        ctx.translate(-shakeX, -shakeY);
+    }
+    
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+    
+    startBtn.addEventListener('click', function() {
+        startScreen.style.display = 'none';
+        gameState.phase = 'play';
+        gameState.stage = 1;
+        gameState.score = 0;
+        gameState.elapsedTime = 0;
+        gameState.targets = [];
+        gameState.comboText = [];
+        gameState.particleEffects = [];
+        gameState.confetti = [];
+        initTargets();
+    });
+    
+    document.addEventListener('click', function(e) {
+        if (gameState.phase === 'clear') {
+            clearScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+            gameState.phase = 'start';
+            gameState.stage = 1;
+            gameState.score = 0;
+            gameState.targets = [];
+            gameState.comboText = [];
+            gameState.particleEffects = [];
+            gameState.confetti = [];
+        } else if (gameState.phase === 'over') {
+            gameOverScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+            gameState.phase = 'start';
+            gameState.stage = 1;
+            gameState.score = 0;
+            gameState.targets = [];
+            gameState.comboText = [];
+            gameState.particleEffects = [];
+            gameState.confetti = [];
+        }
+    });
+    
+    canvas.addEventListener('click', handleCanvasClick);
+    
+    let lastPhase = 'start';
+    setInterval(() => {
+        if (gameState.phase === 'clear' && lastPhase !== 'clear') {
+            document.getElementById('finalScore').textContent = `Final Score: ${gameState.score}`;
+            clearScreen.style.display = 'flex';
+            lastPhase = 'clear';
+        } else if (gameState.phase === 'over' && lastPhase !== 'over') {
+            document.getElementById('finalScoreGameOver').textContent = `Final Score: ${gameState.score}`;
+            gameOverScreen.style.display = 'flex';
+            lastPhase = 'over';
+        }
+    }, 50);
+    
+    gameLoop();
+</script>
+</body>
+</html>
