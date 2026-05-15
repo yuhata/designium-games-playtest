@@ -1,496 +1,498 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CATCH IT</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      background: #0f172a;
-      font-family: 'Arial', sans-serif;
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    #gameContainer {
-      text-align: center;
-      max-width: 500px;
-      width: 100%;
-    }
-
-    #startScreen,
-    #gameScreen,
-    #clearScreen,
-    #gameOverScreen {
-      display: none;
-    }
-
-    #startScreen {
-      padding: 40px 20px;
-      background: rgba(99, 102, 241, 0.1);
-      border-radius: 10px;
-    }
-
-    #startScreen h1 {
-      font-size: 48px;
-      margin-bottom: 20px;
-      color: #6366f1;
-      text-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
-    }
-
-    #startScreen p {
-      font-size: 16px;
-      color: #cbd5e1;
-      margin-bottom: 10px;
-      line-height: 1.6;
-    }
-
-    #startScreen .btn {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
-      border: none;
-      padding: 14px 40px;
-      font-size: 18px;
-      font-weight: bold;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-top: 30px;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-    }
-
-    #startScreen .btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
-    }
-
-    #startScreen .btn:active {
-      transform: translateY(0);
-    }
-
-    #gameScreen {
-      padding: 20px;
-    }
-
-    #hud {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-      padding: 0 10px;
-      font-size: 16px;
-      color: #94a3b8;
-    }
-
-    #score,
-    #misses {
-      font-weight: bold;
-    }
-
-    #score span,
-    #misses span {
-      color: #22c55e;
-    }
-
-    #misses span {
-      color: #ef4444;
-      letter-spacing: 4px;
-    }
-
-    canvas {
-      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-      border: 2px solid #6366f1;
-      display: block;
-      margin: 0 auto 15px;
-      cursor: pointer;
-      border-radius: 5px;
-      box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
-    }
-
-    #controls {
-      font-size: 13px;
-      color: #64748b;
-      margin-bottom: 10px;
-    }
-
-    #clearScreen,
-    #gameOverScreen {
-      padding: 40px 20px;
-      background: rgba(99, 102, 241, 0.1);
-      border-radius: 10px;
-    }
-
-    #clearScreen h2,
-    #gameOverScreen h2 {
-      font-size: 42px;
-      margin-bottom: 20px;
-      margin-top: 20px;
-    }
-
-    #clearScreen h2 {
-      color: #22c55e;
-      text-shadow: 0 0 15px rgba(34, 197, 94, 0.5);
-    }
-
-    #gameOverScreen h2 {
-      color: #ef4444;
-      text-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
-    }
-
-    .result-score {
-      font-size: 24px;
-      color: #cbd5e1;
-      margin: 15px 0 30px 0;
-    }
-
-    .result-score strong {
-      color: #6366f1;
-      font-size: 28px;
-    }
-
-    .btn-retry {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
-      border: none;
-      padding: 12px 35px;
-      font-size: 16px;
-      font-weight: bold;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-    }
-
-    .btn-retry:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CATCH IT</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a1a2e;
+            font-family: 'Arial', sans-serif;
+        }
+        .container {
+            position: relative;
+            width: 400px;
+            height: 550px;
+            background-color: #0f172a;
+            border: 2px solid #6366f1;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-color: rgba(15, 23, 42, 0.95);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startScreen h1 {
+            color: #6366f1;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #startScreen p {
+            color: #cbd5e1;
+            font-size: 14px;
+            margin-bottom: 30px;
+            text-align: center;
+            line-height: 1.4;
+        }
+        #startScreen .btn {
+            padding: 12px 30px;
+            font-size: 18px;
+            background-color: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #startScreen .btn:hover {
+            background-color: #7c3aed;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-color: rgba(15, 23, 42, 0.95);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #gameOverScreen h1 {
+            color: #ef4444;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #gameOverScreen p {
+            color: #cbd5e1;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+        #gameOverScreen .btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #gameOverScreen .btn:hover {
+            background-color: #dc2626;
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-color: rgba(15, 23, 42, 0.95);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #clearScreen h1 {
+            color: #22c55e;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #clearScreen p {
+            color: #cbd5e1;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+        #clearScreen .btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            background-color: #22c55e;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #clearScreen .btn:hover {
+            background-color: #16a34a;
+        }
+    </style>
 </head>
 <body>
-  <div id="gameContainer">
-    <div id="startScreen" style="display:none;">
-      <h1>🎯 CATCH IT</h1>
-      <p>良いものをキャッチして、</p>
-      <p>悪いものは避けよう！</p>
-      <p style="font-size: 14px; color: #94a3b8; margin-top: 20px;">
-        緑は +1 | 赤は ミス<br>
-        20個キャッチでクリア
-      </p>
-      <button class="btn">START</button>
+    <div class="container">
+        <canvas id="gameCanvas" width="400" height="550"></canvas>
+        <div id="startScreen">
+            <h1>CATCH IT</h1>
+            <p>左右をクリックしてバスケットを動かす<br>良いアイテムを20個キャッチしよう！</p>
+            <button class="btn">START</button>
+        </div>
+        <div id="gameOverScreen">
+            <h1>GAME OVER</h1>
+            <p id="gameOverScore"></p>
+            <button class="btn">RETRY</button>
+        </div>
+        <div id="clearScreen">
+            <h1>CLEAR!</h1>
+            <p id="clearScore"></p>
+            <button class="btn">PLAY AGAIN</button>
+        </div>
     </div>
 
-    <div id="gameScreen" style="display:none;">
-      <div id="hud">
-        <div id="score">Score: <span>0</span></div>
-        <div id="misses">Misses: <span>❤ ❤ ❤</span></div>
-      </div>
-      <canvas id="gameCanvas" width="400" height="550"></canvas>
-      <div id="controls">👈 左クリック / 右クリック 👉 で移動</div>
-    </div>
+    <script>
+        const config = {
+            title: 'CATCH IT',
+            bg_color: '#0f172a',
+            basket_color: '#6366f1',
+            good_color: '#22c55e',
+            bad_color: '#ef4444',
+            basket_width: 80,
+            basket_height: 20,
+            target_catch: 20,
+            fall_speed_init: 2,
+            spawn_interval: 60
+        };
 
-    <div id="clearScreen" style="display:none;">
-      <h2>🎉 CLEAR!</h2>
-      <div class="result-score">
-        Final Score: <strong id="clearScore">20</strong>
-      </div>
-      <p style="color: #94a3b8; margin-bottom: 30px;">見事なキャッチ！</p>
-      <button class="btn-retry">もう一度プレイ</button>
-    </div>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-    <div id="gameOverScreen" style="display:none;">
-      <h2>💔 GAME OVER</h2>
-      <div class="result-score">
-        Final Score: <strong id="overScore">0</strong>
-      </div>
-      <p style="color: #94a3b8; margin-bottom: 30px;">あと少しだった！</p>
-      <button class="btn-retry">リトライ</button>
-    </div>
-  </div>
+        let gameState = {
+            running: false,
+            gameOver: false,
+            cleared: false,
+            score: 0,
+            misses: 0,
+            basketX: (canvas.width - config.basket_width) / 2,
+            items: [],
+            particles: [],
+            spawnCounter: 0,
+            ambientStars: [],
+            frameCount: 0
+        };
 
-  <script>
-    const config = {
-      title: 'CATCH IT',
-      bg_color: '#0f172a',
-      basket_color: '#6366f1',
-      good_color: '#22c55e',
-      bad_color: '#ef4444',
-      basket_width: 80,
-      basket_height: 20,
-      target_catch: 20,
-      fall_speed_init: 2,
-      spawn_interval: 60
-    };
+        function initAmbientStars() {
+            gameState.ambientStars = [];
+            for (let i = 0; i < 30; i++) {
+                gameState.ambientStars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 1 + 0.5,
+                    opacity: Math.random() * 0.5 + 0.1,
+                    speed: Math.random() * 0.3 + 0.1
+                });
+            }
+        }
 
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+        function drawAmbientStars() {
+            gameState.ambientStars.forEach(star => {
+                ctx.fillStyle = `rgba(148, 163, 184, ${star.opacity})`;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
 
-    var gameState = {
-      running: false,
-      score: 0,
-      misses: 0,
-      basketX: (canvas.width - config.basket_width) / 2,
-      frameCount: 0,
-      fallSpeed: config.fall_speed_init,
-      spawnCounter: 0
-    };
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = -star.radius;
+                }
+            });
+        }
 
-    var items = [];
-    var particles = [];
-    var bgStars = [];
+        function spawnItem() {
+            const isGood = Math.random() > 0.4;
+            gameState.items.push({
+                x: Math.random() * (canvas.width - 30),
+                y: -20,
+                radius: 12,
+                vx: 0,
+                vy: config.fall_speed_init,
+                isGood: isGood,
+                type: isGood ? (Math.random() > 0.5 ? 'fruit' : 'star') : (Math.random() > 0.5 ? 'lightning' : 'x')
+            });
+        }
 
-    function initBackgroundStars() {
-      bgStars = [];
-      for (let i = 0; i < 25; i++) {
-        bgStars.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          radius: Math.random() * 1 + 0.3,
-          vy: 0.15
+        function drawItem(item) {
+            ctx.save();
+
+            if (item.isGood) {
+                ctx.fillStyle = config.good_color;
+                if (item.type === 'star') {
+                    drawStar(ctx, item.x, item.y, 5, item.radius, item.radius * 0.4);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else {
+                ctx.fillStyle = config.bad_color;
+                if (item.type === 'lightning') {
+                    drawLightning(ctx, item.x, item.y, item.radius);
+                } else {
+                    ctx.font = `bold ${item.radius * 2}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('X', item.x, item.y);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
+            let rot = Math.PI / 2 * 3;
+            let step = Math.PI / spikes;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                ctx.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
+                rot += step;
+
+                ctx.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius);
+                rot += step;
+            }
+            ctx.lineTo(cx, cy - outerRadius);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawLightning(ctx, x, y, size) {
+            ctx.strokeStyle = config.bad_color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y - size);
+            ctx.lineTo(x - size * 0.3, y - size * 0.3);
+            ctx.lineTo(x - size * 0.1, y);
+            ctx.lineTo(x, y + size);
+            ctx.stroke();
+        }
+
+        function drawBasket() {
+            ctx.fillStyle = config.basket_color;
+            ctx.fillRect(gameState.basketX, canvas.height - config.basket_height - 5, config.basket_width, config.basket_height);
+        }
+
+        function drawUI() {
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Score: ${gameState.score}`, 10, 25);
+
+            ctx.textAlign = 'right';
+            let missText = '♥'.repeat(3 - gameState.misses);
+            ctx.fillText(missText, canvas.width - 10, 25);
+
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('クリックで左右移動', canvas.width / 2, canvas.height - 10);
+        }
+
+        function drawParticles() {
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                const p = gameState.particles[i];
+                ctx.fillStyle = `rgba(34, 197, 86, ${p.life / p.maxLife})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.1;
+                p.life--;
+
+                if (p.life <= 0) {
+                    gameState.particles.splice(i, 1);
+                }
+            }
+        }
+
+        function createParticles(x, y) {
+            for (let i = 0; i < 5; i++) {
+                const angle = (Math.PI * 2 * i) / 5;
+                gameState.particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * 2,
+                    vy: Math.sin(angle) * 2,
+                    radius: 3,
+                    life: 20,
+                    maxLife: 20
+                });
+            }
+        }
+
+        function checkCollision(item) {
+            const basketLeft = gameState.basketX;
+            const basketRight = gameState.basketX + config.basket_width;
+            const basketTop = canvas.height - config.basket_height - 5;
+            const basketBottom = canvas.height - 5;
+
+            const itemLeft = item.x - item.radius;
+            const itemRight = item.x + item.radius;
+            const itemTop = item.y - item.radius;
+            const itemBottom = item.y + item.radius;
+
+            return !(itemRight < basketLeft || itemLeft > basketRight ||
+                     itemBottom < basketTop || itemTop > basketBottom);
+        }
+
+        function gameLoop() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawAmbientStars();
+
+            if (gameState.running) {
+                gameState.spawnCounter++;
+                if (gameState.spawnCounter >= config.spawn_interval) {
+                    spawnItem();
+                    gameState.spawnCounter = 0;
+                }
+
+                for (let i = gameState.items.length - 1; i >= 0; i--) {
+                    const item = gameState.items[i];
+                    item.y += item.vy;
+                    item.vy += 0.1;
+
+                    if (checkCollision(item)) {
+                        if (item.isGood) {
+                            gameState.score++;
+                            createParticles(item.x, item.y);
+                            if (gameState.score >= config.target_catch) {
+                                gameState.running = false;
+                                gameState.cleared = true;
+                                showClearScreen();
+                            }
+                        } else {
+                            gameState.misses++;
+                            if (gameState.misses >= 3) {
+                                gameState.running = false;
+                                gameState.gameOver = true;
+                                showGameOverScreen();
+                            }
+                        }
+                        gameState.items.splice(i, 1);
+                    } else if (item.y > canvas.height) {
+                        gameState.items.splice(i, 1);
+                    } else {
+                        drawItem(item);
+                    }
+                }
+
+                drawParticles();
+            }
+
+            drawBasket();
+            drawUI();
+            gameState.frameCount++;
+        }
+
+        function showStartScreen() {
+            const startScreen = document.getElementById('startScreen');
+            startScreen.style.display = 'flex';
+        }
+
+        function hideStartScreen() {
+            const startScreen = document.getElementById('startScreen');
+            startScreen.style.display = 'none';
+        }
+
+        function showGameOverScreen() {
+            const gameOverScreen = document.getElementById('gameOverScreen');
+            const scoreDisplay = document.getElementById('gameOverScore');
+            scoreDisplay.textContent = `スコア: ${gameState.score}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function hideGameOverScreen() {
+            const gameOverScreen = document.getElementById('gameOverScreen');
+            gameOverScreen.style.display = 'none';
+        }
+
+        function showClearScreen() {
+            const clearScreen = document.getElementById('clearScreen');
+            const scoreDisplay = document.getElementById('clearScore');
+            scoreDisplay.textContent = `スコア: ${gameState.score}`;
+            clearScreen.style.display = 'flex';
+        }
+
+        function hideClearScreen() {
+            const clearScreen = document.getElementById('clearScreen');
+            clearScreen.style.display = 'none';
+        }
+
+        function startGame() {
+            gameState.running = true;
+            gameState.gameOver = false;
+            gameState.cleared = false;
+            gameState.score = 0;
+            gameState.misses = 0;
+            gameState.items = [];
+            gameState.particles = [];
+            gameState.spawnCounter = 0;
+            gameState.basketX = (canvas.width - config.basket_width) / 2;
+            hideStartScreen();
+            hideClearScreen();
+            hideGameOverScreen();
+        }
+
+        function retryGame() {
+            gameState.running = false;
+            startGame();
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState.running) {
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+
+                if (clickX < canvas.width / 2) {
+                    gameState.basketX = Math.max(0, gameState.basketX - 40);
+                } else {
+                    gameState.basketX = Math.min(canvas.width - config.basket_width, gameState.basketX + 40);
+                }
+            }
         });
-      }
-    }
 
-    function spawnItem() {
-      const isGood = Math.random() > 0.35;
-      items.push({
-        x: Math.random() * (canvas.width - 20),
-        y: -20,
-        radius: 10,
-        vy: gameState.fallSpeed,
-        type: isGood ? 'good' : 'bad'
-      });
-    }
-
-    function updateItems() {
-      for (let i = items.length - 1; i >= 0; i--) {
-        items[i].y += items[i].vy;
-        if (items[i].y > canvas.height + 20) {
-          items.splice(i, 1);
-          gameState.misses++;
-        }
-      }
-    }
-
-    function checkCollisions() {
-      for (let i = items.length - 1; i >= 0; i--) {
-        const item = items[i];
-        const basketLeft = gameState.basketX;
-        const basketRight = gameState.basketX + config.basket_width;
-        const basketTop = canvas.height - config.basket_height - 10;
-
-        if (
-          item.y + item.radius >= basketTop &&
-          item.x + item.radius >= basketLeft &&
-          item.x - item.radius <= basketRight
-        ) {
-          if (item.type === 'good') {
-            gameState.score++;
-            createParticles(item.x, item.y, true);
-          } else {
-            gameState.misses++;
-            createParticles(item.x, item.y, false);
-          }
-          items.splice(i, 1);
-        }
-      }
-    }
-
-    function createParticles(x, y, isGood) {
-      const count = 6;
-      const color = isGood ? config.good_color : config.bad_color;
-      for (let i = 0; i < count; i++) {
-        const angle = (Math.PI * 2 / count) * i;
-        const speed = 2 + Math.random() * 1.5;
-        particles.push({
-          x: x,
-          y: y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 0.5,
-          life: 25,
-          maxLife: 25,
-          color: color
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn')) {
+                const parentId = e.target.parentElement.id;
+                if (parentId === 'startScreen') {
+                    startGame();
+                } else if (parentId === 'gameOverScreen') {
+                    retryGame();
+                } else if (parentId === 'clearScreen') {
+                    retryGame();
+                }
+            }
         });
-      }
-    }
 
-    function updateParticles() {
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.15;
-        p.life--;
-        if (p.life <= 0) {
-          particles.splice(i, 1);
-        }
-      }
-    }
-
-    function draw() {
-      ctx.fillStyle = config.bg_color;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      drawBackgroundStars();
-      drawItems();
-      drawParticles();
-      drawBasket();
-    }
-
-    function drawBackgroundStars() {
-      bgStars.forEach(star => {
-        star.y = (star.y + star.vy) % (canvas.height + 10);
-        ctx.fillStyle = 'rgba(100, 116, 139, 0.25)';
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-
-    function drawItems() {
-      items.forEach(item => {
-        ctx.fillStyle = item.type === 'good' ? config.good_color : config.bad_color;
-        ctx.beginPath();
-        ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      });
-    }
-
-    function drawParticles() {
-      particles.forEach(p => {
-        const alpha = (p.life / p.maxLife) * 0.8;
-        ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-
-    function drawBasket() {
-      ctx.fillStyle = config.basket_color;
-      ctx.fillRect(gameState.basketX, canvas.height - config.basket_height - 10, config.basket_width, config.basket_height);
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(gameState.basketX, canvas.height - config.basket_height - 10, config.basket_width, config.basket_height);
-    }
-
-    function updateHUD() {
-      document.querySelector('#score span').textContent = gameState.score;
-      const missDisplay = ['❤ ❤ ❤', '❤ ❤ ', '❤ ', ''][Math.min(gameState.misses, 3)];
-      document.querySelector('#misses span').textContent = missDisplay;
-    }
-
-    function gameLoop() {
-      if (!gameState.running) return;
-
-      gameState.frameCount++;
-      gameState.fallSpeed = config.fall_speed_init + (gameState.score * 0.04);
-
-      gameState.spawnCounter++;
-      if (gameState.spawnCounter >= config.spawn_interval) {
-        spawnItem();
-        gameState.spawnCounter = 0;
-      }
-
-      updateItems();
-      checkCollisions();
-      updateParticles();
-      updateHUD();
-      draw();
-
-      if (gameState.score >= config.target_catch) {
-        clearGame();
-      }
-      if (gameState.misses >= 3) {
-        gameOverFunc();
-      }
-    }
-
-    function startGame() {
-      document.getElementById('startScreen').style.display = 'none';
-      document.getElementById('gameScreen').style.display = 'block';
-      gameState.score = 0;
-      gameState.misses = 0;
-      gameState.frameCount = 0;
-      gameState.spawnCounter = 0;
-      gameState.fallSpeed = config.fall_speed_init;
-      items = [];
-      particles = [];
-      initBackgroundStars();
-      gameState.running = true;
-      updateHUD();
-    }
-
-    function retryGame() {
-      gameState.running = false;
-      document.getElementById('clearScreen').style.display = 'none';
-      document.getElementById('gameOverScreen').style.display = 'none';
-      document.getElementById('gameScreen').style.display = 'block';
-      gameState.score = 0;
-      gameState.misses = 0;
-      gameState.frameCount = 0;
-      gameState.spawnCounter = 0;
-      gameState.fallSpeed = config.fall_speed_init;
-      items = [];
-      particles = [];
-      initBackgroundStars();
-      updateHUD();
-      gameState.running = true;
-    }
-
-    function clearGame() {
-      gameState.running = false;
-      document.getElementById('gameScreen').style.display = 'none';
-      document.getElementById('clearScreen').style.display = 'block';
-      document.getElementById('clearScore').textContent = gameState.score;
-    }
-
-    function gameOverFunc() {
-      gameState.running = false;
-      document.getElementById('gameScreen').style.display = 'none';
-      document.getElementById('gameOverScreen').style.display = 'block';
-      document.getElementById('overScore').textContent = gameState.score;
-    }
-
-    canvas.addEventListener('click', (e) => {
-      if (!gameState.running) return;
-      const rect = canvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const moveAmount = 40;
-
-      if (clickX < canvas.width / 2) {
-        gameState.basketX = Math.max(0, gameState.basketX - moveAmount);
-      } else {
-        gameState.basketX = Math.min(canvas.width - config.basket_width, gameState.basketX + moveAmount);
-      }
-    });
-
-    document.querySelector('#startScreen .btn').addEventListener('click', startGame);
-
-    document.querySelectorAll('.btn-retry').forEach(btn => {
-      btn.addEventListener('click', retryGame);
-    });
-
-    window.addEventListener('DOMContentLoaded', () => {
-      initBackgroundStars();
-      document.getElementById('startScreen').style.display = 'block';
-      setInterval(gameLoop, 16);
-    });
-  </script>
+        initAmbientStars();
+        showStartScreen();
+        setInterval(gameLoop, 16);
+    </script>
 </body>
 </html>
