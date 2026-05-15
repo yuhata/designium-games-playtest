@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOMB SQUAD</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #1a1a1a;
+    }
+    canvas {
+      display: block;
+      background-color: #2a2a2a;
+    }
+    #startScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #ff3333;
+      font-size: 56px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 30px #ff3333;
+    }
+    #startScreen p {
+      color: #fff;
+      font-size: 16px;
+      margin-bottom: 40px;
+      text-align: center;
+      width: 80%;
+      max-width: 500px;
+      line-height: 1.6;
+    }
+    #startBtn {
+      padding: 18px 50px;
+      font-size: 28px;
+      background-color: #ff3333;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+    }
+    #startBtn:hover {
+      background-color: #ff5555;
+      transform: scale(1.12);
+      box-shadow: 0 0 20px #ff3333;
+    }
+    #clearScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #clearScreen h1 {
+      color: #ffdd00;
+      font-size: 56px;
+      margin-bottom: 30px;
+      text-shadow: 0 0 40px #ffdd00;
+      animation: pulse 0.8s infinite;
+    }
+    #clearScreen p {
+      color: #fff;
+      font-size: 24px;
+      margin-bottom: 30px;
+    }
+    #gameoverScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #gameoverScreen h1 {
+      color: #ff3333;
+      font-size: 56px;
+      margin-bottom: 30px;
+      text-shadow: 0 0 40px #ff3333;
+    }
+    #gameoverScreen p {
+      color: #fff;
+      font-size: 24px;
+      margin-bottom: 30px;
+    }
+    .restart-text {
+      color: #999;
+      font-size: 14px;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<div id="startScreen">
+  <h1>💣 BOMB SQUAD 💣</h1>
+  <p>Protect the city from destruction!<br><br>Defuse all 5 bombs before time runs out.<br>Click a bomb, then select the correct wire to defuse it.<br>Wrong choice = -10 HP damage</p>
+  <button id="startBtn">START</button>
+</div>
+
+<div id="clearScreen">
+  <h1>✓ MISSION COMPLETE ✓</h1>
+  <p id="finalScore">Final Score: 0</p>
+  <p class="restart-text">Click anywhere to restart</p>
+</div>
+
+<div id="gameoverScreen">
+  <h1>✗ GAME OVER ✗</h1>
+  <p id="finalScoreOver">Final Score: 0</p>
+  <p class="restart-text">Click anywhere to restart</p>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const gameoverScreen = document.getElementById('gameoverScreen');
+
+const gameState = {
+  phase: 'start',
+  bombsDefused: 0,
+  totalBombs: 5,
+  score: 0,
+  hp: 100,
+  timer: 60,
+  bombs: [],
+  selectedBomb: null,
+  wireSelectionActive: false,
+  correctWireIndex: -1,
+  particles: [],
+  vibrationTime: 0,
+  vibrationStrength: 0,
+  winSequenceTime: 0,
+  lastTime: null,
+  raf: null,
+  blinkCycle: 0
+};
+
+const BOMB_RADIUS = 40;
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 600;
+
+function initGame() {
+  gameState.phase = 'play';
+  gameState.bombsDefused = 0;
+  gameState.score = 0;
+  gameState.hp = 100;
+  gameState.timer = 60;
+  gameState.bombs = [];
+  gameState.selectedBomb = null;
+  gameState.wireSelectionActive = false;
+  gameState.particles = [];
+  gameState.vibrationTime = 0;
+  gameState.winSequenceTime = 0;
+  gameState.lastTime = null;
+  gameState.blinkCycle = 0;
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  gameoverScreen.style.display = 'none';
+  
+  for (let i = 0; i < gameState.totalBombs; i++) {
+    const angle = (i / gameState.totalBombs) * Math.PI * 2 + (Math.random() * 0.3);
+    const radius = 100 + Math.random() * 30;
+    const x = 400 + Math.cos(angle) * radius;
+    const y = 120 + Math.sin(angle) * radius * 0.6;
+    gameState.bombs.push({
+      id: i,
+      x: x,
+      y: y,
+      radius: BOMB_RADIUS,
+      defused: false,
+      countdown: Math.random() * 20 + 15
+    });
+  }
+}
+
+function handleCanvasClick(e) {
+  if (gameState.phase === 'start') return;
+  if (gameState.phase === 'clear') {
+    initGame();
+    return;
+  }
+  if (gameState.phase === 'over') {
+    initGame();
+    return;
+  }
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  if (gameState.wireSelectionActive && gameState.selectedBomb !== null) {
+    const wireY = 250;
+    const wireSpacing = 75;
+    const wires = [0, 1, 2].map(i => ({
+      index: i,
+      x: 300 + i * 100,
+      y: wireY + i * wireSpacing,
+      width: 25,
+      height: 100
+    }));
+    
+    for (let wire of wires) {
+      if (x >= wire.x - wire.width && x <= wire.x + wire.width &&
+          y >= wire.y && y <= wire.y + wire.height) {
+        handleWireClick(wire.index);
+        return;
+      }
+    }
+    return;
+  }
+  
+  for (let bomb of gameState.bombs) {
+    if (!bomb.defused) {
+      const dist = Math.sqrt((x - bomb.x) ** 2 + (y - bomb.y) ** 2);
+      if (dist <= bomb.radius + 8) {
+        selectBomb(bomb.id);
+        return;
+      }
+    }
+  }
+}
+
+function selectBomb(bombId) {
+  gameState.selectedBomb = bombId;
+  gameState.wireSelectionActive = true;
+  gameState.correctWireIndex = Math.floor(Math.random() * 3);
+}
+
+function handleWireClick(wireIndex) {
+  if (gameState.phase !== 'play') return;
+  
+  const bomb = gameState.bombs.find(b => b.id === gameState.selectedBomb);
+  if (!bomb) return;
+  
+  if (wireIndex === gameState.correctWireIndex) {
+    bomb.defused = true;
+    gameState.bombsDefused++;
+    gameState.score += 10;
+    createParticles(bomb.x, bomb.y, 12, '#00ff00');
+  } else {
+    gameState.hp -= 10;
+    gameState.vibrationTime = 0.2;
+    gameState.vibrationStrength = 8;
+    createParticles(400, 300, 18, '#ff3333');
+  }
+  
+  gameState.wireSelectionActive = false;
+  gameState.selectedBomb = null;
+  checkWin();
+}
+
+function createParticles(x, y, count, color) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.random() * Math.PI * 2);
+    const speed = Math.random() * 6 + 2;
+    gameState.particles.push({
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      color: color,
+      size: Math.random() * 3 + 2
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = gameState.particles.length - 1; i >= 0; i--) {
+    const p = gameState.particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    p.life -= dt / 0.6;
+    
+    if (p.life <= 0) {
+      gameState.particles.splice(i, 1);
+    }
+  }
+}
+
+function updateVibration(dt) {
+  if (gameState.vibrationTime > 0) {
+    gameState.vibrationTime -= dt;
+  }
+}
+
+function update(dt) {
+  if (gameState.phase !== 'play') return;
+  
+  gameState.timer -= dt;
+  gameState.blinkCycle += dt;
+  
+  if (gameState.timer <= 0) {
+    gameState.timer = 0;
+    gameState.phase = 'over';
+    gameoverScreen.style.display = 'flex';
+    document.getElementById('finalScoreOver').textContent = `Final Score: ${gameState.score}`;
+  }
+  
+  if (gameState.hp <= 0) {
+    gameState.hp = 0;
+    gameState.phase = 'over';
+    gameoverScreen.style.display = 'flex';
+    document.getElementById('finalScoreOver').textContent = `Final Score: ${gameState.score}`;
+  }
+  
+  updateParticles(dt);
+  updateVibration(dt);
+}
+
+function checkWin() {
+  if (gameState.bombsDefused >= gameState.totalBombs && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    gameState.winSequenceTime = 0;
+    clearScreen.style.display = 'flex';
+    document.getElementById('finalScore').textContent = `Final Score: ${gameState.score}`;
+  }
+}
+
+function draw() {
+  ctx.save();
+  
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  
+  if (gameState.phase === 'play') {
+    if (gameState.hp < 30) {
+      ctx.fillStyle = 'rgba(255, 50, 50, 0.15)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+    
+    if (gameState.timer < 20) {
+      const blink = Math.floor(gameState.blinkCycle * 3) % 2;
+      if (blink === 0) {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.08)';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      }
+    }
+  }
+  
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('💣 BOMB SQUAD - Click bomb → Select correct wire 💣', 15, 25);
+  
+  const minutes = Math.floor(gameState.timer / 60);
+  const seconds = Math.floor(gameState.timer % 60);
+  const timerStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  ctx.fillStyle = gameState.timer < 10 ? '#ff3333' : '#ffff00';
+  ctx.font = 'bold 36px Arial';
+  ctx.fillText(timerStr, 30, 75);
+  
+  const hpBarWidth = 200;
+  const hpBarHeight = 24;
+  const hpBarX = CANVAS_WIDTH - hpBarWidth - 30;
+  const hpBarY = 50;
+  
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
+  
+  const hpPercent = Math.max(0, gameState.hp / 100);
+  const hpColor = hpPercent > 0.5 ? '#00ff00' : (hpPercent > 0.3 ? '#ffff00' : '#ff3333');
+  ctx.fillStyle = hpColor;
+  ctx.fillRect(hpBarX, hpBarY, hpBarWidth * hpPercent, hpBarHeight);
+  
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
+  
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(`HP: ${Math.floor(gameState.hp)}/100`, hpBarX + 8, hpBarY + 17);
+  
+  ctx.fillStyle = '#ffff00';
+  ctx.font = 'bold 20px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText(`Score: ${gameState.score}`, CANVAS_WIDTH - 30, 75);
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px Arial';
+  ctx.fillText(`Defused: ${gameState.bombsDefused}/${gameState.totalBombs}`, CANVAS_WIDTH - 30, 95);
+  
+  for (let bomb of gameState.bombs) {
+    ctx.save();
+    
+    if (gameState.vibrationTime > 0) {
+      ctx.translate(
+        (Math.random() - 0.5) * gameState.vibrationStrength,
+        (Math.random() - 0.5) * gameState.vibrationStrength
+      );
+    }
+    
+    ctx.fillStyle = bomb.defused ? '#00ff00' : '#ff3333';
+    ctx.beginPath();
+    ctx.arc(bomb.x, bomb.y, bomb.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = bomb.id === gameState.selectedBomb ? '#ffff00' : '#fff';
+    ctx.lineWidth = bomb.id === gameState.selectedBomb ? 5 : 3;
+    ctx.stroke();
+    
+    if (bomb.defused) {
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('✓', bomb.x, bomb.y);
+    } else {
+      bomb.countdown -= 1/60;
+      const countdownColor = bomb.countdown > 5 ? '#fff' : (bomb.countdown > 2 ? '#ffff00' : '#ff3333');
+      ctx.fillStyle = countdownColor;
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(Math.max(0, Math.ceil(bomb.countdown)), bomb.x, bomb.y);
+    }
+    
+    ctx.restore();
+  }
+  
+  if (gameState.wireSelectionActive && gameState.selectedBomb !== null) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    ctx.fillStyle = '#222';
+    ctx.fillRect(150, 130, 500, 350);
+    
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(150, 130, 500, 350);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Choose the correct wire to DEFUSE!', 400, 170);
+    
+    const wireY = 250;
+    const wireSpacing = 75;
+    const wireColors = ['#ff0000', '#00ff00', '#0000ff'];
+    const wireLabels = ['RED', 'GREEN', 'BLUE'];
+    
+    for (let i = 0; i < 3; i++) {
+      const wireX = 250 + i * 100;
+      
+      ctx.strokeStyle = wireColors[i];
+      ctx.lineWidth = 28;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(wireX, wireY);
+      ctx.lineTo(wireX, wireY + 100);
+      ctx.stroke();
+      
+      ctx.fillStyle = wireColors[i];
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(wireLabels[i], wireX, wireY + 140);
+    }
+    
+    const correctLabel = wireLabels[gameState.correctWireIndex];
+    ctx.fillStyle = '#aaa';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Correct: ${correctLabel}`, 400, 420);
+  }
+  
+  for (let particle of gameState.particles) {
+    ctx.fillStyle = particle.color.replace(')', `, ${Math.max(0, particle.life)})`).replace('rgb', 'rgba');
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  if (gameState.phase === 'clear') {
+    gameState.winSequenceTime += 1/60;
+    if (gameState.winSequenceTime < 5) {
+      const particleCount = Math.floor((gameState.winSequenceTime * 30) % 30);
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (i / particleCount) * Math.PI * 2 + gameState.winSequenceTime * 3;
+        const dist = 120 + Math.sin(gameState.winSequenceTime * 3) * 60;
+        const px = 400 + Math.cos(angle) * dist;
+        const py = 300 + Math.sin(angle) * dist;
+        
+        ctx.fillStyle = `rgba(255, 215, 0, ${0.8 * (1 - gameState.winSequenceTime / 5)})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  
+  ctx.restore();
+}
+
+function gameLoop(timestamp) {
+  const now = timestamp;
+  const dt = gameState.lastTime ? (now - gameState.lastTime) / 1000 : 0;
+  gameState.lastTime = now;
+  
+  const safeDt = Math.min(dt, 0.05);
+  update(safeDt);
+  draw();
+  
+  gameState.raf = requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', () => {
+  initGame();
+});
+
+canvas.addEventListener('click', handleCanvasClick);
+canvas.addEventListener('mousedown', () => {});
+canvas.addEventListener('mousemove', () => {});
+canvas.addEventListener('mouseup', () => {});
+
+gameState.raf = requestAnimationFrame(gameLoop);
+</script>
+
+<!--GAME_SPEC
+{
+  "win_condition": "All 5 bombs defused before timer reaches 0 and HP remains above 0",
+  "fail_condition": "Timer reaches 0 or HP drops to 0 or below",
+  "input_types": ["click"],
+  "state_vars": ["score", "hp", "timer", "bombsDefused"],
+  "core_loop": "Click undefused bomb → Modal appears with 3 colored wires → Click correct wire → +10 score and defuse or -10 HP from wrong choice",
+  "clear_trigger": "gameState.bombsDefused >= 5",
+  "gameover_trigger": "gameState.timer <= 0 || gameState.hp <= 0"
+}
+-->
+
+</body>
+</html>

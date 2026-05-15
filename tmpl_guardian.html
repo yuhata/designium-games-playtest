@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GUARDIAN</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #111;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 600px;
+      height: 500px;
+    }
+    canvas {
+      display: block;
+      background: #1a1a2e;
+      border: 2px solid #0f3460;
+      cursor: crosshair;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #00d4ff;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #00d4ff;
+    }
+    #startScreen p {
+      color: #ccc;
+      font-size: 16px;
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 20px;
+      background: #0f3460;
+      color: #00d4ff;
+      border: 2px solid #00d4ff;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    #startBtn:hover {
+      background: #00d4ff;
+      color: #0f3460;
+      box-shadow: 0 0 20px #00d4ff;
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #clearScreen h1 {
+      color: #00ff00;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 30px #00ff00;
+      animation: glow 0.5s ease-in-out;
+    }
+    #clearScreen p {
+      color: #ccc;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    #overScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #overScreen h1 {
+      color: #ff0000;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 30px #ff0000;
+    }
+    #overScreen p {
+      color: #ccc;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    .retry-btn {
+      padding: 15px 40px;
+      font-size: 20px;
+      background: #0f3460;
+      color: #00d4ff;
+      border: 2px solid #00d4ff;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    .retry-btn:hover {
+      background: #00d4ff;
+      color: #0f3460;
+      box-shadow: 0 0 20px #00d4ff;
+    }
+    @keyframes glow {
+      0% { text-shadow: 0 0 10px #00ff00; }
+      50% { text-shadow: 0 0 50px #00ff00; }
+      100% { text-shadow: 0 0 30px #00ff00; }
+    }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "wave>=5 and enemiesDefeated>=20",
+  "fail_condition": "baseHP<=0",
+  "input_types": ["click"],
+  "state_vars": ["score"],
+  "core_loop": "敵出現→敵をクリック撃破→敵がベース到達でHP減少→全敵撃破でwave進行→5wave完了で勝利",
+  "clear_trigger": "gameState.wave>=5 && gameState.enemiesDefeated>=20",
+  "gameover_trigger": "gameState.baseHP<=0"
+}
+-->
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="600" height="500"></canvas>
+  <div id="startScreen">
+    <h1>GUARDIAN</h1>
+    <p>Protect your base from enemies!<br>Click on enemies to destroy them.</p>
+    <button id="startBtn">START</button>
+  </div>
+  <div id="clearScreen">
+    <h1>YOU WIN!</h1>
+    <p id="finalScore"></p>
+    <p id="finalWave"></p>
+    <p id="finalDefeated"></p>
+    <p style="margin-top: 20px; font-size: 14px;">Click to restart</p>
+    <button class="retry-btn">PLAY AGAIN</button>
+  </div>
+  <div id="overScreen">
+    <h1>GAME OVER</h1>
+    <p id="gameOverScore"></p>
+    <p id="gameOverWave"></p>
+    <p id="gameOverDefeated"></p>
+    <p style="margin-top: 20px; font-size: 14px;">Click to restart</p>
+    <button class="retry-btn">TRY AGAIN</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const overScreen = document.getElementById('overScreen');
+const startBtn = document.getElementById('startBtn');
+
+const gameState = {
+  baseHP: 100,
+  maxHP: 100,
+  enemiesDefeated: 0,
+  wave: 1,
+  score: 0,
+  phase: 'start',
+  enemies: [],
+  damageFlash: 0,
+  whiteFlash: 0,
+  gameStartTime: 0
+};
+
+const enemy = {
+  radius: 20,
+  baseY: 500
+};
+
+function spawnEnemies() {
+  gameState.enemies = [];
+  const enemyCount = gameState.wave * 3;
+  for (let i = 0; i < enemyCount; i++) {
+    gameState.enemies.push({
+      x: Math.random() * 500 + 50,
+      y: 20,
+      hp: 1,
+      wave: gameState.wave
+    });
+  }
+}
+
+function update() {
+  if (gameState.phase !== 'play') return;
+
+  // Move enemies
+  for (let e of gameState.enemies) {
+    e.y += (3 + gameState.wave);
+  }
+
+  // Check for enemies reaching base
+  for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+    if (gameState.enemies[i].y > 450) {
+      gameState.baseHP--;
+      gameState.damageFlash = 10;
+      gameState.enemies.splice(i, 1);
+      if (gameState.baseHP <= 0) {
+        gameState.phase = 'over';
+        showGameOver();
+      }
+    }
+  }
+
+  // Check for wave completion
+  if (gameState.enemies.length === 0 && gameState.wave < 5) {
+    gameState.wave++;
+    spawnEnemies();
+  } else if (gameState.enemies.length === 0 && gameState.wave >= 5) {
+    checkWin();
+  }
+
+  // Update damage flash
+  if (gameState.damageFlash > 0) {
+    gameState.damageFlash--;
+  }
+
+  // Update white flash
+  if (gameState.whiteFlash > 0) {
+    gameState.whiteFlash--;
+  }
+}
+
+function checkWin() {
+  if (gameState.wave >= 5 && gameState.enemiesDefeated >= 20) {
+    gameState.phase = 'clear';
+    gameState.whiteFlash = 20;
+    showClear();
+  }
+}
+
+function draw() {
+  // Clear canvas
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (gameState.phase === 'start') {
+    drawStart();
+  } else if (gameState.phase === 'play') {
+    drawGame();
+  } else if (gameState.phase === 'clear') {
+    drawGame();
+  } else if (gameState.phase === 'over') {
+    drawGame();
+  }
+}
+
+function drawStart() {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#00d4ff';
+  ctx.font = 'bold 36px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('GUARDIAN', canvas.width / 2, 100);
+  ctx.font = '16px Arial';
+  ctx.fillStyle = '#ccc';
+  ctx.fillText('Click START button to begin', canvas.width / 2, 200);
+  ctx.fillText('Protect your base from enemies!', canvas.width / 2, 230);
+  ctx.fillText('Click on enemies to destroy them', canvas.width / 2, 260);
+}
+
+function drawGame() {
+  // Draw base
+  ctx.fillStyle = gameState.damageFlash > 5 ? '#ff4444' : '#00ff00';
+  ctx.fillRect(250, 450, 100, 40);
+  ctx.strokeStyle = gameState.baseHP <= 10 ? '#ff0000' : '#00ff00';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(250, 450, 100, 40);
+  
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('BASE', 300, 475);
+
+  // Draw enemies
+  for (let e of gameState.enemies) {
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, enemy.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ff9944';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(e.hp, e.x, e.y + 3);
+  }
+
+  // Draw damage flash
+  if (gameState.damageFlash > 0) {
+    ctx.fillStyle = `rgba(255, 0, 0, ${gameState.damageFlash / 20})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Draw white flash (win moment)
+  if (gameState.whiteFlash > 0) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${gameState.whiteFlash / 20})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Draw UI
+  ctx.fillStyle = '#00d4ff';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Score: ${gameState.score}`, 10, 25);
+  ctx.fillText(`Base HP: ${gameState.baseHP}/${gameState.maxHP}`, 10, 50);
+  ctx.fillText(`Wave: ${gameState.wave}/5`, 10, 75);
+  ctx.fillText(`Enemies: ${gameState.enemiesDefeated}/20`, 10, 100);
+
+  // Draw instruction
+  ctx.fillStyle = gameState.baseHP <= 10 ? '#ff4444' : '#ffff00';
+  ctx.font = '14px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('Click on enemies to shoot!', canvas.width / 2, canvas.height - 10);
+
+  // Draw protection status
+  if (gameState.baseHP <= 10) {
+    ctx.fillStyle = '#ff0000';
+    ctx.font = 'bold 20px Arial';
+    ctx.fillText('DANGER!', canvas.width / 2, canvas.height / 2);
+  }
+}
+
+function showClear() {
+  startScreen.style.display = 'none';
+  overScreen.style.display = 'none';
+  clearScreen.style.display = 'flex';
+  document.getElementById('finalScore').textContent = `Final Score: ${gameState.score}`;
+  document.getElementById('finalWave').textContent = `Waves Cleared: ${gameState.wave}/5`;
+  document.getElementById('finalDefeated').textContent = `Enemies Defeated: ${gameState.enemiesDefeated}/20`;
+}
+
+function showGameOver() {
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  overScreen.style.display = 'flex';
+  document.getElementById('gameOverScore').textContent = `Final Score: ${gameState.score}`;
+  document.getElementById('gameOverWave').textContent = `Wave Reached: ${gameState.wave}`;
+  document.getElementById('gameOverDefeated').textContent = `Enemies Defeated: ${gameState.enemiesDefeated}/20`;
+}
+
+function resetGame() {
+  gameState.baseHP = 100;
+  gameState.enemiesDefeated = 0;
+  gameState.wave = 1;
+  gameState.score = 0;
+  gameState.phase = 'start';
+  gameState.enemies = [];
+  gameState.damageFlash = 0;
+  gameState.whiteFlash = 0;
+  startScreen.style.display = 'flex';
+  clearScreen.style.display = 'none';
+  overScreen.style.display = 'none';
+}
+
+function handleCanvasClick(e) {
+  if (gameState.phase !== 'play') return;
+
+  const rect = canvas.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+
+  for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+    const e_obj = gameState.enemies[i];
+    const dist = Math.hypot(clickX - e_obj.x, clickY - e_obj.y);
+    if (dist < enemy.radius) {
+      e_obj.hp--;
+      gameState.score++;
+      
+      if (e_obj.hp <= 0) {
+        gameState.enemiesDefeated++;
+        gameState.enemies.splice(i, 1);
+        checkWin();
+      }
+      break;
+    }
+  }
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', () => {
+  gameState.phase = 'play';
+  gameState.gameStartTime = Date.now();
+  spawnEnemies();
+  startScreen.style.display = 'none';
+});
+
+document.querySelectorAll('.retry-btn').forEach(btn => {
+  btn.addEventListener('click', resetGame);
+});
+
+clearScreen.addEventListener('click', resetGame);
+overScreen.addEventListener('click', resetGame);
+
+canvas.addEventListener('mousedown', handleCanvasClick);
+
+gameLoop();
+</script>
+</body>
+</html>

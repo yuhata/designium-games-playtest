@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<!--GAME_SPEC
+{
+  "win_condition": "score >= 30",
+  "fail_condition": "serverHP <= 0",
+  "input_types": ["click"],
+  "state_vars": ["score", "serverHP", "packetsBlocked"],
+  "core_loop": "packets spawn and move right; player clicks red packets to block (score++); clicking green packets causes penalty (serverHP--); red packets reaching server automatically damage HP; reach 30 score to win or drop to 0 HP to lose",
+  "clear_trigger": "gameState.score >= 30 && gameState.phase === 'play'",
+  "gameover_trigger": "gameState.serverHP <= 0 && gameState.phase === 'play'"
+}
+-->
+<head>
+  <meta charset="UTF-8">
+  <title>FIREWALL - Protect the Server</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #0a0a0a;
+      font-family: "Arial", sans-serif;
+      overflow: hidden;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #000;
+      box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #00ff00;
+      font-size: 56px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #00ff00, 0 0 40px rgba(0, 255, 0, 0.5);
+      letter-spacing: 2px;
+    }
+    #startScreen .instructions {
+      color: #ccc;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 40px;
+      text-align: center;
+      max-width: 500px;
+    }
+    #startBtn {
+      padding: 18px 50px;
+      font-size: 26px;
+      font-weight: bold;
+      color: #000;
+      background: linear-gradient(135deg, #00ff00, #00cc00);
+      border: 2px solid #00ff00;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+    }
+    #startBtn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 25px rgba(0, 255, 0, 0.8);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 101;
+      backdrop-filter: blur(5px);
+    }
+    #clearScreen.win {
+      background: radial-gradient(circle at center, rgba(0, 255, 0, 0.4), rgba(0, 100, 50, 0.6));
+    }
+    #clearScreen.fail {
+      background: radial-gradient(circle at center, rgba(255, 0, 0, 0.4), rgba(100, 0, 0, 0.6));
+    }
+    #clearTitle {
+      font-size: 52px;
+      font-weight: bold;
+      margin-bottom: 30px;
+      text-shadow: 0 0 20px currentColor;
+    }
+    #clearScreen.win #clearTitle {
+      color: #00ff00;
+    }
+    #clearScreen.fail #clearTitle {
+      color: #ff3333;
+    }
+    #clearScore {
+      font-size: 32px;
+      color: #fff;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+    #restartHint {
+      font-size: 16px;
+      color: #aaa;
+      margin-top: 40px;
+      animation: blink 1.2s infinite;
+    }
+    @keyframes blink {
+      0%, 50%, 100% { opacity: 1; }
+      25%, 75% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="startScreen">
+      <h1>FIREWALL</h1>
+      <div class="instructions">
+        <strong>Protect the server from malicious packets</strong><br><br>
+        <span style="color: #ff3333;">● RED packets</span> = Malicious (Click to BLOCK)<br>
+        <span style="color: #00ff00;">● GREEN packets</span> = Safe (Let them PASS)<br><br>
+        Reach 30 blocks to WIN | Defend the server!
+      </div>
+      <button id="startBtn">START GAME</button>
+    </div>
+    <div id="clearScreen">
+      <h2 id="clearTitle">GAME OVER</h2>
+      <p id="clearScore">Final Score: 0</p>
+      <p id="restartHint">Click anywhere to restart</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const clearScreen = document.getElementById('clearScreen');
+    const startBtn = document.getElementById('startBtn');
+    const clearTitle = document.getElementById('clearTitle');
+    const clearScore = document.getElementById('clearScore');
+
+    // Game state
+    const gameState = {
+      phase: 'start',
+      score: 0,
+      serverHP: 100,
+      packetsBlocked: 0,
+      packetsThrough: 0,
+      lastSpawnTime: 0,
+      startTime: 0,
+      damageFlash: 0
+    };
+
+    let packets = [];
+    const PACKET_RADIUS = 15;
+    const PACKET_SPEED = 4;
+    const SPAWN_INTERVAL = 1000;
+    const WIN_SCORE = 30;
+    const MAX_HP = 100;
+    const RED_REACH_DAMAGE = 8;
+    const GREEN_CLICK_DAMAGE = 5;
+
+    // Utility: Calculate distance
+    function distance(x1, y1, x2, y2) {
+      return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+    }
+
+    // Spawn new packet
+    function spawnPacket() {
+      const isRed = Math.random() < 0.7;
+      packets.push({
+        x: 0,
+        y: Math.random() * (canvas.height - 120) + 60,
+        color: isRed ? 'red' : 'green',
+        active: true,
+        blocked: false
+      });
+    }
+
+    // Update game state
+    function updatePackets() {
+      const now = Date.now();
+      if (now - gameState.lastSpawnTime > SPAWN_INTERVAL && gameState.phase === 'play') {
+        spawnPacket();
+        gameState.lastSpawnTime = now;
+      }
+
+      for (let i = 0; i < packets.length; i++) {
+        const packet = packets[i];
+        if (!packet.active) continue;
+
+        packet.x += PACKET_SPEED;
+
+        // Check if red packet reached server
+        if (packet.color === 'red' && packet.x > canvas.width - 10 && packet.active) {
+          gameState.serverHP -= RED_REACH_DAMAGE;
+          packet.active = false;
+          gameState.packetsThrough++;
+          gameState.damageFlash = 10;
+        }
+
+        // Remove off-screen packets
+        if (packet.x > canvas.width + 20) {
+          packet.active = false;
+        }
+      }
+
+      // Damage flash decay
+      if (gameState.damageFlash > 0) {
+        gameState.damageFlash--;
+      }
+    }
+
+    // Draw game
+    function draw() {
+      // Background
+      const bgAlpha = gameState.damageFlash > 0 ? 0.4 : 0.15;
+      ctx.fillStyle = `rgba(10, 10, 30, ${bgAlpha})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Grid pattern
+      ctx.strokeStyle = 'rgba(0, 255, 100, 0.08)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < canvas.width; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+
+      // Server zone
+      ctx.fillStyle = 'rgba(0, 200, 50, 0.15)';
+      ctx.fillRect(canvas.width - 100, 0, 100, canvas.height);
+      ctx.strokeStyle = gameState.damageFlash > 0 ? 'rgba(255, 0, 0, 0.6)' : 'rgba(0, 255, 0, 0.4)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(canvas.width - 100, 0, 100, canvas.height);
+
+      // Server icon
+      ctx.fillStyle = gameState.damageFlash > 0 ? '#ff6666' : '#00ff00';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('SERVER', canvas.width - 50, canvas.height / 2);
+
+      // Draw packets
+      for (let i = 0; i < packets.length; i++) {
+        const packet = packets[i];
+        if (!packet.active && !packet.blocked) continue;
+
+        ctx.fillStyle = packet.color === 'red' ? '#ff3333' : '#00ff00';
+        ctx.beginPath();
+        ctx.arc(packet.x, packet.y, PACKET_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glow
+        ctx.strokeStyle = packet.color === 'red' 
+          ? 'rgba(255, 51, 51, 0.7)' 
+          : 'rgba(0, 255, 0, 0.7)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Packet label
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(packet.color === 'red' ? '!' : '✓', packet.x, packet.y);
+      }
+
+      // HP Bar
+      ctx.fillStyle = '#333';
+      ctx.fillRect(20, 20, 220, 30);
+      const hpPercent = Math.max(0, gameState.serverHP) / MAX_HP;
+      const hpColor = hpPercent > 0.5 ? '#00ff00' : (hpPercent > 0.2 ? '#ffaa00' : '#ff3333');
+      ctx.fillStyle = hpColor;
+      ctx.fillRect(20, 20, 220 * hpPercent, 30);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, 20, 220, 30);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`Server HP: ${Math.max(0, gameState.serverHP)} / ${MAX_HP}`, 240, 24);
+
+      // Score display
+      ctx.fillStyle = gameState.score >= WIN_SCORE ? '#00ff00' : '#ffaa00';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`Score: ${gameState.score} / ${WIN_SCORE}`, 20, 70);
+
+      // Instructions
+      ctx.fillStyle = 'rgba(200, 200, 200, 0.8)';
+      ctx.font = '13px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('Click RED packets to block them • Let GREEN packets pass', 20, canvas.height - 10);
+
+      // Damage warning
+      if (gameState.damageFlash > 5) {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ff3333';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('PACKET BREACHED!', canvas.width / 2, 50);
+      }
+    }
+
+    // Check win
+    function checkWin() {
+      if (gameState.score >= WIN_SCORE && gameState.phase === 'play') {
+        gameState.phase = 'clear';
+        showClearScreen(true);
+        return true;
+      }
+      return false;
+    }
+
+    // Check fail
+    function checkFail() {
+      if (gameState.serverHP <= 0 && gameState.phase === 'play') {
+        gameState.phase = 'over';
+        showClearScreen(false);
+        return true;
+      }
+      return false;
+    }
+
+    // Show result screen
+    function showClearScreen(isWin) {
+      clearScreen.classList.remove('win', 'fail');
+      if (isWin) {
+        clearScreen.classList.add('win');
+        clearTitle.textContent = '🔒 FIREWALL SECURED!';
+      } else {
+        clearScreen.classList.add('fail');
+        clearTitle.textContent = '⚠ FIREWALL BREACHED!';
+      }
+      clearScore.textContent = `Final Score: ${gameState.score} / ${WIN_SCORE}`;
+      clearScreen.style.display = 'flex';
+    }
+
+    // Reset game
+    function resetGame() {
+      gameState.phase = 'start';
+      gameState.score = 0;
+      gameState.serverHP = 100;
+      gameState.packetsBlocked = 0;
+      gameState.packetsThrough = 0;
+      gameState.lastSpawnTime = 0;
+      gameState.damageFlash = 0;
+      packets = [];
+      startScreen.style.display = 'flex';
+      clearScreen.style.display = 'none';
+    }
+
+    // Mouse down: detect packet clicks
+    canvas.addEventListener('mousedown', function(e) {
+      if (gameState.phase !== 'play') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      let hitPacket = false;
+
+      for (let i = packets.length - 1; i >= 0; i--) {
+        const packet = packets[i];
+        if (!packet.active) continue;
+
+        const dist = distance(clickX, clickY, packet.x, packet.y);
+        if (dist <= PACKET_RADIUS + 8) {
+          if (packet.color === 'red') {
+            // Blocked malicious packet
+            gameState.score++;
+            gameState.packetsBlocked++;
+            packet.active = false;
+            packet.blocked = true;
+            hitPacket = true;
+            checkWin();
+          } else {
+            // Clicked safe packet (penalty)
+            gameState.serverHP -= GREEN_CLICK_DAMAGE;
+            packet.active = false;
+            gameState.damageFlash = 10;
+            hitPacket = true;
+            checkFail();
+          }
+          break;
+        }
+      }
+    });
+
+    // Start button
+    startBtn.addEventListener('click', function() {
+      gameState.phase = 'play';
+      gameState.startTime = Date.now();
+      gameState.lastSpawnTime = Date.now();
+      startScreen.style.display = 'none';
+    });
+
+    // Restart on clear/over
+    clearScreen.addEventListener('click', function() {
+      if (gameState.phase === 'clear' || gameState.phase === 'over') {
+        resetGame();
+      }
+    });
+
+    // Game loop
+    function gameLoop() {
+      if (gameState.phase === 'play') {
+        updatePackets();
+        checkFail();
+      }
+
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
