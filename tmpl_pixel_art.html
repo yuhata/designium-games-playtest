@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PIXEL STUDIO</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh; 
+      background: #1a1a2e; 
+      font-family: 'Arial', sans-serif;
+      padding: 20px;
+    }
+    #gameContainer {
+      position: relative;
+      display: flex;
+      gap: 20px;
+    }
+    canvas {
+      background: #0f3460;
+      border: 3px solid #e94560;
+      display: block;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    #sidebar {
+      width: 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .stat-panel {
+      background: #162a45;
+      padding: 12px;
+      border: 2px solid #00d4ff;
+      border-radius: 5px;
+      color: #00d4ff;
+      font-size: 14px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: bold;
+      margin: 5px 0 0 0;
+    }
+    .color-palette {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .color-btn {
+      width: 50px;
+      height: 50px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: transform 0.1s;
+    }
+    .color-btn:hover {
+      transform: scale(1.1);
+    }
+    .color-btn.selected {
+      border: 3px solid #ffff00;
+      box-shadow: 0 0 10px #ffff00;
+    }
+    #startScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    #startScreen h1 {
+      color: #e94560;
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    #startScreen p {
+      color: #00d4ff;
+      font-size: 16px;
+      margin-bottom: 30px;
+      text-align: center;
+      max-width: 400px;
+    }
+    #startBtn {
+      padding: 15px 50px;
+      font-size: 20px;
+      background: #e94560;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      transition: all 0.3s;
+    }
+    #startBtn:hover {
+      background: #ff6b7a;
+      transform: scale(1.05);
+    }
+    #clearScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1001;
+      color: white;
+      text-align: center;
+    }
+    #clearScreen h1 {
+      color: #e94560;
+      font-size: 48px;
+      margin-bottom: 20px;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    .clear-stats {
+      color: #00d4ff;
+      font-size: 24px;
+      margin: 15px 0;
+    }
+    #clearScreen p {
+      color: #00d4ff;
+      font-size: 16px;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "matchScore >= 90",
+  "fail_condition": "none (creative mode)",
+  "input_types": ["click", "drag", "touch"],
+  "state_vars": ["filledCells", "selectedColor", "matchScore", "phase", "elapsedTime"],
+  "core_loop": "click/drag cell -> paint selected color -> calculate matchScore -> check win",
+  "clear_trigger": "matchScore >= 90",
+  "gameover_trigger": "none"
+}
+-->
+
+<div id="startScreen">
+  <h1>PIXEL STUDIO</h1>
+  <p>Draw to match the target pattern.<br>Build your masterpiece pixel by pixel!</p>
+  <button id="startBtn">START</button>
+</div>
+
+<div id="clearScreen">
+  <h1>✨ MASTERPIECE CREATED! ✨</h1>
+  <div class="clear-stats" id="finalScore">Score: 100%</div>
+  <p>Click to create another</p>
+</div>
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="512" height="512"></canvas>
+  <div id="sidebar">
+    <div class="stat-panel">
+      <div>SCORE</div>
+      <div class="stat-value" id="scoreDisplay">0%</div>
+    </div>
+    <div class="stat-panel">
+      <div>TIME</div>
+      <div class="stat-value" id="timeDisplay">0s</div>
+    </div>
+    <div class="stat-panel">
+      <div>CELLS</div>
+      <div class="stat-value" id="cellsDisplay">0</div>
+    </div>
+    <div class="stat-panel">
+      <div>COLOR</div>
+      <div class="color-palette" id="colorPalette"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const finalScoreDiv = document.getElementById('finalScore');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const timeDisplay = document.getElementById('timeDisplay');
+const cellsDisplay = document.getElementById('cellsDisplay');
+const colorPalette = document.getElementById('colorPalette');
+
+const GRID_SIZE = 16;
+const CANVAS_SIZE = 512;
+const CELL_SIZE = CANVAS_SIZE / GRID_SIZE;
+const COLORS = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'];
+
+let gameState = {
+  filledCells: [],
+  targetPattern: [],
+  selectedColor: '#FF0000',
+  matchScore: 0,
+  phase: 'start',
+  startTime: null,
+  elapsedTime: 0
+};
+
+let dragging = false;
+let lastPaintedCell = null;
+
+function initColorPalette() {
+  colorPalette.innerHTML = '';
+  for (let color of COLORS) {
+    const btn = document.createElement('div');
+    btn.className = 'color-btn';
+    btn.style.backgroundColor = color;
+    if (color === gameState.selectedColor) {
+      btn.classList.add('selected');
+    }
+    btn.addEventListener('click', () => selectColor(color, btn));
+    colorPalette.appendChild(btn);
+  }
+}
+
+function selectColor(color, element) {
+  gameState.selectedColor = color;
+  document.querySelectorAll('.color-btn').forEach(btn => btn.classList.remove('selected'));
+  element.classList.add('selected');
+}
+
+function generateTargetPattern() {
+  gameState.targetPattern = [];
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      gameState.targetPattern.push({
+        x: x,
+        y: y,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)]
+      });
+    }
+  }
+}
+
+function initGame() {
+  gameState.filledCells = [];
+  gameState.selectedColor = '#FF0000';
+  gameState.matchScore = 0;
+  gameState.phase = 'play';
+  gameState.startTime = Date.now();
+  gameState.elapsedTime = 0;
+  lastPaintedCell = null;
+  generateTargetPattern();
+  initColorPalette();
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  gameLoop();
+}
+
+function paintCell(gridX, gridY) {
+  if (gridX < 0 || gridX >= GRID_SIZE || gridY < 0 || gridY >= GRID_SIZE) return;
+  
+  const existingCell = gameState.filledCells.find(c => c !== null && c !== undefined && c.x === gridX && c.y === gridY);
+  if (existingCell) {
+    existingCell.color = gameState.selectedColor;
+  } else {
+    gameState.filledCells.push({
+      x: gridX,
+      y: gridY,
+      color: gameState.selectedColor
+    });
+  }
+  
+  calculateMatchScore();
+  checkWin();
+}
+
+function calculateMatchScore() {
+  if (!gameState.targetPattern || gameState.targetPattern.length === 0) return;
+  
+  let matches = 0;
+  for (let cell of gameState.filledCells) {
+    if (cell === null || cell === undefined) continue;
+    const targetCell = gameState.targetPattern.find(t => t !== null && t !== undefined && t.x === cell.x && t.y === cell.y);
+    if (targetCell && targetCell.color === cell.color) {
+      matches++;
+    }
+  }
+  gameState.matchScore = Math.round((matches / (GRID_SIZE * GRID_SIZE)) * 100);
+  scoreDisplay.textContent = gameState.matchScore + '%';
+}
+
+function checkWin() {
+  if (gameState.matchScore >= 90) {
+    gameState.phase = 'clear';
+    showClearScreen();
+  }
+}
+
+function showClearScreen() {
+  clearScreen.style.display = 'flex';
+  finalScoreDiv.textContent = 'Score: ' + gameState.matchScore + '%';
+}
+
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  let x, y;
+  
+  if (e.touches) {
+    x = e.touches[0].clientX - rect.left;
+    y = e.touches[0].clientY - rect.top;
+  } else {
+    x = e.clientX - rect.left;
+    y = e.clientY - rect.top;
+  }
+  
+  return { x, y };
+}
+
+function handleCanvasClick(e) {
+  if (gameState.phase !== 'play') return;
+  
+  const { x, y } = getCanvasCoords(e);
+  const gridX = Math.floor(x / CELL_SIZE);
+  const gridY = Math.floor(y / CELL_SIZE);
+  
+  paintCell(gridX, gridY);
+}
+
+function handleMouseDown(e) {
+  if (gameState.phase !== 'play') return;
+  
+  const { x, y } = getCanvasCoords(e);
+  
+  if (x >= 0 && x <= CANVAS_SIZE && y >= 0 && y <= CANVAS_SIZE) {
+    dragging = true;
+    const gridX = Math.floor(x / CELL_SIZE);
+    const gridY = Math.floor(y / CELL_SIZE);
+    lastPaintedCell = { x: gridX, y: gridY };
+    paintCell(gridX, gridY);
+  }
+}
+
+function handleMouseMove(e) {
+  if (!dragging || gameState.phase !== 'play') return;
+  
+  const { x, y } = getCanvasCoords(e);
+  
+  const gridX = Math.floor(x / CELL_SIZE);
+  const gridY = Math.floor(y / CELL_SIZE);
+  
+  if (lastPaintedCell && (lastPaintedCell.x !== gridX || lastPaintedCell.y !== gridY)) {
+    lastPaintedCell = { x: gridX, y: gridY };
+    paintCell(gridX, gridY);
+  }
+}
+
+function handleMouseUp() {
+  dragging = false;
+}
+
+function draw() {
+  ctx.fillStyle = '#0f3460';
+  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  
+  ctx.strokeStyle = '#333333';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    const pos = i * CELL_SIZE;
+    ctx.beginPath();
+    ctx.moveTo(pos, 0);
+    ctx.lineTo(pos, CANVAS_SIZE);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(0, pos);
+    ctx.lineTo(CANVAS_SIZE, pos);
+    ctx.stroke();
+  }
+  
+  if (gameState.targetPattern && gameState.targetPattern.length > 0) {
+    ctx.globalAlpha = 0.15;
+    for (let cell of gameState.targetPattern) {
+      if (cell === null || cell === undefined) continue;
+      ctx.fillStyle = cell.color || '#FF0000';
+      ctx.fillRect(cell.x * CELL_SIZE + 1, cell.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+  
+  for (let cell of gameState.filledCells) {
+    if (cell === null || cell === undefined) continue;
+    ctx.fillStyle = cell.color || '#FF0000';
+    ctx.fillRect(cell.x * CELL_SIZE + 1, cell.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+  }
+  
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.font = '12px Arial';
+  ctx.fillText('Click/Drag to paint', 10, 20);
+  ctx.fillText('Match the target', 10, 35);
+}
+
+function gameLoop() {
+  if (gameState.phase === 'play') {
+    gameState.elapsedTime = Math.floor((Date.now() - gameState.startTime) / 1000);
+    timeDisplay.textContent = gameState.elapsedTime + 's';
+    cellsDisplay.textContent = gameState.filledCells.length;
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+}
+
+startBtn.addEventListener('click', initGame);
+canvas.addEventListener('click', handleCanvasClick);
+canvas.addEventListener('mousedown', handleMouseDown);
+canvas.addEventListener('mousemove', handleMouseMove);
+canvas.addEventListener('mouseup', handleMouseUp);
+canvas.addEventListener('mouseleave', handleMouseUp);
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const mouseEvent = new MouseEvent('mousedown', {
+    clientX: touch.clientX,
+    clientY: touch.clientY
+  });
+  canvas.dispatchEvent(mouseEvent);
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const mouseEvent = new MouseEvent('mousemove', {
+    clientX: touch.clientX,
+    clientY: touch.clientY
+  });
+  canvas.dispatchEvent(mouseEvent);
+});
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  const mouseEvent = new MouseEvent('mouseup', {});
+  canvas.dispatchEvent(mouseEvent);
+});
+
+clearScreen.addEventListener('click', () => {
+  initGame();
+});
+
+window.addEventListener('load', () => {
+  startScreen.style.display = 'flex';
+  initColorPalette();
+});
+</script>
+
+</body>
+</html>

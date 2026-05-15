@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DEMOLISH</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #222;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #87CEEB;
+      border: 3px solid #333;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: #87CEEB;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #startScreen h1 {
+      color: #FF4500;
+      font-size: 64px;
+      margin: 0 0 20px 0;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    #startScreen p {
+      color: #FFD700;
+      font-size: 20px;
+      margin: 10px 0;
+    }
+    #startBtn {
+      padding: 15px 50px;
+      font-size: 28px;
+      font-weight: bold;
+      background: #FF4500;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 30px;
+      transition: all 0.1s;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    #startBtn:hover {
+      background: #FF6347;
+      transform: scale(1.05);
+    }
+    #startBtn:active {
+      transform: scale(0.95);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1001;
+    }
+    #clearScreen h1 {
+      color: #FFD700;
+      font-size: 72px;
+      margin: 0 0 30px 0;
+      text-shadow: 2px 2px 8px rgba(255,215,0,0.5);
+    }
+    #clearScreen p {
+      color: white;
+      font-size: 22px;
+      margin: 10px 0;
+    }
+    #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1001;
+    }
+    #gameOverScreen h1 {
+      color: #FF6347;
+      font-size: 64px;
+      margin: 0 0 30px 0;
+    }
+    #gameOverScreen p {
+      color: white;
+      font-size: 20px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "すべての構造物が破壊されて structuresLeft == 0",
+  "fail_condition": "なし（すべての構造物を必ず破壊する）",
+  "input_types": ["click", "mousedown", "mousemove", "mouseup"],
+  "state_vars": ["score", "structuresLeft", "phase"],
+  "core_loop": "クリック→構造物選択→health減少→ビジュアル更新→倒壊判定→瓦礫落下→スコア加算",
+  "clear_trigger": "structuresLeft == 0 && phase == 'play'",
+  "gameover_trigger": "なし"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div id="startScreen">
+    <h1>DEMOLISH</h1>
+    <p>すべての構造物を破壊せよ</p>
+    <p style="font-size: 16px; color: #aaa;">クリックで構造物にダメージを与える</p>
+    <button id="startBtn">START</button>
+  </div>
+  <div id="clearScreen">
+    <h1>CLEAR!</h1>
+    <p>すべての構造物を破壊しました！</p>
+    <p id="finalScore" style="font-size: 32px; color: #FFD700; font-weight: bold;">Final Score: 0</p>
+    <p style="font-size: 18px; margin-top: 30px; color: #FFA500;">クリックでリスタート</p>
+  </div>
+  <div id="gameOverScreen">
+    <h1>ERROR</h1>
+    <p>エラーが発生しました</p>
+    <p id="overScore">Score: 0</p>
+    <p style="font-size: 18px; margin-top: 30px;">クリックでリスタート</p>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const startScreen = document.getElementById('startScreen');
+  const clearScreen = document.getElementById('clearScreen');
+  const gameOverScreen = document.getElementById('gameOverScreen');
+  const startBtn = document.getElementById('startBtn');
+
+  let gameState = {
+    phase: 'start',
+    score: 0,
+    structuresLeft: 0,
+    time: 0,
+    clearStartTime: -1
+  };
+
+  let structures = [];
+  let particles = [];
+  let scorePopups = [];
+  let pointerState = {
+    x: 0,
+    y: 0,
+    isDown: false
+  };
+
+  const STRUCTURE_WIDTH = 60;
+  const STRUCTURE_HEIGHT = 80;
+  const INITIAL_HEALTH = 7;
+
+  function initGame() {
+    gameState.phase = 'play';
+    gameState.score = 0;
+    gameState.time = 0;
+    gameState.clearStartTime = -1;
+    structures = [];
+    particles = [];
+    scorePopups = [];
+
+    const spacing = 130;
+    const startX = 80;
+    const startY = 120;
+
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 3; col++) {
+        structures.push({
+          x: startX + col * spacing,
+          y: startY + row * spacing,
+          width: STRUCTURE_WIDTH,
+          height: STRUCTURE_HEIGHT,
+          health: INITIAL_HEALTH,
+          maxHealth: INITIAL_HEALTH,
+          rotation: 0,
+          velocityY: 0,
+          rotationVelocity: 0,
+          falling: false
+        });
+      }
+    }
+
+    gameState.structuresLeft = structures.length;
+    startScreen.style.display = 'none';
+    clearScreen.style.display = 'none';
+    gameOverScreen.style.display = 'none';
+  }
+
+  function drawStructure(s) {
+    if (s.health === -1) return;
+
+    ctx.save();
+    ctx.translate(s.x + s.width / 2, s.y + s.height / 2);
+    ctx.rotate((s.rotation * Math.PI) / 180);
+
+    let color = '#4CAF50';
+    if (s.health <= 5 && s.health > 3) color = '#FFD700';
+    if (s.health <= 3 && s.health > 0) color = '#FF6347';
+    if (s.health <= 0) color = '#888';
+
+    ctx.fillStyle = color;
+    ctx.fillRect(-s.width / 2, -s.height / 2, s.width, s.height);
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-s.width / 2, -s.height / 2, s.width, s.height);
+
+    if (s.health > 0) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(s.health.toString(), 0, 0);
+    }
+
+    ctx.restore();
+  }
+
+  function createExplosion(x, y) {
+    for (let i = 0; i < 25; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 5;
+      particles.push({
+        x: x,
+        y: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1,
+        life: 50,
+        maxLife: 50,
+        size: 2 + Math.random() * 5,
+        color: ['#FF4500', '#FFD700', '#FF6347', '#FF8C00'][Math.floor(Math.random() * 4)]
+      });
+    }
+
+    scorePopups.push({
+      x: x,
+      y: y - 20,
+      text: '+10',
+      life: 50,
+      maxLife: 50
+    });
+  }
+
+  function updateAndDrawParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      if (p === null || p === undefined) continue;
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.2;
+      p.life--;
+
+      const alpha = p.life / p.maxLife;
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+      }
+    }
+  }
+
+  function updateAndDrawScorePopups() {
+    for (let i = scorePopups.length - 1; i >= 0; i--) {
+      const sp = scorePopups[i];
+      if (sp === null || sp === undefined) continue;
+
+      sp.y -= 1.5;
+      sp.life--;
+
+      const alpha = sp.life / sp.maxLife;
+      ctx.fillStyle = '#FFD700';
+      ctx.globalAlpha = alpha;
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(sp.text, sp.x, sp.y);
+      ctx.globalAlpha = 1.0;
+
+      if (sp.life <= 0) {
+        scorePopups.splice(i, 1);
+      }
+    }
+  }
+
+  function getCanvasCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }
+
+  function handleCanvasClick(e) {
+    if (gameState.phase !== 'play') return;
+
+    const coords = getCanvasCoords(e);
+    let hitAny = false;
+
+    for (let s of structures) {
+      if (s.health > 0 &&
+          coords.x >= s.x &&
+          coords.x < s.x + s.width &&
+          coords.y >= s.y &&
+          coords.y < s.y + s.height) {
+        
+        s.health--;
+        gameState.score += 10;
+        createExplosion(s.x + s.width / 2, s.y + s.height / 2);
+        hitAny = true;
+
+        if (s.health <= 0) {
+          s.falling = true;
+          s.rotationVelocity = (Math.random() > 0.5 ? 1 : -1) * (1 + Math.random());
+          gameState.structuresLeft--;
+        }
+
+        break;
+      }
+    }
+
+    checkWin();
+  }
+
+  function handleMouseDown(e) {
+    if (gameState.phase !== 'play') return;
+    pointerState.isDown = true;
+    const coords = getCanvasCoords(e);
+    pointerState.x = coords.x;
+    pointerState.y = coords.y;
+  }
+
+  function handleMouseMove(e) {
+    if (gameState.phase !== 'play') return;
+    const coords = getCanvasCoords(e);
+    pointerState.x = coords.x;
+    pointerState.y = coords.y;
+  }
+
+  function handleMouseUp(e) {
+    if (gameState.phase !== 'play') return;
+    pointerState.isDown = false;
+  }
+
+  function checkWin() {
+    if (gameState.structuresLeft <= 0 && gameState.phase === 'play') {
+      gameState.phase = 'clear';
+      gameState.clearStartTime = gameState.time;
+    }
+  }
+
+  function gameLoop() {
+    gameState.time++;
+
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let s of structures) {
+      if (s.falling) {
+        s.rotation += s.rotationVelocity;
+        s.velocityY += 0.4;
+        s.y += s.velocityY;
+
+        if (s.y > canvas.height) {
+          s.health = -1;
+        }
+      }
+      drawStructure(s);
+    }
+
+    updateAndDrawParticles();
+    updateAndDrawScorePopups();
+
+    if (gameState.phase === 'clear') {
+      const elapsedSinceClear = gameState.time - gameState.clearStartTime;
+
+      if (elapsedSinceClear < 60) {
+        const flashOpacity = Math.abs(Math.sin((elapsedSinceClear / 60) * Math.PI)) * 0.7;
+        ctx.fillStyle = `rgba(255, 255, 255, ${flashOpacity})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (elapsedSinceClear < 50) {
+          const shake = Math.sin((elapsedSinceClear / 50) * Math.PI * 12) * 3;
+          ctx.save();
+          ctx.translate(shake, shake);
+        }
+
+        const scale = 0.2 + (elapsedSinceClear / 60) * 1.2;
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#FF4500';
+        ctx.font = 'bold 80px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CLEAR!', 0, 0);
+        ctx.restore();
+      } else {
+        clearScreen.style.display = 'flex';
+        document.getElementById('finalScore').textContent = `Final Score: ${gameState.score}`;
+      }
+    }
+
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`Score: ${gameState.score}`, 20, 20);
+    ctx.fillText(`Structures: ${gameState.structuresLeft}`, 20, 50);
+
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#333';
+    ctx.fillText('クリックして構造物を破壊！', 20, 80);
+
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(`Time: ${Math.floor(gameState.time / 60)}s`, canvas.width - 20, 20);
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  startBtn.addEventListener('click', initGame);
+  canvas.addEventListener('click', handleCanvasClick);
+  canvas.addEventListener('mousedown', handleMouseDown);
+  canvas.addEventListener('mousemove', handleMouseMove);
+  canvas.addEventListener('mouseup', handleMouseUp);
+
+  clearScreen.addEventListener('click', () => {
+    initGame();
+  });
+
+  gameOverScreen.addEventListener('click', () => {
+    initGame();
+  });
+
+  gameLoop();
+</script>
+</body>
+</html>

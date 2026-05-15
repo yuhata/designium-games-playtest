@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STOMP CITY</title>
+  <!--GAME_SPEC
+{
+  "win_condition": "buildingsDestroyed >= 10",
+  "fail_condition": "none",
+  "input_types": ["click", "mousemove", "mousedown", "mouseup"],
+  "state_vars": ["score", "buildingsDestroyed", "phase"],
+  "core_loop": "click canvas -> monster foot moves -> collision check -> buildings destroyed -> particles explode -> score increases -> check win",
+  "clear_trigger": "gameState.buildingsDestroyed >= 10",
+  "gameover_trigger": "null"
+}
+  -->
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #333;
+      font-family: Arial, sans-serif;
+    }
+    
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #87CEEB;
+    }
+    
+    #gameCanvas {
+      display: block;
+      background: #87CEEB;
+      cursor: crosshair;
+    }
+    
+    #startScreen, #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      color: white;
+      text-align: center;
+    }
+    
+    #startScreen h1, #clearScreen h1 {
+      font-size: 48px;
+      margin: 0 0 20px 0;
+      color: #FFD700;
+    }
+    
+    #startScreen p, #clearScreen p {
+      font-size: 18px;
+      margin: 10px 0;
+    }
+    
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 20px;
+      background: #FF6B6B;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 20px;
+      font-weight: bold;
+    }
+    
+    #startBtn:hover {
+      background: #FF5252;
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="startScreen">
+      <h1>🏙️ STOMP CITY</h1>
+      <p>Destroy 10 buildings with your giant monster foot!</p>
+      <button id="startBtn">START GAME</button>
+    </div>
+    
+    <div id="clearScreen" style="display: none;">
+      <h1>🎉 YOU WIN!</h1>
+      <p>Final Score: <span id="finalScore">0</span></p>
+      <p>Buildings Destroyed: <span id="finalBuildings">0</span>/10</p>
+      <p style="margin-top: 30px; font-size: 16px;">Click anywhere to play again</p>
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const clearScreen = document.getElementById('clearScreen');
+    const startBtn = document.getElementById('startBtn');
+
+    const gameState = {
+      phase: 'start',
+      score: 0,
+      buildingsDestroyed: 0,
+      totalBuildings: 15
+    };
+
+    const monsterFoot = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 30,
+      targetX: canvas.width / 2,
+      targetY: canvas.height / 2,
+      isMoving: false,
+      moveSpeed: 12
+    };
+
+    let buildings = [];
+    let particles = [];
+    let scorePopups = [];
+
+    function initBuildings() {
+      buildings = [];
+      const cols = 3;
+      const rows = 5;
+      const colWidth = canvas.width / cols;
+      const rowHeight = canvas.height / rows;
+      const buildingWidth = 80;
+      const buildingHeight = 60;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          buildings.push({
+            x: c * colWidth + (colWidth - buildingWidth) / 2,
+            y: r * rowHeight + (rowHeight - buildingHeight) / 2,
+            width: buildingWidth,
+            height: buildingHeight,
+            destroyed: false,
+            color: '#FF6B6B'
+          });
+        }
+      }
+    }
+
+    function createParticles(x, y) {
+      const particleCount = 45;
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+        const speed = 5 + Math.random() * 8;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.4,
+          maxLife: 0.4,
+          radius: 3 + Math.random() * 3
+        });
+      }
+    }
+
+    function createScorePopup(x, y, score) {
+      scorePopups.push({
+        x: x,
+        y: y,
+        score: score,
+        life: 1.0,
+        maxLife: 1.0
+      });
+    }
+
+    function updateParticles(deltaTime) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.2;
+        p.life -= deltaTime / 1000;
+
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    function updateScorePopups(deltaTime) {
+      for (let i = scorePopups.length - 1; i >= 0; i--) {
+        const p = scorePopups[i];
+        p.y -= 2;
+        p.life -= deltaTime / 1000;
+
+        if (p.life <= 0) {
+          scorePopups.splice(i, 1);
+        }
+      }
+    }
+
+    function updateMonsterFoot(deltaTime) {
+      if (!monsterFoot.isMoving) return;
+
+      const dx = monsterFoot.targetX - monsterFoot.x;
+      const dy = monsterFoot.targetY - monsterFoot.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 5) {
+        monsterFoot.x = monsterFoot.targetX;
+        monsterFoot.y = monsterFoot.targetY;
+        monsterFoot.isMoving = false;
+        checkCollisions();
+      } else {
+        const moveDistance = monsterFoot.moveSpeed;
+        monsterFoot.x += (dx / distance) * moveDistance;
+        monsterFoot.y += (dy / distance) * moveDistance;
+      }
+    }
+
+    function checkCollisions() {
+      for (let i = buildings.length - 1; i >= 0; i--) {
+        const building = buildings[i];
+        if (building.destroyed) continue;
+
+        const bx = building.x + building.width / 2;
+        const by = building.y + building.height / 2;
+        const dx = monsterFoot.x - bx;
+        const dy = monsterFoot.y - by;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        const buildingRadius = Math.sqrt(
+          (building.width / 2) ** 2 + (building.height / 2) ** 2
+        );
+
+        if (distance < monsterFoot.radius + buildingRadius) {
+          building.destroyed = true;
+          gameState.buildingsDestroyed++;
+          gameState.score += 100;
+          createParticles(bx, by);
+          createScorePopup(bx, by, 100);
+        }
+      }
+      checkWin();
+    }
+
+    function checkWin() {
+      if (gameState.buildingsDestroyed >= 10 && gameState.phase === 'play') {
+        gameState.phase = 'clear';
+        showClearScreen();
+      }
+    }
+
+    function showClearScreen() {
+      document.getElementById('finalScore').textContent = gameState.score;
+      document.getElementById('finalBuildings').textContent = gameState.buildingsDestroyed;
+      clearScreen.style.display = 'flex';
+    }
+
+    function drawGame() {
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (const building of buildings) {
+        if (!building.destroyed) {
+          ctx.fillStyle = building.color;
+          ctx.fillRect(building.x, building.y, building.width, building.height);
+          ctx.strokeStyle = '#CC4444';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(building.x, building.y, building.width, building.height);
+        }
+      }
+
+      for (const particle of particles) {
+        const alpha = particle.life / particle.maxLife;
+        ctx.fillStyle = `rgba(255, 200, 0, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (const popup of scorePopups) {
+        const alpha = popup.life / popup.maxLife;
+        ctx.fillStyle = `rgba(255, 100, 0, ${alpha})`;
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`+${popup.score}`, popup.x, popup.y);
+      }
+
+      ctx.fillStyle = '#8B4513';
+      ctx.beginPath();
+      ctx.arc(monsterFoot.x, monsterFoot.y, monsterFoot.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#654321';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.fillStyle = '#000000';
+      ctx.font = '20px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`Score: ${gameState.score}`, 10, 10);
+      ctx.fillText(`Destroyed: ${gameState.buildingsDestroyed}/${gameState.totalBuildings}`, 10, 40);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('Click to stomp buildings!', canvas.width / 2, canvas.height - 20);
+    }
+
+    let lastTime = Date.now();
+
+    function gameLoop() {
+      const now = Date.now();
+      const deltaTime = now - lastTime;
+      lastTime = now;
+
+      if (gameState.phase === 'play') {
+        updateMonsterFoot(deltaTime);
+        updateParticles(deltaTime);
+        updateScorePopups(deltaTime);
+      }
+
+      drawGame();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function handleCanvasClick(e) {
+      if (gameState.phase !== 'play') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      monsterFoot.targetX = x;
+      monsterFoot.targetY = y;
+      monsterFoot.isMoving = true;
+    }
+
+    function handleCanvasMouseDown(e) {
+      if (gameState.phase !== 'play') return;
+    }
+
+    function handleCanvasMouseMove(e) {
+      if (gameState.phase !== 'play') return;
+    }
+
+    function handleCanvasMouseUp(e) {
+      if (gameState.phase !== 'play') return;
+    }
+
+    canvas.addEventListener('click', handleCanvasClick);
+    canvas.addEventListener('mousedown', handleCanvasMouseDown);
+    canvas.addEventListener('mousemove', handleCanvasMouseMove);
+    canvas.addEventListener('mouseup', handleCanvasMouseUp);
+
+    startBtn.addEventListener('click', () => {
+      gameState.phase = 'play';
+      gameState.score = 0;
+      gameState.buildingsDestroyed = 0;
+      particles = [];
+      scorePopups = [];
+      initBuildings();
+      startScreen.style.display = 'none';
+      monsterFoot.x = canvas.width / 2;
+      monsterFoot.y = canvas.height / 2;
+    });
+
+    clearScreen.addEventListener('click', () => {
+      gameState.phase = 'start';
+      clearScreen.style.display = 'none';
+      startScreen.style.display = 'flex';
+      particles = [];
+      scorePopups = [];
+    });
+
+    initBuildings();
+    gameLoop();
+  </script>
+</body>
+</html>
