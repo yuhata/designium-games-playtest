@@ -1,0 +1,470 @@
+<!--GAME_SPEC
+{
+  "win_condition": "sorted >= totalItems (20)",
+  "fail_condition": "errors >= 5 OR timer <= 0",
+  "input_types": ["click", "mousedown", "mousemove", "mouseup"],
+  "state_vars": ["sorted", "errors", "timer", "selectedItem"],
+  "core_loop": "spawn falling item → click item to select → click bin to sort → increment sorted or errors → check win/fail",
+  "clear_trigger": "gameState.sorted >= 20 && gameState.phase === 'play'",
+  "gameover_trigger": "gameState.errors >= 5 || gameState.timer <= 0"
+}
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SORT IT</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+    .container { position: relative; width: 600px; height: 600px; background: white; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+    #startScreen h1 { font-size: 56px; color: white; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+    #startScreen .subtitle { font-size: 18px; color: rgba(255,255,255,0.9); margin-bottom: 40px; text-align: center; max-width: 400px; line-height: 1.5; }
+    #startBtn { padding: 16px 48px; font-size: 22px; font-weight: bold; background: white; color: #667eea; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s; }
+    #startBtn:hover { transform: scale(1.05); }
+    #startBtn:active { transform: scale(0.98); }
+    #clearScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 101; }
+    #clearScreen.active { display: flex; }
+    #resultText { font-size: 48px; font-weight: bold; color: white; margin-bottom: 24px; text-align: center; text-shadow: 2px 2px 8px rgba(0,0,0,0.5); }
+    #resultScore { font-size: 36px; color: #FFE66D; margin-bottom: 32px; font-weight: bold; }
+    #retryText { font-size: 16px; color: rgba(255,255,255,0.7); margin-top: 20px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <canvas id="gameCanvas" width="600" height="600"></canvas>
+  <div id="startScreen">
+    <h1>SORT IT</h1>
+    <div class="subtitle">Sort falling items by color into matching bins. Keep errors under 5!</div>
+    <button id="startBtn">START</button>
+  </div>
+  <div id="clearScreen">
+    <div id="resultText"></div>
+    <div id="resultScore"></div>
+    <div id="retryText">Click to restart</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const startBtn = document.getElementById('startBtn');
+
+const COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3'];
+const COLOR_NAMES = ['Red', 'Cyan', 'Yellow', 'Green'];
+const BIN_Y = 480;
+const BIN_HEIGHT = 70;
+const ITEM_RADIUS = 15;
+const GRAVITY = 300;
+
+let gameState = {
+  phase: 'start',
+  sorted: 0,
+  totalItems: 20,
+  errors: 0,
+  timer: 60,
+  items: [],
+  bins: [],
+  selectedItem: null,
+  selectedItemTimeout: null,
+  particles: [],
+};
+
+let lastFrameTime = Date.now();
+let itemSpawnCounter = 0;
+let gameStartTime = 0;
+let mouseDown = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+class Item {
+  constructor(x, y, colorIdx) {
+    this.x = x;
+    this.y = y;
+    this.colorIdx = colorIdx;
+    this.color = COLORS[colorIdx];
+    this.vx = 0;
+    this.vy = 0;
+    this.radius = ITEM_RADIUS;
+    this.scale = 1;
+    this.rotation = Math.random() * Math.PI * 2;
+  }
+
+  update(dt) {
+    this.vy += GRAVITY * dt;
+    this.y += this.vy * dt;
+    this.x += this.vx * dt;
+    this.rotation += this.vx * dt * 0.5;
+    
+    if (this.scale > 1) this.scale -= dt * 0.5;
+    if (this.scale < 1) this.scale = 1;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
+    
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius * this.scale, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (gameState.selectedItem === this) {
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * this.scale + 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+  }
+
+  distanceTo(x, y) {
+    return Math.sqrt((this.x - x) ** 2 + (this.y - y) ** 2);
+  }
+}
+
+class Bin {
+  constructor(x, colorIdx) {
+    this.x = x;
+    this.y = BIN_Y;
+    this.width = 100;
+    this.height = BIN_HEIGHT;
+    this.colorIdx = colorIdx;
+    this.color = COLORS[colorIdx];
+    this.items = [];
+  }
+
+  draw(ctx) {
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(this.x - this.width / 2, this.y, this.width, this.height);
+    ctx.globalAlpha = 1;
+    
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(this.x - this.width / 2, this.y, this.width, this.height);
+    
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(COLOR_NAMES[this.colorIdx], this.x, this.y + 35);
+    
+    // Draw sorted items stacked
+    for (let i = 0; i < this.items.length && i < 6; i++) {
+      ctx.fillStyle = this.color;
+      ctx.globalAlpha = 0.6 - i * 0.08;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y + this.height - 18 - i * 10, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  contains(x, y) {
+    return x > this.x - this.width / 2 && x < this.x + this.width / 2 && y > this.y && y < this.y + this.height;
+  }
+}
+
+class Particle {
+  constructor(x, y, vx, vy, color) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.color = color;
+    this.life = 0.6;
+    this.radius = 5;
+  }
+
+  update(dt) {
+    this.vy += GRAVITY * dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.life -= dt;
+    this.radius = 5 * (this.life / 0.6);
+  }
+
+  draw(ctx) {
+    if (this.life <= 0) return;
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = this.life / 0.6;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function initGame() {
+  gameState.phase = 'play';
+  gameState.sorted = 0;
+  gameState.errors = 0;
+  gameState.timer = 60;
+  gameState.items = [];
+  gameState.selectedItem = null;
+  gameState.particles = [];
+  gameStartTime = Date.now() / 1000;
+  itemSpawnCounter = 0;
+  
+  gameState.bins = [
+    new Bin(75, 0),
+    new Bin(225, 1),
+    new Bin(375, 2),
+    new Bin(525, 3),
+  ];
+  
+  startScreen.style.display = 'none';
+  clearScreen.classList.remove('active');
+}
+
+function spawnItem() {
+  const x = Math.random() * 550 + 25;
+  const colorIdx = Math.floor(Math.random() * COLORS.length);
+  const item = new Item(x, -30, colorIdx);
+  gameState.items.push(item);
+}
+
+function createParticles(x, y, color, count = 8) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+    const speed = 100 + Math.random() * 100;
+    const p = new Particle(
+      x, y,
+      Math.cos(angle) * speed,
+      Math.sin(angle) * speed,
+      color
+    );
+    gameState.particles.push(p);
+  }
+}
+
+function update(dt) {
+  if (gameState.phase !== 'play') return;
+  
+  gameState.timer -= dt;
+  
+  if (gameState.timer <= 0) {
+    gameState.phase = 'over';
+    showGameOver();
+    return;
+  }
+  
+  if (gameState.errors >= 5) {
+    gameState.phase = 'over';
+    showGameOver();
+    return;
+  }
+  
+  itemSpawnCounter += dt;
+  if (itemSpawnCounter > 0.5 && gameState.sorted + gameState.items.length < gameState.totalItems) {
+    spawnItem();
+    itemSpawnCounter = 0;
+  }
+  
+  for (let item of gameState.items) {
+    item.update(dt);
+  }
+  
+  for (let i = gameState.particles.length - 1; i >= 0; i--) {
+    gameState.particles[i].update(dt);
+    if (gameState.particles[i].life <= 0) {
+      gameState.particles.splice(i, 1);
+    }
+  }
+  
+  gameState.items = gameState.items.filter(item => item.y < 650);
+}
+
+function checkWin() {
+  if (gameState.sorted >= gameState.totalItems && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    showWin();
+  }
+}
+
+function handleItemClick(x, y) {
+  let closest = null;
+  let closestDist = ITEM_RADIUS * 2 + 15;
+  
+  for (let item of gameState.items) {
+    const dist = item.distanceTo(x, y);
+    if (dist < closestDist) {
+      closest = item;
+      closestDist = dist;
+    }
+  }
+  
+  if (closest) {
+    gameState.selectedItem = closest;
+    closest.scale = 1.3;
+    
+    clearTimeout(gameState.selectedItemTimeout);
+    gameState.selectedItemTimeout = setTimeout(() => {
+      if (gameState.selectedItem === closest) {
+        gameState.selectedItem = null;
+      }
+    }, 10000);
+  }
+}
+
+function handleBinClick(x, y) {
+  if (!gameState.selectedItem) return;
+  
+  for (let bin of gameState.bins) {
+    if (bin.contains(x, y)) {
+      const selectedItem = gameState.selectedItem;
+      
+      if (bin.colorIdx === selectedItem.colorIdx) {
+        gameState.sorted++;
+        bin.items.push(selectedItem);
+        gameState.items.splice(gameState.items.indexOf(selectedItem), 1);
+        createParticles(selectedItem.x, selectedItem.y, selectedItem.color, 12);
+      } else {
+        gameState.errors++;
+        createParticles(selectedItem.x, selectedItem.y, '#FF0000', 6);
+      }
+      
+      gameState.selectedItem = null;
+      clearTimeout(gameState.selectedItemTimeout);
+      checkWin();
+      return;
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#f9f9f9';
+  ctx.fillRect(0, 0, 600, 600);
+  
+  // Draw gradient background
+  const grad = ctx.createLinearGradient(0, 0, 0, 600);
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(1, '#f0f0f0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 600, 600);
+  
+  // Draw bins
+  for (let bin of gameState.bins) {
+    bin.draw(ctx);
+  }
+  
+  // Draw items
+  for (let item of gameState.items) {
+    item.draw(ctx);
+  }
+  
+  // Draw particles
+  for (let p of gameState.particles) {
+    p.draw(ctx);
+  }
+  
+  // Draw UI background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+  ctx.fillRect(0, 0, 600, 65);
+  
+  // Draw stats
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`Errors: ${gameState.errors}/5`, 15, 8);
+  
+  ctx.textAlign = 'center';
+  const timerColor = gameState.timer < 10 ? '#FF6B6B' : '#333';
+  ctx.fillStyle = timerColor;
+  ctx.fillText(`Time: ${Math.max(0, Math.ceil(gameState.timer))}s`, 300, 8);
+  
+  ctx.fillStyle = '#333';
+  ctx.fillText(`Sorted: ${gameState.sorted}/${gameState.totalItems}`, 300, 28);
+  
+  // Draw instruction
+  ctx.font = '14px Arial';
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'center';
+  ctx.fillText('Click item, then click matching bin', 300, 48);
+}
+
+function showWin() {
+  clearScreen.classList.add('active');
+  document.getElementById('resultText').textContent = '✓ SORTED!';
+  document.getElementById('resultScore').textContent = `Score: ${gameState.sorted}`;
+}
+
+function showGameOver() {
+  clearScreen.classList.add('active');
+  document.getElementById('resultText').textContent = 'GAME OVER';
+  document.getElementById('resultScore').textContent = `Score: ${gameState.sorted}`;
+}
+
+function gameLoop() {
+  const now = Date.now();
+  const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+  lastFrameTime = now;
+  
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// Event listeners
+startBtn.addEventListener('click', initGame);
+
+canvas.addEventListener('mousedown', (e) => {
+  if (gameState.phase !== 'play') return;
+  mouseDown = true;
+  const rect = canvas.getBoundingClientRect();
+  lastMouseX = e.clientX - rect.left;
+  lastMouseY = e.clientY - rect.top;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!mouseDown || gameState.phase !== 'play') return;
+  const rect = canvas.getBoundingClientRect();
+  lastMouseX = e.clientX - rect.left;
+  lastMouseY = e.clientY - rect.top;
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  mouseDown = false;
+});
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    if (gameState.phase !== 'start') {
+      initGame();
+    }
+    return;
+  }
+  
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  if (gameState.selectedItem === null) {
+    handleItemClick(x, y);
+  } else {
+    handleBinClick(x, y);
+  }
+});
+
+clearScreen.addEventListener('click', () => {
+  if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    initGame();
+  }
+});
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

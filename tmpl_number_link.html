@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NUMBER LINK</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    #container {
+      position: relative;
+      width: 600px;
+      height: 400px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: white;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    #startScreen p {
+      color: rgba(255,255,255,0.9);
+      font-size: 16px;
+      margin-bottom: 30px;
+      text-align: center;
+      max-width: 400px;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 20px;
+      font-weight: bold;
+      color: #667eea;
+      background: white;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    #startBtn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+    #clearScreen.show {
+      display: flex;
+    }
+    #clearScreen h2 {
+      color: #4ade80;
+      font-size: 56px;
+      margin-bottom: 30px;
+      text-shadow: 0 0 10px rgba(74,222,128,0.5);
+    }
+    #clearScreen p {
+      color: white;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    #clearScreen .subtitle {
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+      margin-top: 20px;
+    }
+    #overScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+    #overScreen.show {
+      display: flex;
+    }
+    #overScreen h2 {
+      color: #ef4444;
+      font-size: 56px;
+      margin-bottom: 30px;
+      text-shadow: 0 0 10px rgba(239,68,68,0.5);
+    }
+    #overScreen p {
+      color: white;
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "linkedPairs.length == 5 && all grid cells filled",
+  "fail_condition": "path crosses another path",
+  "input_types": ["mousedown", "mousemove", "mouseup"],
+  "state_vars": ["linkedPairs", "phase", "score"],
+  "core_loop": "click number → drag to paired number → path complete → check win/fail → repeat",
+  "clear_trigger": "linkedPairs.length == 5 && gridFilled == 30",
+  "gameover_trigger": "dragPath.crosses == true"
+}
+-->
+<div id="container">
+  <canvas id="gameCanvas"></canvas>
+  <div id="startScreen">
+    <h1>NUMBER LINK</h1>
+    <p>Connect matching numbers with paths.<br>Paths cannot cross. Fill all cells to win!</p>
+    <button id="startBtn">START</button>
+  </div>
+  <div id="clearScreen">
+    <h2>PERFECT!</h2>
+    <p id="finalScore">Score: 100</p>
+    <p class="subtitle">Click to play again</p>
+  </div>
+  <div id="overScreen">
+    <h2>PATH CROSSED</h2>
+    <p id="overScore">Score: 50</p>
+    <p class="subtitle">Click to retry</p>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 600;
+canvas.height = 400;
+
+const COLS = 5;
+const ROWS = 6;
+const CELL_WIDTH = 100;
+const CELL_HEIGHT = 50;
+const GRID_LEFT = 50;
+const GRID_TOP = 50;
+const GRID_WIDTH = 450;
+const GRID_HEIGHT = 300;
+
+const gameState = {
+  phase: 'start', // start, play, clear, over
+  grid: [],
+  linkedPairs: [],
+  score: 0,
+  selectedNumber: null,
+  dragStartCell: null,
+  filledCells: 0,
+  clearStartTime: 0
+};
+
+let tempPath = [];
+let tempPathCrossing = false;
+let isDragging = false;
+let lastFrameTime = Date.now();
+
+function initializeGrid() {
+  gameState.grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+  gameState.linkedPairs = [];
+  gameState.score = 0;
+  gameState.selectedNumber = null;
+  gameState.dragStartCell = null;
+  gameState.filledCells = 0;
+  tempPath = [];
+  tempPathCrossing = false;
+  isDragging = false;
+  
+  const numbers = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5];
+  shuffle(numbers);
+  
+  let index = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      gameState.grid[r][c] = {
+        number: numbers[index],
+        pathId: -1,
+        filled: false
+      };
+      index++;
+    }
+  }
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('clearScreen').style.display = 'none';
+  document.getElementById('clearScreen').classList.remove('show');
+  document.getElementById('overScreen').style.display = 'none';
+  document.getElementById('overScreen').classList.remove('show');
+  
+  gameState.phase = 'play';
+  initializeGrid();
+  gameState.clearStartTime = 0;
+  gameLoop();
+}
+
+function getCellFromPos(x, y) {
+  if (x < GRID_LEFT || x > GRID_LEFT + GRID_WIDTH ||
+      y < GRID_TOP || y > GRID_TOP + GRID_HEIGHT) {
+    return null;
+  }
+  const col = Math.floor((x - GRID_LEFT) / CELL_WIDTH);
+  const row = Math.floor((y - GRID_TOP) / CELL_HEIGHT);
+  if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+    return { col, row };
+  }
+  return null;
+}
+
+function getCellCenter(col, row) {
+  return {
+    x: GRID_LEFT + col * CELL_WIDTH + CELL_WIDTH / 2,
+    y: GRID_TOP + row * CELL_HEIGHT + CELL_HEIGHT / 2
+  };
+}
+
+function segmentsIntersect(p1, p2, p3, p4) {
+  function ccw(A, B, C) {
+    return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+  }
+  
+  if (p1.x === p3.x && p1.y === p3.y) return false;
+  if (p1.x === p4.x && p1.y === p4.y) return false;
+  if (p2.x === p3.x && p2.y === p3.y) return false;
+  if (p2.x === p4.x && p2.y === p4.y) return false;
+  
+  return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+}
+
+function checkPathCrossing(newPathSegments) {
+  for (const pair of gameState.linkedPairs) {
+    if (!pair.path) continue;
+    for (let i = 0; i < pair.path.length - 1; i++) {
+      const existingP1 = pair.path[i];
+      const existingP2 = pair.path[i + 1];
+      for (const segment of newPathSegments) {
+        if (segmentsIntersect(existingP1, existingP2, segment.p1, segment.p2)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function fillPathCells(path) {
+  const cells = new Set();
+  for (let i = 0; i < path.length - 1; i++) {
+    const p1 = path[i];
+    const p2 = path[i + 1];
+    const steps = Math.max(Math.abs(p2.x - p1.x), Math.abs(p2.y - p1.y)) / 10;
+    for (let s = 0; s <= steps; s++) {
+      const x = p1.x + (p2.x - p1.x) * s / steps;
+      const y = p1.y + (p2.y - p1.y) * s / steps;
+      const cell = getCellFromPos(x, y);
+      if (cell) {
+        cells.add(JSON.stringify(cell));
+      }
+    }
+  }
+  return Array.from(cells).map(c => JSON.parse(c));
+}
+
+function checkWin() {
+  if (gameState.phase !== 'play') return;
+  
+  if (gameState.linkedPairs.length === 5) {
+    let allFilled = true;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (!gameState.grid[r][c].filled) {
+          allFilled = false;
+          break;
+        }
+      }
+      if (!allFilled) break;
+    }
+    
+    if (allFilled) {
+      gameState.phase = 'clear';
+      gameState.clearStartTime = Date.now();
+      gameState.score = gameState.linkedPairs.length * 20;
+    }
+  }
+}
+
+function handleMouseDown(e) {
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  const cell = getCellFromPos(x, y);
+  if (!cell) return;
+  
+  const cellData = gameState.grid[cell.row][cell.col];
+  if (!cellData) return;
+  
+  gameState.dragStartCell = cell;
+  gameState.selectedNumber = cellData.number;
+  isDragging = true;
+  tempPath = [getCellCenter(cell.col, cell.row)];
+  tempPathCrossing = false;
+}
+
+function handleMouseMove(e) {
+  if (!isDragging || gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  const lastPoint = tempPath[tempPath.length - 1];
+  const dist = Math.sqrt((x - lastPoint.x) ** 2 + (y - lastPoint.y) ** 2);
+  
+  if (dist > 15) {
+    tempPath.push({ x, y });
+    
+    const newSegment = {
+      p1: tempPath[tempPath.length - 2],
+      p2: tempPath[tempPath.length - 1]
+    };
+    
+    if (checkPathCrossing([newSegment])) {
+      tempPathCrossing = true;
+    }
+  }
+}
+
+function handleMouseUp(e) {
+  if (!isDragging || gameState.phase !== 'play') return;
+  
+  isDragging = false;
+  
+  if (tempPathCrossing) {
+    gameState.phase = 'over';
+    tempPath = [];
+    return;
+  }
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  let endCell = null;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const center = getCellCenter(c, r);
+      const dist = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
+      if (dist < 40 && gameState.grid[r][c].number === gameState.selectedNumber && 
+          !(r === gameState.dragStartCell.row && c === gameState.dragStartCell.col)) {
+        endCell = { col: c, row: r };
+        break;
+      }
+    }
+    if (endCell) break;
+  }
+  
+  if (endCell) {
+    gameState.linkedPairs.push({
+      number: gameState.selectedNumber,
+      from: gameState.dragStartCell,
+      to: endCell,
+      path: tempPath
+    });
+    
+    const filledCells = fillPathCells(tempPath);
+    for (const cell of filledCells) {
+      if (gameState.grid[cell.row] && gameState.grid[cell.row][cell.col]) {
+        gameState.grid[cell.row][cell.col].filled = true;
+        gameState.grid[cell.row][cell.col].pathId = gameState.linkedPairs.length - 1;
+      }
+    }
+    
+    gameState.score += 20;
+    checkWin();
+  }
+  
+  tempPath = [];
+  tempPathCrossing = false;
+  gameState.dragStartCell = null;
+  gameState.selectedNumber = null;
+}
+
+function drawGrid() {
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath();
+    ctx.moveTo(GRID_LEFT, GRID_TOP + r * CELL_HEIGHT);
+    ctx.lineTo(GRID_LEFT + GRID_WIDTH, GRID_TOP + r * CELL_HEIGHT);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath();
+    ctx.moveTo(GRID_LEFT + c * CELL_WIDTH, GRID_TOP);
+    ctx.lineTo(GRID_LEFT + c * CELL_WIDTH, GRID_TOP + GRID_HEIGHT);
+    ctx.stroke();
+  }
+}
+
+const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#ffa07a', '#98d8c8'];
+
+function drawPaths() {
+  for (let i = 0; i < gameState.linkedPairs.length; i++) {
+    const pair = gameState.linkedPairs[i];
+    if (!pair.path || pair.path.length === 0) continue;
+    
+    ctx.strokeStyle = colors[i % colors.length];
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pair.path[0].x, pair.path[0].y);
+    for (let j = 1; j < pair.path.length; j++) {
+      ctx.lineTo(pair.path[j].x, pair.path[j].y);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawTempPath() {
+  if (tempPath.length < 2) return;
+  ctx.strokeStyle = tempPathCrossing ? 'rgba(255,0,0,0.5)' : '#333';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(tempPath[0].x, tempPath[0].y);
+  for (let i = 1; i < tempPath.length; i++) {
+    ctx.lineTo(tempPath[i].x, tempPath[i].y);
+  }
+  ctx.stroke();
+}
+
+function drawNumbers() {
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = gameState.grid[r][c];
+      if (!cell) continue;
+      
+      const center = getCellCenter(c, r);
+      
+      if (cell.filled) {
+        ctx.fillStyle = colors[cell.pathId % colors.length];
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(
+          GRID_LEFT + c * CELL_WIDTH,
+          GRID_TOP + r * CELL_HEIGHT,
+          CELL_WIDTH,
+          CELL_HEIGHT
+        );
+        ctx.globalAlpha = 1;
+      }
+      
+      ctx.fillStyle = '#333';
+      ctx.fillText(cell.number, center.x, center.y);
+    }
+  }
+}
+
+function drawUI() {
+  ctx.font = 'bold 18px Arial';
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Score: ${gameState.score}`, 20, 25);
+  ctx.fillText(`Pairs: ${gameState.linkedPairs.length}/5`, 20, 50);
+  ctx.font = '14px Arial';
+  ctx.fillText('Click & drag numbers to connect', 20, 380);
+}
+
+function drawClearAnimation() {
+  const elapsed = Date.now() - gameState.clearStartTime;
+  const FLASH_DURATION = 300;
+  const STEP_DELAY = 100;
+  
+  if (elapsed < FLASH_DURATION) {
+    ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - elapsed / FLASH_DURATION)})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    const stepIndex = Math.floor((elapsed - FLASH_DURATION) / STEP_DELAY);
+    for (let i = 0; i < gameState.linkedPairs.length; i++) {
+      const pair = gameState.linkedPairs[i];
+      if (!pair.path || pair.path.length === 0) continue;
+      
+      const opacity = Math.min(1, (stepIndex - i) * 0.3 + 0.2);
+      if (opacity > 0) {
+        ctx.strokeStyle = colors[i % colors.length];
+        ctx.globalAlpha = opacity;
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(pair.path[0].x, pair.path[0].y);
+        for (let j = 1; j < pair.path.length; j++) {
+          ctx.lineTo(pair.path[j].x, pair.path[j].y);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  if (gameState.phase === 'play') {
+    drawGrid();
+    drawPaths();
+    if (isDragging) drawTempPath();
+    drawNumbers();
+    drawUI();
+  } else if (gameState.phase === 'clear') {
+    drawGrid();
+    drawNumbers();
+    drawUI();
+    drawClearAnimation();
+    
+    if (Date.now() - gameState.clearStartTime > 1500) {
+      document.getElementById('finalScore').textContent = `Score: ${gameState.score}`;
+      document.getElementById('clearScreen').classList.add('show');
+      document.getElementById('clearScreen').style.display = 'flex';
+    }
+  } else if (gameState.phase === 'over') {
+    drawGrid();
+    drawPaths();
+    drawNumbers();
+    drawUI();
+    document.getElementById('overScore').textContent = `Score: ${gameState.score}`;
+    document.getElementById('overScreen').classList.add('show');
+    document.getElementById('overScreen').style.display = 'flex';
+  }
+  
+  requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener('mousedown', handleMouseDown);
+canvas.addEventListener('mousemove', handleMouseMove);
+canvas.addEventListener('mouseup', handleMouseUp);
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('clearScreen').addEventListener('click', startGame);
+document.getElementById('overScreen').addEventListener('click', startGame);
+
+gameLoop();
+</script>
+</body>
+</html>

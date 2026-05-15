@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEMORY LANE</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0a0a0a;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 3px solid #333;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+        #gameCanvas {
+            display: block;
+            background: #1a1a2e;
+            cursor: pointer;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startScreen h1 {
+            color: #fff;
+            font-size: 56px;
+            margin: 0 0 20px 0;
+            text-shadow: 0 0 30px rgba(200, 150, 255, 0.6);
+            letter-spacing: 3px;
+        }
+        #startScreen p {
+            color: #aaa;
+            font-size: 14px;
+            margin: 0 0 50px 0;
+            font-style: italic;
+        }
+        #startBtn {
+            padding: 16px 70px;
+            font-size: 24px;
+            background: linear-gradient(135deg, #c896ff 0%, #e6b3ff 100%);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #000;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 5px 25px rgba(200, 150, 255, 0.4);
+        }
+        #startBtn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 8px 35px rgba(200, 150, 255, 0.6);
+        }
+        #startBtn:active {
+            transform: scale(0.95);
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2a 100%);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 101;
+            cursor: pointer;
+        }
+        #clearScreen h2 {
+            color: #ffd700;
+            font-size: 72px;
+            margin: 0 0 30px 0;
+            text-shadow: 0 0 40px rgba(255, 215, 0, 0.8), 0 0 60px rgba(200, 150, 255, 0.6);
+            animation: glowPulse 2s ease-in-out infinite;
+            letter-spacing: 2px;
+        }
+        @keyframes glowPulse {
+            0%, 100% { text-shadow: 0 0 40px rgba(255, 215, 0, 0.8), 0 0 60px rgba(200, 150, 255, 0.6); }
+            50% { text-shadow: 0 0 60px rgba(255, 215, 0, 1), 0 0 80px rgba(200, 150, 255, 0.8); }
+        }
+        #clearStats {
+            color: #fff;
+            font-size: 18px;
+            margin: 15px;
+            text-align: center;
+        }
+        #clearText {
+            color: #aaa;
+            font-size: 14px;
+            margin-top: 50px;
+            font-style: italic;
+            animation: fadeInOut 2s ease-in-out infinite;
+        }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "chaptersRead >= totalChapters (5)",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["chaptersRead", "totalChapters", "choices", "phase"],
+  "core_loop": "click START → click story panels → select choices → advance chapters → repeat until all 5 chapters read → display ending",
+  "clear_trigger": "chaptersRead >= 5",
+  "gameover_trigger": "none"
+}
+-->
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="startScreen">
+            <h1>MEMORY LANE</h1>
+            <p>Click to recall your journey...</p>
+            <button id="startBtn">START</button>
+        </div>
+
+        <div id="clearScreen">
+            <h2>THE END</h2>
+            <div id="clearStats"></div>
+            <div id="clearText">Click to return...</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const clearScreen = document.getElementById('clearScreen');
+        const startBtn = document.getElementById('startBtn');
+        const clearStats = document.getElementById('clearStats');
+
+        const gameState = {
+            phase: 'start',
+            chaptersRead: 0,
+            totalChapters: 5,
+            choices: [],
+            selectedChoice: null,
+            fadeAlpha: 1,
+            currentChapterIndex: 0,
+            choicesDisplay: [],
+            gameStartTime: 0,
+            lastInteractionTime: 0
+        };
+
+        const chapters = [
+            {
+                title: "Chapter 1: The Beginning",
+                text: "You stand at the crossroads of memory,\nwhere past and present collide.\nThe path ahead shimmers with possibilities.",
+                choices: ["Look back", "Move forward", "Wander"]
+            },
+            {
+                title: "Chapter 2: Lost in Translation",
+                text: "Fragments of familiar faces appear\nin the distance, calling your name.\nYou recognize the voice, yet cannot place it.",
+                choices: ["Follow the voice", "Ignore it", "Listen"]
+            },
+            {
+                title: "Chapter 3: The Mirror",
+                text: "You encounter a reflection that isn't quite you.\nIt smiles with a sadness you've forgotten.\nTime seems to fold in on itself.",
+                choices: ["Embrace it", "Turn away", "Speak"]
+            },
+            {
+                title: "Chapter 4: Colors Return",
+                text: "The grayscale world suddenly blooms\nwith vibrant hues you thought were lost.\nEach color tells a story.",
+                choices: ["Celebrate", "Weep", "Observe"]
+            },
+            {
+                title: "Chapter 5: Full Circle",
+                text: "You realize the journey has returned you\nto where you began, but transformed.\nNothing is lost—it was all part of the path.",
+                choices: ["Accept", "Understand", "Continue"]
+            }
+        ];
+
+        let fadeOpacity = 1;
+        let fadeAnimating = false;
+        let mouseX = 0;
+        let mouseY = 0;
+
+        startBtn.addEventListener('click', startGame);
+        canvas.addEventListener('click', handleCanvasClick);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        clearScreen.addEventListener('click', restartGame);
+
+        function startGame() {
+            startScreen.style.display = 'none';
+            clearScreen.style.display = 'none';
+            gameState.phase = 'play';
+            gameState.chaptersRead = 0;
+            gameState.currentChapterIndex = 0;
+            gameState.choices = [];
+            gameState.selectedChoice = null;
+            gameState.gameStartTime = Date.now();
+            gameState.lastInteractionTime = Date.now();
+            fadeOpacity = 1;
+            renderGame();
+        }
+
+        function restartGame() {
+            clearScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+        }
+
+        function handleMouseMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        }
+
+        function handleMouseDown(e) {
+            if (gameState.phase === 'play') {
+                gameState.lastInteractionTime = Date.now();
+            }
+        }
+
+        function handleMouseUp(e) {
+        }
+
+        function handleCanvasClick(e) {
+            if (gameState.phase !== 'play') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (x == null || y == null) return;
+
+            for (let choice of gameState.choicesDisplay) {
+                if (x >= choice.x && x <= choice.x + choice.width &&
+                    y >= choice.y && y <= choice.y + choice.height) {
+                    selectChoice(choice.index);
+                    return;
+                }
+            }
+
+            advanceStory();
+        }
+
+        function advanceStory() {
+            if (gameState.chaptersRead < gameState.totalChapters && !fadeAnimating) {
+                fadeAnimating = true;
+                fadeOpacity = 1;
+            }
+        }
+
+        function selectChoice(choiceIndex) {
+            if (fadeAnimating) return;
+            gameState.selectedChoice = choiceIndex;
+            gameState.choices.push(choiceIndex);
+            fadeAnimating = true;
+            fadeOpacity = 1;
+
+            setTimeout(() => {
+                gameState.chaptersRead++;
+                gameState.currentChapterIndex++;
+                checkWin();
+                if (gameState.phase === 'play' && gameState.chaptersRead < gameState.totalChapters) {
+                    gameState.choicesDisplay = [];
+                    fadeOpacity = 1;
+                    fadeAnimating = false;
+                }
+            }, 600);
+        }
+
+        function checkWin() {
+            if (gameState.chaptersRead >= gameState.totalChapters) {
+                gameState.phase = 'clear';
+                displayClearScreen();
+            }
+        }
+
+        function displayClearScreen() {
+            clearScreen.style.display = 'flex';
+            clearStats.innerHTML = `You completed the journey through all ${gameState.totalChapters} chapters.<br>Choices made: ${gameState.choices.length}`;
+        }
+
+        function renderGame() {
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState.phase === 'play') {
+                renderPlayScreen();
+            }
+
+            requestAnimationFrame(renderGame);
+        }
+
+        function renderPlayScreen() {
+            if (fadeAnimating) {
+                fadeOpacity -= 0.06;
+                if (fadeOpacity <= 0) {
+                    fadeOpacity = 0;
+                    fadeAnimating = false;
+                    gameState.selectedChoice = null;
+                }
+            } else if (fadeOpacity < 1) {
+                fadeOpacity += 0.04;
+                if (fadeOpacity >= 1) {
+                    fadeOpacity = 1;
+                }
+            }
+
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, 'rgba(30, 20, 50, 0.6)');
+            grad.addColorStop(1, 'rgba(20, 20, 40, 0.8)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(180, 150, 220, ' + fadeOpacity + ')';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Chapter ' + (gameState.chaptersRead + 1) + ' / ' + gameState.totalChapters, 20, 30);
+
+            const panelX = 160;
+            const panelY = 100;
+            const panelWidth = 480;
+            const panelHeight = 280;
+
+            ctx.fillStyle = 'rgba(25, 35, 60, ' + (0.8 * fadeOpacity) + ')';
+            ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+            ctx.strokeStyle = 'rgba(150, 120, 180, ' + (fadeOpacity * 0.9) + ')';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+            if (gameState.currentChapterIndex < chapters.length && gameState.currentChapterIndex >= 0) {
+                const chapter = chapters[gameState.currentChapterIndex];
+
+                ctx.fillStyle = 'rgba(200, 170, 255, ' + fadeOpacity + ')';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(chapter.title, panelX + panelWidth / 2, panelY + 35);
+
+                ctx.fillStyle = 'rgba(220, 220, 240, ' + fadeOpacity + ')';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                const lines = chapter.text.split('\n');
+                let textY = panelY + 85;
+                for (let i = 0; i < lines.length; i++) {
+                    ctx.fillText(lines[i], panelX + panelWidth / 2, textY);
+                    textY += 38;
+                }
+
+                if (fadeOpacity > 0.4) {
+                    drawChoices(chapter.choices);
+                }
+            }
+
+            ctx.fillStyle = 'rgba(140, 120, 160, ' + (fadeOpacity * 0.7) + ')';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Click panel to advance • Choose wisely', canvas.width / 2, canvas.height - 20);
+
+            const progressWidth = (gameState.chaptersRead / gameState.totalChapters) * canvas.width;
+            ctx.fillStyle = 'rgba(150, 120, 200, 0.3)';
+            ctx.fillRect(0, canvas.height - 6, progressWidth, 6);
+            ctx.strokeStyle = 'rgba(150, 120, 200, 0.7)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(0, canvas.height - 6, canvas.width, 6);
+        }
+
+        function drawChoices(choices) {
+            gameState.choicesDisplay = [];
+            const startY = 420;
+            const buttonHeight = 45;
+            const maxButtonWidth = 200;
+            const totalButtonWidth = Math.min(choices.length * maxButtonWidth, canvas.width - 40);
+            const spaceBetween = (canvas.width - totalButtonWidth) / (choices.length + 1);
+
+            for (let i = 0; i < choices.length; i++) {
+                const buttonWidth = Math.min(maxButtonWidth, (canvas.width - 40) / choices.length);
+                const x = spaceBetween + i * (buttonWidth + spaceBetween);
+                const y = startY;
+
+                if (x == null || y == null || buttonWidth == null || buttonHeight == null) {
+                    continue;
+                }
+
+                const isHover = mouseX >= x && mouseX <= x + buttonWidth &&
+                                mouseY >= y && mouseY <= y + buttonHeight;
+
+                ctx.fillStyle = isHover ? 'rgba(120, 180, 255, 0.9)' : 'rgba(80, 150, 220, 0.7)';
+                ctx.fillRect(x, y, buttonWidth, buttonHeight);
+
+                ctx.strokeStyle = isHover ? 'rgba(180, 220, 255, 1)' : 'rgba(100, 150, 200, 0.9)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, buttonWidth, buttonHeight);
+
+                ctx.fillStyle = isHover ? 'rgba(255, 255, 255, 1)' : 'rgba(220, 220, 240, 1)';
+                ctx.font = 'bold 13px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(choices[i], x + buttonWidth / 2, y + buttonHeight / 2);
+
+                gameState.choicesDisplay.push({
+                    x: x,
+                    y: y,
+                    width: buttonWidth,
+                    height: buttonHeight,
+                    index: i,
+                    text: choices[i]
+                });
+            }
+        }
+
+        startScreen.style.display = 'flex';
+        clearScreen.style.display = 'none';
+        renderGame();
+    </script>
+</body>
+</html>
