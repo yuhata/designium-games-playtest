@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html>
+<!--GAME_SPEC
+{
+  "win_condition": "itemsPlaced.length >= 8",
+  "fail_condition": "なし",
+  "input_types": ["click"],
+  "state_vars": ["score", "itemsPlaced", "phase", "selectedFurniture"],
+  "core_loop": "家具選択→配置→スコア増加→8個でクリア",
+  "clear_trigger": "itemsPlaced.length >= 8",
+  "gameover_trigger": "なし"
+}
+-->
+<head>
+  <meta charset="UTF-8">
+  <title>ROOM DESIGNER</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #e0e0e0;
+    }
+    #gameContainer {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    #palette {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      padding: 15px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      min-width: 150px;
+    }
+    .furniture-btn {
+      padding: 10px;
+      border-radius: 4px;
+      border: 2px solid #ccc;
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .furniture-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    #gameCanvas {
+      display: none;
+      border: 3px solid #333;
+      background: #fafafa;
+      cursor: default;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    #scoreDisplay {
+      display: none;
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 20px;
+      font-weight: bold;
+      background: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #startScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      z-index: 1000;
+    }
+    #startScreen.show {
+      display: flex;
+    }
+    #startScreen h1 {
+      color: white;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    #startScreen p {
+      color: white;
+      font-size: 18px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 20px;
+      background: #FFD700;
+      color: #333;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    #startBtn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    }
+    #clearScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 2000;
+    }
+    #clearScreen.show {
+      display: flex;
+    }
+    #clearScreenContent {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      animation: popIn 0.5s ease-out;
+    }
+    @keyframes popIn {
+      0% {
+        transform: scale(0.5);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    #clearScreenContent h1 {
+      font-size: 48px;
+      color: #4CAF50;
+      margin-bottom: 20px;
+      animation: pulse 0.6s ease-in-out;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    #finalScore {
+      font-size: 32px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    #clearScreenContent p {
+      font-size: 16px;
+      color: #666;
+      margin-top: 20px;
+      animation: blink 1s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div id="scoreDisplay"></div>
+  
+  <div id="startScreen" class="show">
+    <h1>🏠 ROOM DESIGNER</h1>
+    <p>家具を選んで、素敵な部屋をデザインしよう！<br>8個の家具を配置してクリア</p>
+    <button id="startBtn">START</button>
+  </div>
+
+  <div id="clearScreen">
+    <div id="clearScreenContent">
+      <h1>🎉 ROOM COMPLETE!</h1>
+      <p id="finalScore">Score: 8</p>
+      <p>クリックでリトライ</p>
+    </div>
+  </div>
+
+  <div id="gameContainer">
+    <div id="palette"></div>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+  </div>
+
+  <script>
+    const gameState = {
+      phase: 'start',
+      itemsPlaced: [],
+      score: 0,
+      selectedFurniture: null,
+      gridSize: 40,
+      canvasWidth: 600,
+      canvasHeight: 400,
+      frameCounter: 0
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const clearScreen = document.getElementById('clearScreen');
+    const startBtn = document.getElementById('startBtn');
+    const palette = document.getElementById('palette');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+
+    const furnitureItems = [
+      { id: 'sofa', name: 'ソファ', color: '#8B4513', width: 2, height: 1, emoji: '🛋️' },
+      { id: 'table', name: 'テーブル', color: '#D2691E', width: 1, height: 1, emoji: '🪑' },
+      { id: 'bed', name: 'ベッド', color: '#FF69B4', width: 2, height: 2, emoji: '🛏️' },
+      { id: 'desk', name: 'デスク', color: '#8B7355', width: 2, height: 1, emoji: '📚' },
+      { id: 'shelf', name: '本棚', color: '#654321', width: 1, height: 2, emoji: '🗄️' },
+      { id: 'lamp', name: 'ランプ', color: '#FFD700', width: 1, height: 1, emoji: '💡' },
+      { id: 'plant', name: '観葉植物', color: '#228B22', width: 1, height: 1, emoji: '🌿' },
+      { id: 'door', name: 'ドア', color: '#CD853F', width: 1, height: 2, emoji: '🚪' }
+    ];
+
+    function initPalette() {
+      palette.innerHTML = '';
+      furnitureItems.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'furniture-btn';
+        btn.dataset.id = item.id;
+        btn.textContent = item.emoji + ' ' + item.name;
+        btn.style.backgroundColor = item.color;
+        
+        btn.addEventListener('click', () => {
+          selectFurniture(item.id);
+        });
+        
+        palette.appendChild(btn);
+      });
+    }
+
+    function selectFurniture(itemId) {
+      if (gameState.phase !== 'play') return;
+      
+      gameState.selectedFurniture = itemId;
+      
+      document.querySelectorAll('.furniture-btn').forEach(btn => {
+        if (btn.dataset.id === itemId) {
+          btn.style.borderWidth = '4px';
+          btn.style.borderColor = '#FFD700';
+          btn.style.boxShadow = '0 0 12px rgba(255, 215, 0, 0.8)';
+        } else {
+          btn.style.borderWidth = '2px';
+          btn.style.borderColor = '#ccc';
+          btn.style.boxShadow = 'none';
+        }
+      });
+      
+      canvas.style.cursor = 'crosshair';
+    }
+
+    function checkCollision(x1, y1, w1, h1, item) {
+      return !(x1 + w1 <= item.x || x1 >= item.x + item.width ||
+               y1 + h1 <= item.y || y1 >= item.y + item.height);
+    }
+
+    function placeFurniture(x, y) {
+      if (gameState.phase !== 'play' || !gameState.selectedFurniture) return;
+      
+      const furniture = furnitureItems.find(f => f.id === gameState.selectedFurniture);
+      if (!furniture) return;
+      
+      const gridX = Math.floor(x / gameState.gridSize) * gameState.gridSize;
+      const gridY = Math.floor(y / gameState.gridSize) * gameState.gridSize;
+      const gridWidth = furniture.width * gameState.gridSize;
+      const gridHeight = furniture.height * gameState.gridSize;
+      
+      if (gridX + gridWidth > gameState.canvasWidth || gridY + gridHeight > gameState.canvasHeight) {
+        return;
+      }
+      
+      for (const placed of gameState.itemsPlaced) {
+        if (checkCollision(gridX, gridY, gridWidth, gridHeight, placed)) {
+          return;
+        }
+      }
+      
+      gameState.itemsPlaced.push({
+        id: gameState.selectedFurniture,
+        x: gridX,
+        y: gridY,
+        width: gridWidth,
+        height: gridHeight,
+        color: furniture.color,
+        emoji: furniture.emoji,
+        discoveredAt: Date.now()
+      });
+      
+      gameState.score = gameState.itemsPlaced.length;
+      updateScoreDisplay();
+      checkWin();
+    }
+
+    function checkWin() {
+      if (gameState.itemsPlaced.length >= 8) {
+        gameState.phase = 'clear';
+      }
+    }
+
+    function updateScoreDisplay() {
+      scoreDisplay.textContent = `Score: ${gameState.score}/8`;
+    }
+
+    function draw() {
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(0, 0, gameState.canvasWidth, gameState.canvasHeight);
+      
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= gameState.canvasWidth; i += gameState.gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, gameState.canvasHeight);
+        ctx.stroke();
+      }
+      for (let i = 0; i <= gameState.canvasHeight; i += gameState.gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(gameState.canvasWidth, i);
+        ctx.stroke();
+      }
+      
+      gameState.itemsPlaced.forEach((item) => {
+        const timeSinceDiscovery = Date.now() - item.discoveredAt;
+        const isRecent = timeSinceDiscovery < 800;
+        
+        if (isRecent) {
+          const pulse = Math.sin(timeSinceDiscovery / 100) * 0.3 + 0.7;
+          ctx.globalAlpha = pulse;
+          ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+          ctx.shadowBlur = 15;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+        }
+        
+        ctx.fillStyle = item.color;
+        ctx.fillRect(item.x, item.y, item.width, item.height);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(item.x, item.y, item.width, item.height);
+        
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const cx = item.x + item.width / 2;
+        const cy = item.y + item.height / 2;
+        ctx.fillText(item.emoji, cx, cy);
+      });
+      
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('📍 家具を選んでクリックして配置', 10, 10);
+      
+      ctx.fillStyle = '#4CAF50';
+      ctx.font = 'bold 18px Arial';
+      ctx.fillText(`配置済み: ${gameState.score}/8`, 10, 35);
+      
+      if (gameState.selectedFurniture) {
+        const furniture = furnitureItems.find(f => f.id === gameState.selectedFurniture);
+        ctx.fillStyle = '#666';
+        ctx.font = '12px Arial';
+        ctx.fillText(`選択中: ${furniture.emoji} ${furniture.name}`, 10, gameState.canvasHeight - 15);
+      }
+    }
+
+    function gameLoop() {
+      gameState.frameCounter++;
+      
+      if (gameState.phase === 'play') {
+        draw();
+      }
+      
+      if (gameState.phase === 'clear') {
+        clearScreen.classList.add('show');
+        startScreen.classList.remove('show');
+        canvas.style.display = 'none';
+        palette.style.display = 'none';
+        scoreDisplay.style.display = 'none';
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener('click', (e) => {
+      if (gameState.phase !== 'play') return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      if (x >= 0 && x < gameState.canvasWidth && y >= 0 && y < gameState.canvasHeight) {
+        placeFurniture(x, y);
+      }
+    });
+
+    startBtn.addEventListener('click', () => {
+      gameState.phase = 'play';
+      gameState.itemsPlaced = [];
+      gameState.score = 0;
+      gameState.selectedFurniture = null;
+      startScreen.classList.remove('show');
+      clearScreen.classList.remove('show');
+      canvas.style.display = 'block';
+      palette.style.display = 'flex';
+      scoreDisplay.style.display = 'block';
+      updateScoreDisplay();
+      initPalette();
+      draw();
+    });
+
+    clearScreen.addEventListener('click', () => {
+      startBtn.click();
+    });
+
+    function init() {
+      startScreen.classList.add('show');
+      clearScreen.classList.remove('show');
+      canvas.style.display = 'none';
+      palette.style.display = 'none';
+      scoreDisplay.style.display = 'none';
+      initPalette();
+      gameLoop();
+    }
+
+    init();
+  </script>
+</body>
+</html>

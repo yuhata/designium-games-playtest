@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>HAIKU GARDEN</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #fafaf8;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startScreen h1 {
+            color: white;
+            font-size: 52px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.4);
+            letter-spacing: 2px;
+        }
+        #startScreen p {
+            color: rgba(255,255,255,0.95);
+            font-size: 16px;
+            margin-bottom: 30px;
+            text-align: center;
+            max-width: 500px;
+            line-height: 1.6;
+        }
+        #startBtn {
+            padding: 16px 48px;
+            font-size: 22px;
+            font-weight: bold;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        #startBtn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 101;
+        }
+        #clearScreen h2 {
+            color: #ffd700;
+            font-size: 52px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255,215,0,0.8);
+            animation: pulse 0.6s;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        #finalHaiku {
+            color: #fff;
+            font-size: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+            font-style: italic;
+            line-height: 1.8;
+        }
+        #scoreDisplay {
+            color: #ffd700;
+            font-size: 28px;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        #retryText {
+            color: rgba(255,255,255,0.8);
+            font-size: 16px;
+            margin-top: 10px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "Collect 15+ words AND complete perfect 5-7-5 haiku syllable pattern",
+  "fail_condition": "none (infinite play until victory)",
+  "input_types": ["click"],
+  "state_vars": ["score", "phase", "wordsChosen", "syllables", "discoveredCount"],
+  "core_loop": "click word tile -> syllables accumulate -> line completes at 5/7/5 -> haiku forms -> check win if 15+ words and 5-7-5 pattern matched",
+  "clear_trigger": "wordsChosen.length >= 15 && syllables[0]===5 && syllables[1]===7 && syllables[2]===5",
+  "gameover_trigger": "none"
+}
+-->
+
+<div id="gameContainer">
+    <div id="startScreen">
+        <h1>🌸 HAIKU GARDEN 🌸</h1>
+        <p>Discover the hidden pattern of words.<br/>Click tiles to build a haiku (5-7-5 syllables).<br/>Collect 15 words to reveal your poem!</p>
+        <button id="startBtn">START</button>
+    </div>
+    <div id="clearScreen">
+        <h2>✦ HAIKU DISCOVERED ✦</h2>
+        <div id="finalHaiku"></div>
+        <div id="scoreDisplay"></div>
+        <div id="retryText">Click to Plant Again</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const startBtn = document.getElementById('startBtn');
+
+canvas.width = 800;
+canvas.height = 600;
+
+const WORD_DATA = [
+    {word: '春', syl: 2}, {word: '夏', syl: 1}, {word: '秋', syl: 2}, {word: '冬', syl: 2},
+    {word: '月', syl: 1}, {word: '星', syl: 2}, {word: '雨', syl: 2}, {word: '雪', syl: 2},
+    {word: '花', syl: 2}, {word: '草', syl: 1}, {word: '木', syl: 1}, {word: '山', syl: 2},
+    {word: '川', syl: 2}, {word: '海', syl: 2}, {word: '風', syl: 2}, {word: '鳥', syl: 2},
+    {word: '蛙', syl: 3}, {word: '蝶', syl: 2}, {word: '蜂', syl: 1}, {word: '蝉', syl: 2},
+    {word: '朝', syl: 2}, {word: '昼', syl: 2}, {word: '夜', syl: 1}, {word: '夕', syl: 2},
+    {word: '人', syl: 1}, {word: '子', syl: 1}, {word: '親', syl: 2}, {word: '友', syl: 2},
+    {word: '恋', syl: 2}, {word: '愛', syl: 2}, {word: '夢', syl: 2}, {word: '心', syl: 2}
+];
+
+const gameState = {
+    phase: 'start',
+    score: 0,
+    wordsChosen: [],
+    syllables: [0, 0, 0],
+    currentLineIndex: 0,
+    tiles: [],
+    discoveredCount: 0,
+    flashAlpha: 0,
+    isFlashing: false,
+    haikuText: '',
+    createdTileIds: new Set()
+};
+
+function generateUniqueTiles(count) {
+    const tiles = [];
+    let tileId = gameState.createdTileIds.size;
+    
+    for (let i = 0; i < count; i++) {
+        const data = WORD_DATA[Math.floor(Math.random() * WORD_DATA.length)];
+        tiles.push({
+            id: tileId++,
+            word: data.word,
+            syllable: data.syl,
+            x: (i % 5) * 150 + 35,
+            y: Math.floor(i / 5) * 110 + 120,
+            width: 140,
+            height: 95,
+            used: false
+        });
+        gameState.createdTileIds.add(tiles[i].id);
+    }
+    return tiles;
+}
+
+function initGame() {
+    gameState.phase = 'play';
+    gameState.score = 0;
+    gameState.wordsChosen = [];
+    gameState.syllables = [0, 0, 0];
+    gameState.currentLineIndex = 0;
+    gameState.discoveredCount = 0;
+    gameState.createdTileIds.clear();
+    gameState.tiles = generateUniqueTiles(10);
+    gameState.flashAlpha = 0;
+    gameState.isFlashing = false;
+    startScreen.style.display = 'none';
+    clearScreen.style.display = 'none';
+}
+
+const TARGETS = [5, 7, 5];
+
+function onTileClick(tile) {
+    if (tile.used || gameState.phase !== 'play') return;
+
+    gameState.wordsChosen.push(tile.word);
+    gameState.syllables[gameState.currentLineIndex] += tile.syllable;
+    gameState.score = gameState.wordsChosen.length;
+    tile.used = true;
+
+    const target = TARGETS[gameState.currentLineIndex];
+
+    if (gameState.syllables[gameState.currentLineIndex] === target) {
+        gameState.discoveredCount++;
+        
+        if (gameState.currentLineIndex < 2) {
+            gameState.currentLineIndex++;
+        } else {
+            gameState.isFlashing = true;
+            gameState.flashAlpha = 1;
+            buildHaikuText();
+            checkWin();
+        }
+    } else if (gameState.syllables[gameState.currentLineIndex] > target) {
+        gameState.syllables[gameState.currentLineIndex] = 0;
+    }
+
+    const activeCount = gameState.tiles.filter(t => !t.used).length;
+    if (activeCount < 4) {
+        const newTiles = generateUniqueTiles(6);
+        gameState.tiles.push(...newTiles);
+    }
+}
+
+function buildHaikuText() {
+    let text = '';
+    let wordIdx = 0;
+    
+    for (let lineIdx = 0; lineIdx < 3; lineIdx++) {
+        const target = TARGETS[lineIdx];
+        let lineText = '';
+        let lineSum = 0;
+        
+        while (wordIdx < gameState.wordsChosen.length && lineSum < target) {
+            const word = gameState.wordsChosen[wordIdx];
+            const wordSyl = WORD_DATA.find(d => d.word === word)?.syl || 2;
+            lineSum += wordSyl;
+            lineText += word;
+            wordIdx++;
+            if (lineSum === target) break;
+        }
+        
+        text += lineText + (lineIdx < 2 ? '\n' : '');
+    }
+    
+    gameState.haikuText = text;
+}
+
+function checkWin() {
+    if (gameState.wordsChosen.length >= 15 && 
+        gameState.syllables[0] === 5 && 
+        gameState.syllables[1] === 7 && 
+        gameState.syllables[2] === 5) {
+        gameState.phase = 'clear';
+        showClear();
+    }
+}
+
+function showClear() {
+    clearScreen.style.display = 'flex';
+    document.getElementById('finalHaiku').textContent = gameState.haikuText;
+    document.getElementById('scoreDisplay').textContent = 
+        'Words Collected: ' + gameState.wordsChosen.length + 
+        ' | Discoveries: ' + gameState.discoveredCount;
+}
+
+function draw() {
+    ctx.fillStyle = '#fafaf8';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (gameState.phase === 'play') {
+        // Title
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 28px Arial';
+        ctx.fillText('🌸 HAIKU GARDEN 🌸', 20, 35);
+
+        // Status lines
+        ctx.font = '13px Arial';
+        ctx.fillStyle = '#555';
+        const targetArr = [5, 7, 5];
+        for (let i = 0; i < 3; i++) {
+            const curr = gameState.syllables[i];
+            const targ = targetArr[i];
+            const status = curr === targ ? '✓ Complete' : curr + '/' + targ;
+            const color = curr === targ ? '#4CAF50' : '#999';
+            ctx.fillStyle = color;
+            ctx.fillText(`Line ${i+1}: ${status}`, 20, 65 + i * 18);
+        }
+
+        // Score/discoveries
+        ctx.font = 'bold 16px Arial';
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillText('Score: ' + gameState.score + ' | Discoveries: ' + gameState.discoveredCount, 500, 35);
+
+        // Instructions
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#888';
+        ctx.fillText('Click word tiles to match syllable pattern (5-7-5)', 20, 575);
+
+        // Tiles
+        gameState.tiles.forEach(tile => {
+            if (!tile.used) {
+                ctx.fillStyle = '#f0f8ff';
+                ctx.fillRect(tile.x, tile.y, tile.width, tile.height);
+                ctx.strokeStyle = '#4CAF50';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(tile.x, tile.y, tile.width, tile.height);
+
+                ctx.fillStyle = '#333';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(tile.word, tile.x + tile.width/2, tile.y + 50);
+
+                ctx.font = '13px Arial';
+                ctx.fillStyle = '#666';
+                ctx.fillText('(' + tile.syllable + '音)', tile.x + tile.width/2, tile.y + 75);
+                ctx.textAlign = 'left';
+            }
+        });
+
+        // Flash/discover effect
+        if (gameState.isFlashing && gameState.flashAlpha > 0) {
+            ctx.fillStyle = `rgba(255, 215, 0, ${gameState.flashAlpha * 0.15})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const alpha = gameState.flashAlpha;
+            ctx.fillStyle = `rgba(255, 215, 0, ${Math.min(alpha * 1.2, 1)})`;
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(255, 215, 0, 0.5)';
+            ctx.shadowBlur = 20;
+            ctx.fillText('✦ HAIKU REVEALED ✦', canvas.width/2, 200);
+
+            ctx.font = '28px Arial';
+            ctx.fillStyle = `rgba(255, 215, 0, ${alpha * 0.85})`;
+            ctx.shadowBlur = 10;
+            const lines = gameState.haikuText.split('\n');
+            lines.forEach((line, i) => {
+                ctx.fillText(line, canvas.width/2, 280 + i * 45);
+            });
+
+            ctx.shadowColor = 'transparent';
+        }
+    }
+}
+
+function gameLoop() {
+    draw();
+    
+    if (gameState.isFlashing) {
+        gameState.flashAlpha -= 0.025;
+        if (gameState.flashAlpha <= 0) {
+            gameState.isFlashing = false;
+        }
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', initGame);
+
+clearScreen.addEventListener('click', function() {
+    if (gameState.phase === 'clear') {
+        initGame();
+    }
+});
+
+canvas.addEventListener('click', function(e) {
+    if (gameState.phase === 'play') {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        for (const tile of gameState.tiles) {
+            if (!tile.used &&
+                x >= tile.x && x <= tile.x + tile.width &&
+                y >= tile.y && y <= tile.y + tile.height) {
+                onTileClick(tile);
+                break;
+            }
+        }
+    }
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MELODY MAKER</title>
+<style>
+  body { margin: 0; padding: 0; overflow: hidden; background: #1a1a1a; font-family: Arial, sans-serif; }
+  canvas { display: block; background: linear-gradient(135deg, #2d2d44 0%, #1a1a2e 100%); }
+  #startScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: block; z-index: 50; }
+  #startBtn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 50px; font-size: 24px; background: #00ff88; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+  #startBtn:hover { background: #00dd66; transform: translate(-50%, -50%) scale(1.1); }
+  #clearScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; z-index: 100; }
+  #scoreDisplay { position: fixed; top: 10px; left: 10px; color: #00ff88; font-size: 18px; z-index: 10; font-weight: bold; }
+  #melodyCount { position: fixed; top: 10px; right: 10px; color: #ffd700; font-size: 18px; z-index: 10; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+  <div style="position: absolute; top: 15%; left: 50%; transform: translateX(-50%); text-align: center; color: #00ff88; width: 85%; max-width: 500px;">
+    <h1 style="font-size: 52px; margin: 0; text-shadow: 0 0 30px #00ff88;">MELODY MAKER</h1>
+    <p style="font-size: 16px; margin: 40px 0; color: #bbb; line-height: 1.6;">Click the note buttons below to compose a 16-note melody.<br/>Discover hidden patterns and unlock the complete song!</p>
+  </div>
+  <button id="startBtn">START</button>
+</div>
+
+<div id="clearScreen">
+  <div style="position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 90%; max-width: 550px;">
+    <h2 id="clearTitle" style="color: #ffd700; font-size: 48px; margin: 0 0 20px 0; text-shadow: 0 0 30px #ffaa00;">🎵 COMPOSITION COMPLETE! 🎵</h2>
+    <p id="finalScore" style="color: #00ff88; font-size: 32px; margin: 20px 0; font-weight: bold;">Score: 0</p>
+    <p id="finalMelody" style="color: #aaa; font-size: 14px; margin: 15px 0; word-wrap: break-word; max-height: 80px; overflow-y: auto;">Your melody: </p>
+    <p style="color: #fff; font-size: 14px; margin-top: 30px;">Click anywhere to compose another melody...</p>
+  </div>
+</div>
+
+<div id="scoreDisplay">Score: 0</div>
+<div id="melodyCount">Notes: 0/16</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+/*GAME_SPEC
+{
+  "win_condition": "melody.length >= 16",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["score", "melody", "phase"],
+  "core_loop": "click note button → sound plays → note added to melody → particles burst → score updates → check if 16 notes reached",
+  "clear_trigger": "melody.length >= 16",
+  "gameover_trigger": "never"
+}
+*/
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const melodyCount = document.getElementById('melodyCount');
+
+canvas.width = 800;
+canvas.height = 600;
+
+const notes = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+const frequencies = { C: 262, D: 294, E: 330, F: 349, G: 392, A: 440, B: 494 };
+const noteColors = { C: '#ff6b6b', D: '#ff922b', E: '#ffd43b', F: '#51cf66', G: '#339af0', A: '#845ef7', B: '#ff6b9d' };
+
+let gameState = {
+  score: 0,
+  melody: [],
+  phase: 'start',
+  notesPlayed: 0,
+  particles: [],
+  hoverIndex: -1,
+  flashAlpha: 0,
+  frameCount: 0
+};
+
+let audioContext = null;
+
+function initAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+}
+
+function playNote(frequency, duration = 0.3) {
+  if (!audioContext) return;
+  const now = audioContext.currentTime;
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  
+  osc.connect(gain);
+  gain.connect(audioContext.destination);
+  osc.frequency.value = frequency;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(0.25, now);
+  gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+  osc.start(now);
+  osc.stop(now + duration);
+}
+
+function calculateScore() {
+  if (gameState.melody.length === 0) return 0;
+  let score = 0;
+  
+  // Count consecutive identical notes
+  let i = 0;
+  while (i < gameState.melody.length) {
+    let count = 1;
+    while (i + count < gameState.melody.length && gameState.melody[i] === gameState.melody[i + count]) {
+      count++;
+    }
+    score += count;
+    i += count;
+  }
+  
+  // Pattern repetition bonus
+  if (gameState.melody.length >= 4) {
+    for (let patternLen = 1; patternLen <= Math.floor(gameState.melody.length / 4); patternLen++) {
+      let pattern = gameState.melody.slice(0, patternLen);
+      let matches = 1;
+      for (let i = patternLen; i + patternLen <= gameState.melody.length; i += patternLen) {
+        let match = true;
+        for (let j = 0; j < patternLen; j++) {
+          if (gameState.melody[i + j] !== pattern[j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) matches++;
+        else break;
+      }
+      if (matches >= 2) {
+        score = Math.floor(score * 1.5);
+        break;
+      }
+    }
+  }
+  
+  return score;
+}
+
+function addParticles(x, y, note) {
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2;
+    const speed = 3 + Math.random() * 3;
+    gameState.particles.push({
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      note: note,
+      size: 6 + Math.random() * 4
+    });
+  }
+}
+
+function checkWin() {
+  if (gameState.melody.length >= 16 && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    gameState.flashAlpha = 1.0;
+    return true;
+  }
+  return false;
+}
+
+function onNoteClick(noteIndex) {
+  if (gameState.phase !== 'play') return;
+  
+  gameState.melody.push(notes[noteIndex]);
+  gameState.notesPlayed++;
+  gameState.hoverIndex = noteIndex;
+  
+  playNote(frequencies[notes[noteIndex]]);
+  
+  // Burst particles from button
+  const btnX = 55 + noteIndex * 80;
+  const btnY = 480;
+  addParticles(btnX + 35, btnY, notes[noteIndex]);
+  
+  gameState.score = calculateScore();
+  scoreDisplay.textContent = `Score: ${gameState.score}`;
+  melodyCount.textContent = `Notes: ${gameState.melody.length}/16`;
+  
+  checkWin();
+  
+  if (gameState.phase === 'clear') {
+    setTimeout(() => {
+      clearScreen.style.display = 'block';
+      document.getElementById('finalScore').textContent = `Score: ${gameState.score}`;
+      document.getElementById('finalMelody').textContent = `Your melody: ${gameState.melody.join(' - ')}`;
+    }, 400);
+  }
+}
+
+function handleCanvasClick(e) {
+  initAudio();
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  if (gameState.phase === 'play') {
+    for (let i = 0; i < notes.length; i++) {
+      const btnX = 55 + i * 80;
+      const btnY = 480;
+      const btnW = 60;
+      const btnH = 60;
+      
+      if (x > btnX && x < btnX + btnW && y > btnY && y < btnY + btnH) {
+        onNoteClick(i);
+        return;
+      }
+    }
+  }
+}
+
+function handleMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  gameState.hoverIndex = -1;
+  if (gameState.phase === 'play') {
+    for (let i = 0; i < notes.length; i++) {
+      const btnX = 55 + i * 80;
+      const btnY = 480;
+      const btnW = 60;
+      const btnH = 60;
+      
+      if (x > btnX && x < btnX + btnW && y > btnY && y < btnY + btnH) {
+        gameState.hoverIndex = i;
+        return;
+      }
+    }
+  }
+}
+
+function resetGame() {
+  gameState.melody = [];
+  gameState.score = 0;
+  gameState.phase = 'play';
+  gameState.notesPlayed = 0;
+  gameState.particles = [];
+  gameState.hoverIndex = -1;
+  gameState.flashAlpha = 0;
+  scoreDisplay.textContent = 'Score: 0';
+  melodyCount.textContent = 'Notes: 0/16';
+  clearScreen.style.display = 'none';
+}
+
+function draw() {
+  // Background
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, '#2d2d44');
+  gradient.addColorStop(0.5, '#1a1a2e');
+  gradient.addColorStop(1, '#16213e');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Title
+  ctx.fillStyle = '#00ff88';
+  ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('MELODY MAKER', canvas.width / 2, 45);
+  
+  // Instructions
+  ctx.fillStyle = '#aaa';
+  ctx.font = '13px Arial';
+  ctx.fillText('Click note buttons to compose a 16-note melody - discover hidden patterns!', canvas.width / 2, 75);
+  
+  // Display current melody
+  if (gameState.melody.length > 0) {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 14px Arial';
+    let displayMelody = gameState.melody.slice(-12).join(' ');
+    if (gameState.melody.length > 12) displayMelody = '... ' + displayMelody;
+    ctx.fillText(displayMelody, canvas.width / 2, 110);
+  }
+  
+  // Progress bar
+  const progressWidth = (gameState.melody.length / 16) * 280;
+  ctx.fillStyle = '#333';
+  ctx.fillRect(canvas.width / 2 - 140, 135, 280, 18);
+  ctx.fillStyle = '#00ff88';
+  ctx.fillRect(canvas.width / 2 - 140, 135, progressWidth, 18);
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(canvas.width / 2 - 140, 135, 280, 18);
+  
+  ctx.fillStyle = '#aaa';
+  ctx.font = '11px Arial';
+  ctx.fillText(`${gameState.melody.length}/16 notes`, canvas.width / 2, 155);
+  
+  // Particle effect (discovery spotlight)
+  gameState.particles = gameState.particles.filter(p => p.life > 0);
+  for (let p of gameState.particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.4;
+    p.life -= 0.025;
+    
+    ctx.fillStyle = noteColors[p.note];
+    ctx.globalAlpha = p.life * 0.7;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1.0;
+  
+  // 16-note completion spotlight (discover effect)
+  if (gameState.melody.length === 16 && gameState.phase === 'play') {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2 - 100;
+    const spotlightRadius = 150 + Math.sin(gameState.frameCount * 0.1) * 30;
+    
+    const radialGrad = ctx.createRadialGradient(centerX, centerY, spotlightRadius - 50, centerX, centerY, spotlightRadius);
+    radialGrad.addColorStop(0, 'rgba(255, 215, 0, 0.6)');
+    radialGrad.addColorStop(0.7, 'rgba(255, 215, 0, 0.2)');
+    radialGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+    
+    ctx.fillStyle = radialGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 36px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('✨ 16 NOTES DISCOVERED! ✨', centerX, centerY);
+  }
+  
+  // Note buttons
+  for (let i = 0; i < notes.length; i++) {
+    const btnX = 55 + i * 80;
+    const btnY = 480;
+    const btnW = 60;
+    const btnH = 60;
+    const isHover = gameState.hoverIndex === i;
+    
+    // Button shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(btnX + 2, btnY + 2, btnW, btnH);
+    
+    // Button background
+    ctx.fillStyle = isHover ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)';
+    ctx.fillRect(btnX, btnY, btnW, btnH);
+    
+    // Button color ring
+    ctx.strokeStyle = noteColors[notes[i]];
+    ctx.lineWidth = isHover ? 4 : 2;
+    ctx.strokeRect(btnX, btnY, btnW, btnH);
+    
+    // Note label
+    ctx.fillStyle = noteColors[notes[i]];
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(notes[i], btnX + btnW / 2, btnY + btnH / 2);
+  }
+  
+  // Helper text
+  ctx.fillStyle = '#666';
+  ctx.font = '12px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('↓ Click to add note and hear the sound ↓', canvas.width / 2, 560);
+  
+  gameState.frameCount++;
+}
+
+function gameLoop() {
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', () => {
+  initAudio();
+  startScreen.style.display = 'none';
+  resetGame();
+});
+
+clearScreen.addEventListener('click', () => {
+  startScreen.style.display = 'block';
+  clearScreen.style.display = 'none';
+});
+
+canvas.addEventListener('click', handleCanvasClick);
+canvas.addEventListener('mousemove', handleMouseMove);
+canvas.addEventListener('mouseup', (e) => {
+  // No game logic here (P1 prevention)
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>
