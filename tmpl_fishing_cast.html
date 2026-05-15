@@ -222,8 +222,9 @@ function update() {
       gameState.lineActive = false;
     }
 
-    // out of bounds
-    if (gameState.lineX > W + 50 || gameState.lineX < -50) gameState.lineActive = false;
+    // wall bounce (keeps line in play)
+    if (gameState.lineX > W - 5) { gameState.lineX = W - 5; gameState.lineVx = -Math.abs(gameState.lineVx) * 0.6; }
+    if (gameState.lineX < 5)     { gameState.lineX = 5;     gameState.lineVx =  Math.abs(gameState.lineVx) * 0.6; }
   }
 
   document.getElementById('catchHud').textContent = gameState.caught;

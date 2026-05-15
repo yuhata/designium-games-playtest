@@ -117,11 +117,42 @@
       transition: width 0.3s ease;
     }
 
+    .zone-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .zone-btn {
+      flex: 1;
+      padding: 10px 8px;
+      font-size: 14px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .zone-btn:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    .zone-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
     .collection-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 10px;
+      max-height: 260px;
+      overflow-y: auto;
+      margin-bottom: 8px;
     }
 
     .collection-item {
@@ -289,11 +320,12 @@
         </div>
       </div>
 
-      <div class="collection-grid" id="collectionGrid"></div>
+      <div class="zone-buttons">
+        <button class="zone-btn" id="forestBtn" onclick="explore('forest')">🌲 森を探検</button>
+        <button class="zone-btn" id="oceanBtn" onclick="explore('ocean')">🌊 海を探検</button>
+      </div>
 
-      <button class="explore-btn" id="exploreBtn" onclick="explore()">
-        🔍 探検する
-      </button>
+      <div class="collection-grid" id="collectionGrid"></div>
     </div>
 
     <!-- Clear Screen -->
@@ -328,26 +360,26 @@
     };
 
     var items = [
-      { emoji: '🦋', name: 'Butterfly' },
-      { emoji: '🐸', name: 'Frog' },
-      { emoji: '🦎', name: 'Lizard' },
-      { emoji: '🐢', name: 'Turtle' },
-      { emoji: '🦜', name: 'Parrot' },
-      { emoji: '🐙', name: 'Octopus' },
-      { emoji: '🦑', name: 'Squid' },
-      { emoji: '🦐', name: 'Shrimp' },
-      { emoji: '🦞', name: 'Lobster' },
-      { emoji: '🦀', name: 'Crab' },
-      { emoji: '🐡', name: 'Blowfish' },
-      { emoji: '🐠', name: 'Tropical Fish' },
-      { emoji: '🐟', name: 'Fish' },
-      { emoji: '🦈', name: 'Shark' },
-      { emoji: '🐬', name: 'Dolphin' },
-      { emoji: '🐳', name: 'Whale' },
-      { emoji: '🦭', name: 'Seal' },
-      { emoji: '🦦', name: 'Otter' },
-      { emoji: '🦥', name: 'Sloth' },
-      { emoji: '🦨', name: 'Skunk' }
+      { emoji: '🦋', name: 'チョウ', zone: 'forest' },
+      { emoji: '🐸', name: 'カエル', zone: 'forest' },
+      { emoji: '🦎', name: 'トカゲ', zone: 'forest' },
+      { emoji: '🐢', name: 'カメ', zone: 'forest' },
+      { emoji: '🦜', name: 'オウム', zone: 'forest' },
+      { emoji: '🦥', name: 'ナマケモノ', zone: 'forest' },
+      { emoji: '🦨', name: 'スカンク', zone: 'forest' },
+      { emoji: '🐙', name: 'タコ', zone: 'ocean' },
+      { emoji: '🦑', name: 'イカ', zone: 'ocean' },
+      { emoji: '🦐', name: 'エビ', zone: 'ocean' },
+      { emoji: '🦞', name: 'ロブスター', zone: 'ocean' },
+      { emoji: '🦀', name: 'カニ', zone: 'ocean' },
+      { emoji: '🐡', name: 'フグ', zone: 'ocean' },
+      { emoji: '🐠', name: 'ネッタイギョ', zone: 'ocean' },
+      { emoji: '🐟', name: 'サカナ', zone: 'ocean' },
+      { emoji: '🦈', name: 'サメ', zone: 'ocean' },
+      { emoji: '🐬', name: 'イルカ', zone: 'ocean' },
+      { emoji: '🐳', name: 'クジラ', zone: 'ocean' },
+      { emoji: '🦭', name: 'アザラシ', zone: 'ocean' },
+      { emoji: '🦦', name: 'カワウソ', zone: 'ocean' }
     ];
 
     function startGame() {
@@ -369,50 +401,42 @@
       updateCollectedCount();
     }
 
-    function explore() {
+    function explore(zone) {
       if (gameState.energy <= 0) return;
+
+      var uncollectedInZone = gameState.collection
+        .map((item, index) => (item.zone === zone && !item.collected ? index : null))
+        .filter((index) => index !== null);
+
+      if (uncollectedInZone.length === 0) {
+        var zoneName = zone === 'forest' ? '🌲 森' : '🌊 海';
+        showItemPopup('😅', zoneName + 'の動物は全て集めました！', '別のエリアへ');
+        return;
+      }
 
       gameState.energy--;
       gameState.energyTimer = 0;
       updateEnergyDisplay();
 
-      var uncollectedIndices = gameState.collection
-        .map((item, index) => (item.collected ? null : index))
-        .filter((index) => index !== null);
+      var randomPos = Math.floor(Math.random() * uncollectedInZone.length);
+      var itemIndex = uncollectedInZone[randomPos];
+      gameState.collection[itemIndex].collected = true;
+      gameState.collectedCount++;
 
-      if (uncollectedIndices.length === 0) {
-        showItemPopup('🎁', 'All items collected!', '');
-        return;
-      }
-
-      var count = Math.random() > 0.6 ? 2 : 1;
-      var revealed = 0;
-
-      for (var i = 0; i < count && uncollectedIndices.length > 0; i++) {
-        var randomPos = Math.floor(Math.random() * uncollectedIndices.length);
-        var itemIndex = uncollectedIndices[randomPos];
-        uncollectedIndices.splice(randomPos, 1);
-
-        if (!gameState.collection[itemIndex].collected) {
-          gameState.collection[itemIndex].collected = true;
-          gameState.collectedCount++;
-          revealed++;
-
-          showItemPopup(
-            gameState.collection[itemIndex].emoji,
-            'New item: ' + gameState.collection[itemIndex].emoji + ' ' + gameState.collection[itemIndex].name,
-            ''
-          );
-        }
-      }
+      showItemPopup(
+        gameState.collection[itemIndex].emoji,
+        '新発見！ ' + gameState.collection[itemIndex].emoji + ' ' + gameState.collection[itemIndex].name,
+        zone === 'forest' ? '🌲 森で発見' : '🌊 海で発見'
+      );
 
       renderCollectionGrid();
       updateCollectedCount();
-      updateEnergyDisplay();
 
       if (gameState.collectedCount >= 16) {
-        showScreen('clearScreen');
-        gameState.running = false;
+        setTimeout(function() {
+          showScreen('clearScreen');
+          gameState.running = false;
+        }, 1900);
       }
     }
 
@@ -451,7 +475,9 @@
       var percentage = (gameState.energy / gameState.maxEnergy) * 100;
       document.getElementById('energyBar').style.width = percentage + '%';
       document.getElementById('energyLabel').textContent = gameState.energy + '/' + gameState.maxEnergy + ' ⚡';
-      document.getElementById('exploreBtn').disabled = gameState.energy <= 0;
+      var noEnergy = gameState.energy <= 0;
+      document.getElementById('forestBtn').disabled = noEnergy;
+      document.getElementById('oceanBtn').disabled = noEnergy;
     }
 
     function updateCollectedCount() {

@@ -70,17 +70,17 @@ const BOARD_X = 30, BOARD_Y = 50;
 function makeInitBoard() {
     const board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     // CPU (top, row 0): R B S G K  (from col 0)
-    board[0][4] = { type: 'K', owner: 1 };
-    board[0][3] = { type: 'G', owner: 1 };
-    board[0][2] = { type: 'S', owner: 1 };
-    board[0][1] = { type: 'B', owner: 1 };
-    board[0][0] = { type: 'R', owner: 1 };
-    // Player (bottom, row 4): K G S B R (from col 0)
-    board[4][0] = { type: 'K', owner: 0 };
-    board[4][1] = { type: 'G', owner: 0 };
-    board[4][2] = { type: 'S', owner: 0 };
-    board[4][3] = { type: 'B', owner: 0 };
-    board[4][4] = { type: 'R', owner: 0 };
+    board[0][0] = { type: 'K', owner: 1 };
+    board[0][1] = { type: 'G', owner: 1 };
+    board[0][2] = { type: 'R', owner: 1 };
+    board[0][3] = { type: 'S', owner: 1 };
+    board[0][4] = { type: 'B', owner: 1 };
+    // Player (bottom, row 4): B S R G K — rook center, kings opposite corners
+    board[4][0] = { type: 'B', owner: 0 };
+    board[4][1] = { type: 'S', owner: 0 };
+    board[4][2] = { type: 'R', owner: 0 };
+    board[4][3] = { type: 'G', owner: 0 };
+    board[4][4] = { type: 'K', owner: 0 };
     return board;
 }
 

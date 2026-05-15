@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相撲</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1000; font-family: Arial, sans-serif; }
+        #gameContainer { position: relative; }
+        canvas { display: block; }
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; color: #fff; gap: 14px; z-index: 100; text-align: center; padding: 20px; }
+        .screen h1 { font-size: 42px; color: #f6e05e; }
+        .screen p { font-size: 15px; line-height: 1.7; max-width: 300px; }
+        .screen button { padding: 12px 36px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; background: #e53e3e; color: #fff; }
+        .screen button:hover { background: #fc5c5c; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>🏆 相撲</h1>
+        <p>土俵の外に相手を押し出せ！<br><br>
+        操作: 矢印キー / WASD<br>またはキャンバス下のボタン<br><br>
+        2本先取でクリア（3本勝負）</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">2勝！横綱だ！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">GAME OVER</h1>
+        <p id="overMsg">押し出されました…</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+<script>
+const W = 460, H = 540;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+
+const CX = W / 2, CY = 220;
+const RING_R = 150;
+const CHAR_R = 28;
+const FRICTION = 0.82;
+const PUSH_SPEED = 2.6;
+const CPU_SPEED = 1.6;
+const DPAD_CX = W / 2, DPAD_CY = H - 65;
+const DPAD_BTN = 36;
+
+const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
+                w: false, s: false, a: false, d: false };
+const dpad = { up: false, down: false, left: false, right: false };
+
+const gs = {
+    running: false,
+    playerWins: 0, cpuWins: 0,
+    px: CX - 60, py: CY, pvx: 0, pvy: 0,
+    ex: CX + 60, ey: CY, evx: 0, evy: 0,
+    phase: 'fight', // fight | roundEnd
+    roundMsg: '', roundTimer: 0,
+    flashMsg: '', flashTimer: 0,
+    roundNum: 0,
+};
+let gameLoop = null;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    gs.running = true;
+    gs.playerWins = 0; gs.cpuWins = 0; gs.roundNum = 0;
+    startRound();
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+}
+
+function retryGame() {
+    gs.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function startRound() {
+    gs.px = CX - 55; gs.py = CY;
+    gs.ex = CX + 55; gs.ey = CY;
+    gs.pvx = 0; gs.pvy = 0; gs.evx = 0; gs.evy = 0;
+    gs.phase = 'fight';
+    gs.roundNum++;
+}
+
+function update() {
+    if (!gs.running) return;
+
+    if (gs.phase === 'roundEnd') {
+        gs.roundTimer--;
+        if (gs.roundTimer <= 0) {
+            if (gs.playerWins >= 2) {
+                gs.running = false; clearInterval(gameLoop);
+                document.getElementById('clearMsg').innerText = '2勝！横綱の称号を得た！';
+                document.getElementById('clearScreen').style.display = 'flex';
+            } else if (gs.cpuWins >= 2) {
+                gs.running = false; clearInterval(gameLoop);
+                document.getElementById('overMsg').innerText = gs.playerWins + '勝' + gs.cpuWins + '敗…';
+                document.getElementById('gameOverScreen').style.display = 'flex';
+            } else {
+                startRound();
+            }
+        }
+        draw(); return;
+    }
+
+    // Player input
+    let pdx = 0, pdy = 0;
+    if (keys.ArrowUp || keys.w || dpad.up) pdy -= 1;
+    if (keys.ArrowDown || keys.s || dpad.down) pdy += 1;
+    if (keys.ArrowLeft || keys.a || dpad.left) pdx -= 1;
+    if (keys.ArrowRight || keys.d || dpad.right) pdx += 1;
+    if (pdx !== 0 || pdy !== 0) {
+        const len = Math.sqrt(pdx * pdx + pdy * pdy);
+        gs.pvx += (pdx / len) * PUSH_SPEED;
+        gs.pvy += (pdy / len) * PUSH_SPEED;
+    }
+
+    // CPU AI: move toward player
+    const cDx = gs.px - gs.ex, cDy = gs.py - gs.ey;
+    const cDist = Math.sqrt(cDx * cDx + cDy * cDy);
+    if (cDist > CHAR_R * 2) {
+        gs.evx += (cDx / cDist) * CPU_SPEED;
+        gs.evy += (cDy / cDist) * CPU_SPEED;
+    }
+
+    // Speed cap
+    const pspeed = Math.sqrt(gs.pvx * gs.pvx + gs.pvy * gs.pvy);
+    if (pspeed > 6) { gs.pvx = gs.pvx / pspeed * 6; gs.pvy = gs.pvy / pspeed * 6; }
+    const espeed = Math.sqrt(gs.evx * gs.evx + gs.evy * gs.evy);
+    if (espeed > 5) { gs.evx = gs.evx / espeed * 5; gs.evy = gs.evy / espeed * 5; }
+
+    // Move
+    gs.px += gs.pvx; gs.py += gs.pvy;
+    gs.ex += gs.evx; gs.ey += gs.evy;
+
+    // Friction
+    gs.pvx *= FRICTION; gs.pvy *= FRICTION;
+    gs.evx *= FRICTION; gs.evy *= FRICTION;
+
+    // Collision between characters
+    const dx = gs.px - gs.ex, dy = gs.py - gs.ey;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const minDist = CHAR_R * 2;
+    if (dist < minDist && dist > 0.1) {
+        const nx = dx / dist, ny = dy / dist;
+        const overlap = minDist - dist;
+        gs.px += nx * overlap * 0.5; gs.py += ny * overlap * 0.5;
+        gs.ex -= nx * overlap * 0.5; gs.ey -= ny * overlap * 0.5;
+        // Velocity transfer
+        const relVx = gs.pvx - gs.evx, relVy = gs.pvy - gs.evy;
+        const dot = relVx * nx + relVy * ny;
+        if (dot < 0) {
+            const imp = dot * 0.7;
+            gs.pvx -= imp * nx; gs.pvy -= imp * ny;
+            gs.evx += imp * nx; gs.evy += imp * ny;
+        }
+    }
+
+    // Check out-of-ring
+    const pDist = Math.sqrt((gs.px - CX) ** 2 + (gs.py - CY) ** 2);
+    const eDist = Math.sqrt((gs.ex - CX) ** 2 + (gs.ey - CY) ** 2);
+    if (pDist + CHAR_R > RING_R) {
+        gs.cpuWins++;
+        gs.roundMsg = 'CPU の勝ち！'; gs.phase = 'roundEnd'; gs.roundTimer = 90;
+    } else if (eDist + CHAR_R > RING_R) {
+        gs.playerWins++;
+        gs.roundMsg = 'あなたの勝ち！'; gs.phase = 'roundEnd'; gs.roundTimer = 90;
+    }
+
+    draw();
+}
+
+function draw() {
+    ctx.fillStyle = '#1a1000';
+    ctx.fillRect(0, 0, W, H);
+
+    // Dohyo shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.ellipse(CX + 6, CY + 10, RING_R, RING_R * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Dohyo
+    ctx.fillStyle = '#d4a855';
+    ctx.beginPath(); ctx.arc(CX, CY, RING_R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8b6914'; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(CX, CY, RING_R - 3, 0, Math.PI * 2); ctx.stroke();
+    // Tawara (straw bales) marks
+    ctx.strokeStyle = '#c8a028'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(CX, CY, RING_R - 16, 0, Math.PI * 2); ctx.stroke();
+
+    // Center line
+    ctx.strokeStyle = 'rgba(100,60,0,0.4)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(CX - 20, CY); ctx.lineTo(CX + 20, CY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(CX, CY - 12); ctx.lineTo(CX, CY + 12); ctx.stroke();
+
+    // D-pad buttons
+    drawDpad();
+
+    const isRoundEnd = gs.phase === 'roundEnd';
+
+    // CPU character (red)
+    const eAlpha = isRoundEnd ? 0.5 : 1;
+    ctx.globalAlpha = eAlpha;
+    ctx.fillStyle = '#e53e3e';
+    ctx.beginPath(); ctx.arc(gs.ex, gs.ey, CHAR_R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#c53030'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(gs.ex, gs.ey, CHAR_R, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('大', gs.ex, gs.ey + 1);
+    ctx.globalAlpha = 1;
+
+    // Player character (blue)
+    const pAlpha = isRoundEnd ? 0.5 : 1;
+    ctx.globalAlpha = pAlpha;
+    ctx.fillStyle = '#2b6cb0';
+    ctx.beginPath(); ctx.arc(gs.px, gs.py, CHAR_R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2c5282'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(gs.px, gs.py, CHAR_R, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('大', gs.px, gs.py + 1);
+    ctx.globalAlpha = 1;
+
+    // Scoreboard
+    ctx.fillStyle = '#2d1a00';
+    ctx.fillRect(0, 0, W, 46);
+    ctx.fillStyle = '#f6e05e';
+    ctx.font = 'bold 14px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('あなた', 14, 14);
+    ctx.fillStyle = '#90cdf4';
+    ctx.fillText(gs.playerWins + '勝', 14, 34);
+    ctx.fillStyle = '#f6e05e';
+    ctx.textAlign = 'center';
+    ctx.fillText('第' + gs.roundNum + '戦 / 3本勝負', CX, 14);
+    ctx.fillStyle = '#fc8181';
+    ctx.fillText('2勝でクリア', CX, 34);
+    ctx.fillStyle = '#f6e05e';
+    ctx.textAlign = 'right';
+    ctx.fillText('CPU', W - 14, 14);
+    ctx.fillStyle = '#fc8181';
+    ctx.fillText(gs.cpuWins + '勝', W - 14, 34);
+
+    // Round end overlay
+    if (isRoundEnd) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(0, CY - 40, W, 80);
+        ctx.fillStyle = '#f6e05e';
+        ctx.font = 'bold 28px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(gs.roundMsg, CX, CY);
+    }
+
+    // Controls hint
+    ctx.fillStyle = '#4a5568'; ctx.font = '11px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('矢印キー / WASD またはボタン', CX, H - 4);
+}
+
+function drawDpad() {
+    const bw = DPAD_BTN, bh = DPAD_BTN;
+    const btns = [
+        { key: 'up',    x: DPAD_CX - bw/2, y: DPAD_CY - bh * 1.5, label: '▲' },
+        { key: 'down',  x: DPAD_CX - bw/2, y: DPAD_CY + bh * 0.5, label: '▼' },
+        { key: 'left',  x: DPAD_CX - bw * 1.5 - 4, y: DPAD_CY - bh/2, label: '◀' },
+        { key: 'right', x: DPAD_CX + bw * 0.5 + 4, y: DPAD_CY - bh/2, label: '▶' },
+    ];
+    for (const b of btns) {
+        ctx.fillStyle = dpad[b.key] ? '#4a90d9' : '#2d4a6e';
+        ctx.strokeStyle = '#4a6a8a'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(b.x, b.y, bw, bh, 4); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = '16px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(b.label, b.x + bw / 2, b.y + bh / 2);
+    }
+}
+
+function getDpadKey(mx, my) {
+    const bw = DPAD_BTN, bh = DPAD_BTN;
+    const btns = [
+        { key: 'up',    x: DPAD_CX - bw/2, y: DPAD_CY - bh * 1.5 },
+        { key: 'down',  x: DPAD_CX - bw/2, y: DPAD_CY + bh * 0.5 },
+        { key: 'left',  x: DPAD_CX - bw * 1.5 - 4, y: DPAD_CY - bh/2 },
+        { key: 'right', x: DPAD_CX + bw * 0.5 + 4, y: DPAD_CY - bh/2 },
+    ];
+    for (const b of btns) {
+        if (mx >= b.x && mx <= b.x + bw && my >= b.y && my <= b.y + bh) return b.key;
+    }
+    return null;
+}
+
+canvas.addEventListener('mousedown', e => {
+    const r = canvas.getBoundingClientRect();
+    const k = getDpadKey(e.clientX - r.left, e.clientY - r.top);
+    if (k) dpad[k] = true;
+});
+canvas.addEventListener('mouseup', () => { for (const k in dpad) dpad[k] = false; });
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    for (const t of e.touches) {
+        const k = getDpadKey(t.clientX - r.left, t.clientY - r.top);
+        if (k) dpad[k] = true;
+    }
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    for (const k in dpad) dpad[k] = false;
+    const r = canvas.getBoundingClientRect();
+    for (const t of e.touches) {
+        const k = getDpadKey(t.clientX - r.left, t.clientY - r.top);
+        if (k) dpad[k] = true;
+    }
+}, { passive: false });
+
+document.addEventListener('keydown', e => {
+    if (e.key in keys) { keys[e.key] = true; e.preventDefault(); }
+});
+document.addEventListener('keyup', e => { if (e.key in keys) keys[e.key] = false; });
+</script>
+</body>
+</html>

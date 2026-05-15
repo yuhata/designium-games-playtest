@@ -116,6 +116,18 @@
       border-radius: 4px;
     }
 
+    #timerDisplay {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+
+    #timerDisplay.urgent {
+      background: rgba(180, 0, 0, 0.6);
+      color: #ff4444;
+    }
+
     #tilesBoard {
       position: absolute;
       top: 50px;
@@ -233,6 +245,7 @@
     <div id="gameScreen" class="screen">
       <div id="gameHUD">
         <div id="pairsLeft">Pairs: <span id="tileCount">0</span></div>
+        <div id="timerDisplay">3:00</div>
         <div id="matchedCount">Matched: <span id="matchedDisplay">0</span></div>
       </div>
       <div id="tilesBoard"></div>
@@ -263,7 +276,9 @@
       selectedTiles: [],
       matchedPairs: 0,
       totalPairs: 16,
-      gameLoopId: null
+      gameLoopId: null,
+      timeLeft: 180,
+      frameCount: 0
     };
 
     // Tile symbols (16 pairs)
@@ -278,6 +293,8 @@
       gameState.selectedTiles = [];
       gameState.matchedPairs = 0;
       gameState.totalPairs = 16;
+      gameState.timeLeft = 180;
+      gameState.frameCount = 0;
 
       // Hide all screens
       document.getElementById('startScreen').style.display = 'none';
@@ -297,6 +314,7 @@
       gameState.gameLoopId = setInterval(gameLoop, 16);
 
       updateHUD();
+      updateTimerDisplay();
     }
 
     /**
@@ -475,6 +493,14 @@
       document.getElementById('matchedDisplay').textContent = gameState.matchedPairs;
     }
 
+    function updateTimerDisplay() {
+      const m = Math.floor(gameState.timeLeft / 60);
+      const s = gameState.timeLeft % 60;
+      const el = document.getElementById('timerDisplay');
+      el.textContent = m + ':' + String(s).padStart(2, '0');
+      el.className = gameState.timeLeft <= 30 ? 'urgent' : '';
+    }
+
     /**
      * Check for valid moves
      */
@@ -499,6 +525,22 @@
      */
     function gameLoop() {
       if (!gameState.running) return;
+
+      // Countdown timer
+      gameState.frameCount++;
+      if (gameState.frameCount % 60 === 0) {
+        gameState.timeLeft--;
+        updateTimerDisplay();
+        if (gameState.timeLeft <= 0) {
+          gameState.running = false;
+          clearInterval(gameState.gameLoopId);
+          setTimeout(() => {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'flex';
+          }, 300);
+          return;
+        }
+      }
 
       // Check win condition
       if (gameState.matchedPairs === gameState.totalPairs) {

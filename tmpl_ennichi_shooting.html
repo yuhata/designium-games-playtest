@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>縁日射的</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a0a00; font-family: Arial, sans-serif; }
+        #gameContainer { position: relative; }
+        canvas { display: block; cursor: none; }
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; color: #fff; gap: 14px; z-index: 100; text-align: center; padding: 20px; }
+        .screen h1 { font-size: 42px; color: #f6e05e; }
+        .screen p { font-size: 15px; line-height: 1.7; max-width: 300px; }
+        .screen button { padding: 12px 36px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; background: #e53e3e; color: #fff; }
+        .screen button:hover { background: #fc5c5c; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>🎯 縁日射的</h1>
+        <p>的を狙ってクリック！<br>
+        的は左右に動いている。<br><br>
+        20発で10個当てればクリア<br>
+        金的（小さい）は3点！</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">射的名人！</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">GAME OVER</h1>
+        <p id="overMsg">弾切れ…</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+<script>
+const W = 460, H = 540;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = W + 'px'; gc.style.height = H + 'px';
+
+const MAX_SHOTS = 20;
+const CLEAR_SCORE = 10;
+
+function makeTargets() {
+    const tgts = [];
+    const layout = [
+        { col: 3, y: 110, r: 26, pts: 1 },
+        { col: 3, y: 210, r: 26, pts: 1 },
+        { col: 3, y: 310, r: 26, pts: 1 },
+    ];
+    let id = 0;
+    for (const row of layout) {
+        const spacing = W / (row.col + 1);
+        for (let c = 1; c <= row.col; c++) {
+            tgts.push({
+                id: id++,
+                baseX: spacing * c,
+                x: spacing * c,
+                y: row.y,
+                r: row.r,
+                pts: row.pts,
+                speed: 0.7 + Math.random() * 0.7,
+                amp: 25 + Math.random() * 35,
+                phase: Math.random() * Math.PI * 2,
+                hit: false,
+                hitTimer: 0,
+                respawn: 0,
+            });
+        }
+    }
+    // Add 2 gold small targets
+    tgts.push({ id: id++, baseX: 115, x: 115, y: 160, r: 14, pts: 3, speed: 1.4, amp: 40, phase: 1.2, hit: false, hitTimer: 0, respawn: 0, gold: true });
+    tgts.push({ id: id++, baseX: 345, x: 345, y: 260, r: 14, pts: 3, speed: 1.2, amp: 35, phase: 2.8, hit: false, hitTimer: 0, respawn: 0, gold: true });
+    return tgts;
+}
+
+const gs = {
+    running: false, shots: 0, score: 0, hits: 0,
+    mx: W / 2, my: H / 2,
+    targets: [], flashTexts: [], tick: 0, shotFlash: 0, shotX: 0, shotY: 0,
+};
+let gameLoop = null;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    gs.running = true; gs.shots = 0; gs.score = 0; gs.hits = 0;
+    gs.targets = makeTargets(); gs.flashTexts = []; gs.tick = 0; gs.shotFlash = 0;
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+}
+
+function retryGame() {
+    gs.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function shoot(mx, my) {
+    if (!gs.running || gs.shots >= MAX_SHOTS) return;
+    gs.shots++;
+    gs.shotFlash = 10; gs.shotX = mx; gs.shotY = my;
+    let hitTarget = null;
+    for (const t of gs.targets) {
+        if (t.hit) continue;
+        const dx = mx - t.x, dy = my - t.y;
+        if (Math.sqrt(dx * dx + dy * dy) <= t.r + 4) { hitTarget = t; break; }
+    }
+    if (hitTarget) {
+        hitTarget.hit = true; hitTarget.hitTimer = 35; hitTarget.respawn = 100;
+        gs.score += hitTarget.pts; gs.hits++;
+        gs.flashTexts.push({ x: hitTarget.x, y: hitTarget.y - 20, text: '+' + hitTarget.pts, color: hitTarget.gold ? '#f6ad55' : '#f6e05e', life: 55 });
+    } else {
+        gs.flashTexts.push({ x: mx, y: my - 10, text: 'MISS', color: '#fc8181', life: 40 });
+    }
+    if (gs.score >= CLEAR_SCORE) { setTimeout(() => endGame(true), 400); }
+    else if (gs.shots >= MAX_SHOTS) { setTimeout(() => endGame(false), 400); }
+}
+
+function endGame(win) {
+    if (!gs.running) return;
+    gs.running = false; clearInterval(gameLoop);
+    if (win) {
+        document.getElementById('clearMsg').innerText = gs.hits + '個命中 / ' + gs.score + '点！射的名人！';
+        document.getElementById('clearScreen').style.display = 'flex';
+    } else {
+        document.getElementById('overMsg').innerText = gs.score + '点 / ' + CLEAR_SCORE + '点必要 (' + gs.hits + '個命中)';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+}
+
+function update() {
+    if (!gs.running) return;
+    gs.tick++;
+    if (gs.shotFlash > 0) gs.shotFlash--;
+    for (const t of gs.targets) {
+        if (t.hit) {
+            if (t.hitTimer > 0) t.hitTimer--;
+            if (t.respawn > 0) { t.respawn--; if (t.respawn === 0) { t.hit = false; t.phase = Math.random() * Math.PI * 2; } }
+        } else {
+            t.x = t.baseX + Math.sin(gs.tick * 0.025 * t.speed + t.phase) * t.amp;
+        }
+    }
+    for (let i = gs.flashTexts.length - 1; i >= 0; i--) {
+        const ft = gs.flashTexts[i]; ft.y -= 0.8; ft.life--;
+        if (ft.life <= 0) gs.flashTexts.splice(i, 1);
+    }
+    draw();
+}
+
+function draw() {
+    ctx.fillStyle = '#2d1000';
+    ctx.fillRect(0, 0, W, H);
+
+    // Booth back wall stripes
+    for (let y = 0; y < H - 80; y += 40) {
+        ctx.fillStyle = y % 80 === 0 ? '#3d1800' : '#2d1000';
+        ctx.fillRect(0, y, W, 40);
+    }
+
+    // Strings
+    for (const t of gs.targets) {
+        if (t.hit && t.hitTimer <= 0) continue;
+        ctx.globalAlpha = t.hit ? t.hitTimer / 35 : 1;
+        ctx.strokeStyle = '#c8a060';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(t.x, 0); ctx.lineTo(t.x, t.y - t.r); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Targets
+    for (const t of gs.targets) {
+        if (t.hit && t.hitTimer <= 0) continue;
+        ctx.globalAlpha = t.hit ? t.hitTimer / 35 : 1;
+        if (t.gold) {
+            ctx.fillStyle = '#d69e2e';
+            ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff8dc';
+            ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#d69e2e';
+            ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.2, 0, Math.PI * 2); ctx.fill();
+        } else {
+            ctx.fillStyle = '#e53e3e';
+            ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.62, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#e53e3e';
+            ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.28, 0, Math.PI * 2); ctx.fill();
+        }
+        if (t.hit) {
+            ctx.fillStyle = '#f6e05e';
+            ctx.font = (t.r * 1.2) + 'px Arial';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('💥', t.x, t.y);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Flash texts
+    for (const ft of gs.flashTexts) {
+        ctx.globalAlpha = ft.life / 55;
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(ft.text, ft.x, ft.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // Shot line
+    if (gs.shotFlash > 0) {
+        ctx.strokeStyle = 'rgba(255,220,80,' + (gs.shotFlash / 10) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(gs.mx, H - 60); ctx.lineTo(gs.shotX, gs.shotY); ctx.stroke();
+    }
+
+    // Counter / floor
+    ctx.fillStyle = '#5c2e00';
+    ctx.fillRect(0, H - 80, W, 80);
+    ctx.fillStyle = '#8b4513';
+    ctx.fillRect(0, H - 82, W, 6);
+    for (let x = 0; x < W; x += 28) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, H - 82); ctx.lineTo(x, H); ctx.stroke();
+    }
+
+    // Gun barrel hint
+    ctx.strokeStyle = '#8b8b6e';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(gs.mx - 10, H - 40); ctx.lineTo(gs.mx, H - 60); ctx.stroke();
+
+    // HUD
+    ctx.fillStyle = '#f6e05e';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('スコア: ' + gs.score + ' / ' + CLEAR_SCORE, 10, 8);
+    ctx.fillStyle = '#90cdf4';
+    ctx.textAlign = 'right';
+    ctx.fillText('残弾: ' + (MAX_SHOTS - gs.shots) + ' / ' + MAX_SHOTS, W - 10, 8);
+
+    // Bullet gauge
+    ctx.fillStyle = '#2d3748';
+    ctx.fillRect(10, 28, W - 20, 8);
+    ctx.fillStyle = gs.shots < MAX_SHOTS * 0.6 ? '#e53e3e' : '#fc8181';
+    ctx.fillRect(10, 28, (W - 20) * ((MAX_SHOTS - gs.shots) / MAX_SHOTS), 8);
+    ctx.strokeStyle = '#4a5568'; ctx.lineWidth = 1;
+    ctx.strokeRect(10, 28, W - 20, 8);
+
+    // Crosshair
+    const cx = gs.mx, cy = gs.my;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 6, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 6, cy); ctx.lineTo(cx + 14, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy + 6); ctx.lineTo(cx, cy + 14); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.stroke();
+}
+
+canvas.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect();
+    gs.mx = e.clientX - r.left; gs.my = e.clientY - r.top;
+    if (gs.running) draw();
+});
+canvas.addEventListener('click', e => {
+    const r = canvas.getBoundingClientRect();
+    shoot(e.clientX - r.left, e.clientY - r.top);
+});
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    gs.mx = e.touches[0].clientX - r.left; gs.my = e.touches[0].clientY - r.top;
+    shoot(gs.mx, gs.my);
+}, { passive: false });
+</script>
+</body>
+</html>

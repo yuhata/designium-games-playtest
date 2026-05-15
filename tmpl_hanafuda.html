@@ -264,15 +264,18 @@ function handlePlayerClick(mx, my) {
             } else {
                 showMsg('月が違います！');
             }
-        } else if (isDiscardArea(mx, my)) {
-            // Discard
-            playerDiscard();
         } else {
-            // Re-select
-            gameState.selectedHandCard = null;
-            gameState.phase = 'player_select';
-            gameState.statusMsg = '手札から1枚選んでください';
-            draw();
+            // No matching field card → discard; with match → re-select
+            const selCard = getCard(gameState.selectedHandCard);
+            const hasMatches = fieldMatchIds(selCard.month).length > 0;
+            if (!hasMatches || isDiscardArea(mx, my)) {
+                playerDiscard();
+            } else {
+                gameState.selectedHandCard = null;
+                gameState.phase = 'player_select';
+                gameState.statusMsg = '手札から1枚選んでください';
+                draw();
+            }
         }
     }
 }

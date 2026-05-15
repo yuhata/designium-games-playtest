@@ -190,15 +190,8 @@ function update() {
   if (ball.x - ball.r < 0)   { ball.x = ball.r;     ball.vx = Math.abs(ball.vx) * 0.85; }
   if (ball.x + ball.r > W)   { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * 0.85; }
 
-  // net collision (y around NET_Y, thin)
-  const netLeft = 0, netRight = W;
-  if (ball.y + ball.r >= NET_Y - 5 && ball.y - ball.r <= NET_Y + 5 &&
-      ball.x >= netLeft && ball.x <= netRight) {
-    if (ball.vy > 0) ball.vy = -Math.abs(ball.vy) * 0.8; // bounce off net top
-  }
-
   // ball enters CPU zone (upper half)
-  if (ball.phase !== 'cpu_return' && ball.y < NET_Y && ball.vy < 0) {
+  if (gameState.phase !== 'cpu_return' && ball.y < NET_Y && ball.vy < 0) {
     // ball crossed net going up → now CPU's turn
     if (gameState.phase === 'play') gameState.phase = 'cpu_return';
   }
@@ -211,10 +204,14 @@ function update() {
     }
   }
 
-  // CPU ceiling miss (ball hits CEIL_Y without CPU touching)
+  // ceiling: CPU missed → player scores; else normal bounce
   if (ball.y - ball.r <= CEIL_Y) {
-    // CPU fails if ball in CPU zone
     if (gameState.phase === 'cpu_return') {
+      gameState.myScore++;
+      gameState.lastScorer = 'player';
+      gameState.phase = 'point';
+      gameState.pointTimer = 90;
+    } else {
       ball.y = CEIL_Y + ball.r;
       ball.vy = Math.abs(ball.vy) * 0.7;
     }
@@ -230,14 +227,6 @@ function update() {
     gameState.pointTimer = 90;
   }
 
-  // ball lands in CPU zone (ball hits back from ceiling)
-  if (ball.y - ball.r <= CEIL_Y && ball.phase === 'play') {
-    // player scores
-    gameState.myScore++;
-    gameState.lastScorer = 'player';
-    gameState.phase = 'point';
-    gameState.pointTimer = 90;
-  }
 
   // player hits ball
   if (gameState.phase === 'play' && ball.y >= FLOOR_Y - 60) {
