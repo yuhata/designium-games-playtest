@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>BUG CATCH</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Arial', sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background-color: #ecf0f1;
+      border: 4px solid #2c3e50;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: white;
+      font-size: 72px;
+      margin: 0 0 20px 0;
+      text-shadow: 3px 3px 6px rgba(0,0,0,0.4);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    #startScreen p {
+      color: white;
+      font-size: 18px;
+      margin: 8px 0;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+      max-width: 90%;
+      text-align: center;
+    }
+    #startBtn {
+      margin-top: 30px;
+      padding: 16px 60px;
+      font-size: 26px;
+      font-weight: bold;
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+    }
+    #startBtn:hover {
+      background-color: #c0392b;
+      transform: scale(1.08);
+      box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
+    }
+    #startBtn:active {
+      transform: scale(0.95);
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 101;
+      backdrop-filter: blur(4px);
+    }
+    #clearScreen.show {
+      display: flex;
+    }
+    #clearScreen h2 {
+      color: #f1c40f;
+      font-size: 52px;
+      margin: 0 0 20px 0;
+      text-shadow: 3px 3px 10px rgba(0,0,0,0.6);
+      animation: bounceIn 0.8s ease-out;
+    }
+    #clearScreen p {
+      color: white;
+      font-size: 22px;
+      margin: 8px 0;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    #collectionGrid {
+      display: grid;
+      grid-template-columns: repeat(3, 90px);
+      gap: 25px;
+      margin: 25px 0;
+      padding: 20px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+    }
+    .bugIcon {
+      width: 90px;
+      height: 90px;
+      font-size: 55px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.2);
+      animation: popIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+    @keyframes popIn {
+      0% {
+        transform: scale(0) rotate(-20deg);
+        opacity: 0;
+      }
+      50% {
+        transform: scale(1.2) rotate(10deg);
+      }
+      100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+      }
+    }
+    @keyframes bounceIn {
+      0% {
+        transform: scale(0.3);
+        opacity: 0;
+      }
+      50% {
+        opacity: 1;
+      }
+      70% {
+        transform: scale(1.1);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "Catch all 6 species of bugs within 60 seconds",
+  "fail_condition": "Timer reaches 0 and fewer than 6 bugs are caught",
+  "input_types": ["click", "mousemove"],
+  "state_vars": ["score", "caughtSpecies", "timer", "phase"],
+  "core_loop": "Move net with mouse, click to catch overlapping bugs, add to collection, check if all 6 caught",
+  "clear_trigger": "caughtSpecies.size === 6",
+  "gameover_trigger": "timer <= 0 && caughtSpecies.size < 6"
+}
+-->
+
+<div id="gameContainer">
+  <div id="startScreen">
+    <h1>🐛 BUG CATCH 🐛</h1>
+    <p>Catch all 6 different bugs before time runs out!</p>
+    <p>Move your net with the mouse and click to catch bugs</p>
+    <button id="startBtn">START</button>
+  </div>
+  
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  
+  <div id="clearScreen">
+    <h2>🎉 COLLECTION COMPLETE! 🎉</h2>
+    <p id="finalScore">All 6 bugs caught!</p>
+    <div id="collectionGrid"></div>
+    <p style="margin-top: 20px; font-size: 18px; color: #f1c40f;">Click to play again</p>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const collectionGrid = document.getElementById('collectionGrid');
+
+const bugTypes = [
+  { name: 'ant', emoji: '🐜', color: '#e74c3c' },
+  { name: 'dragonfly', emoji: '🦗', color: '#3498db' },
+  { name: 'butterfly', emoji: '🦋', color: '#f39c12' },
+  { name: 'ladybug', emoji: '🐞', color: '#e67e22' },
+  { name: 'grasshopper', emoji: '🦟', color: '#27ae60' },
+  { name: 'beetle', emoji: '🪲', color: '#8e44ad' }
+];
+
+let gameState = {
+  phase: 'start',
+  timer: 60,
+  score: 0,
+  netX: 400,
+  netY: 300,
+  caughtSpecies: new Set(),
+  bugs: [],
+  collectionFlash: 0,
+  flashAlpha: 0
+};
+
+function initGame() {
+  gameState.phase = 'play';
+  gameState.timer = 60;
+  gameState.score = 0;
+  gameState.netX = 400;
+  gameState.netY = 300;
+  gameState.caughtSpecies.clear();
+  gameState.bugs = [];
+  gameState.collectionFlash = 0;
+  gameState.flashAlpha = 0;
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+
+  for (let i = 0; i < 6; i++) {
+    const bugType = bugTypes[i];
+    if (bugType) {
+      gameState.bugs.push({
+        x: Math.random() * (canvas.width - 80) + 40,
+        y: Math.random() * (canvas.height - 80) + 40,
+        vx: Math.random() * 5 - 2.5,
+        vy: Math.random() * 5 - 2.5,
+        type: bugType,
+        radius: 20
+      });
+    }
+  }
+}
+
+function updateBugs() {
+  for (let i = 0; i < gameState.bugs.length; i++) {
+    const bug = gameState.bugs[i];
+    if (!bug) continue;
+
+    bug.x += bug.vx;
+    bug.y += bug.vy;
+
+    if (bug.x - bug.radius < 0 || bug.x + bug.radius > canvas.width) {
+      bug.vx *= -1;
+      bug.x = Math.max(bug.radius, Math.min(canvas.width - bug.radius, bug.x));
+    }
+    if (bug.y - bug.radius < 0 || bug.y + bug.radius > canvas.height) {
+      bug.vy *= -1;
+      bug.y = Math.max(bug.radius, Math.min(canvas.height - bug.radius, bug.y));
+    }
+  }
+}
+
+function drawGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = '#e8f8f5';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw bugs
+  for (let i = 0; i < gameState.bugs.length; i++) {
+    const bug = gameState.bugs[i];
+    if (!bug || !bug.type) continue;
+
+    ctx.font = 'bold 45px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(bug.type.emoji, bug.x, bug.y);
+  }
+
+  // Draw net (cursor-following net circle)
+  ctx.strokeStyle = '#2c3e50';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(gameState.netX, gameState.netY, 40, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(44, 62, 80, 0.08)';
+  ctx.fill();
+
+  // Flash effect when bug caught
+  if (gameState.collectionFlash > 0) {
+    gameState.flashAlpha = (gameState.collectionFlash / 30) * 0.6;
+    ctx.fillStyle = `rgba(255, 215, 0, ${gameState.flashAlpha})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    gameState.collectionFlash -= 1;
+  }
+
+  // Draw UI text
+  ctx.font = 'bold 20px Arial';
+  ctx.fillStyle = '#2c3e50';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('🖱 Click to catch bugs!', 20, 20);
+  ctx.fillText(`🎯 Collection: ${gameState.caughtSpecies.size}/6`, 20, 55);
+  ctx.fillText(`⏱ Time: ${Math.max(0, Math.ceil(gameState.timer))}s`, 20, 90);
+
+  // Draw large collection counter in center-bottom
+  if (gameState.phase === 'play') {
+    ctx.font = 'bold 36px Arial';
+    ctx.fillStyle = gameState.caughtSpecies.size === 6 ? '#27ae60' : '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`${gameState.caughtSpecies.size}/6`, canvas.width / 2, canvas.height - 25);
+  }
+
+  // Game Over overlay
+  if (gameState.phase === 'over') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = 'bold 52px Arial';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⏰ TIME UP!', canvas.width / 2, canvas.height / 2 - 50);
+    ctx.font = 'bold 28px Arial';
+    ctx.fillStyle = 'white';
+    ctx.fillText(`Caught: ${gameState.caughtSpecies.size}/6`, canvas.width / 2, canvas.height / 2 + 30);
+    ctx.font = 'bold 20px Arial';
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillText('Click to try again', canvas.width / 2, canvas.height / 2 + 90);
+  }
+}
+
+function checkWin() {
+  if (gameState.caughtSpecies.size === 6 && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    displayClearScreen();
+  }
+}
+
+function checkGameOver() {
+  if (gameState.timer <= 0 && gameState.phase === 'play' && gameState.caughtSpecies.size < 6) {
+    gameState.phase = 'over';
+  }
+}
+
+function displayClearScreen() {
+  clearScreen.style.display = 'flex';
+  
+  collectionGrid.innerHTML = '';
+  const speciesArray = Array.from(gameState.caughtSpecies);
+  for (let i = 0; i < speciesArray.length; i++) {
+    const species = speciesArray[i];
+    if (species && species.emoji) {
+      const div = document.createElement('div');
+      div.className = 'bugIcon';
+      div.textContent = species.emoji;
+      div.style.animationDelay = (i * 0.1) + 's';
+      collectionGrid.appendChild(div);
+    }
+  }
+}
+
+function gameLoop() {
+  if (gameState.phase === 'play') {
+    gameState.timer -= 1 / 60;
+    updateBugs();
+    checkGameOver();
+  }
+
+  drawGame();
+  requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (gameState.phase === 'play') {
+    const rect = canvas.getBoundingClientRect();
+    gameState.netX = e.clientX - rect.left;
+    gameState.netY = e.clientY - rect.top;
+
+    gameState.netX = Math.max(40, Math.min(canvas.width - 40, gameState.netX));
+    gameState.netY = Math.max(40, Math.min(canvas.height - 40, gameState.netY));
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (gameState.phase === 'start') {
+    return;
+  }
+
+  if (gameState.phase === 'play') {
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    for (let i = gameState.bugs.length - 1; i >= 0; i--) {
+      const bug = gameState.bugs[i];
+      if (!bug || !bug.type) continue;
+
+      const distance = Math.hypot(clickX - bug.x, clickY - bug.y);
+      
+      if (distance < 60) {
+        if (!gameState.caughtSpecies.has(bug.type)) {
+          gameState.caughtSpecies.add(bug.type);
+          gameState.score += 10;
+          gameState.collectionFlash = 30;
+        }
+        gameState.bugs.splice(i, 1);
+        break;
+      }
+    }
+
+    checkWin();
+  } else if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    initGame();
+  }
+});
+
+startBtn.addEventListener('click', () => {
+  initGame();
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>

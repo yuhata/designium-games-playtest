@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MONSTER CATCH</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1a1a1a;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      border: 3px solid #333;
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(135deg, #0a1929, #1a2a3a);
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 800px;
+      height: 600px;
+      background: rgba(0,0,0,0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #4ecdc4;
+      font-size: 56px;
+      margin: 0 0 30px 0;
+      text-shadow: 0 0 20px rgba(78, 205, 196, 0.6);
+    }
+    #startScreen p {
+      color: #aaa;
+      font-size: 18px;
+      margin: 0 0 50px 0;
+      text-align: center;
+      max-width: 600px;
+      line-height: 1.6;
+    }
+    #startBtn {
+      padding: 16px 60px;
+      font-size: 26px;
+      font-weight: bold;
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+    }
+    #startBtn:hover {
+      background: #ff5252;
+      transform: scale(1.05);
+    }
+    #startBtn:active {
+      transform: scale(0.98);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 800px;
+      height: 600px;
+      background: rgba(0,0,0,0.96);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 800px;
+      height: 600px;
+      background: rgba(0,0,0,0.96);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    .result-title {
+      color: #4ecdc4;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 15px rgba(78, 205, 196, 0.8);
+    }
+    .result-score {
+      color: #fff;
+      font-size: 24px;
+      margin-bottom: 40px;
+    }
+    .retry-btn {
+      padding: 14px 50px;
+      font-size: 22px;
+      font-weight: bold;
+      background: #4ecdc4;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px rgba(78, 205, 196, 0.4);
+    }
+    .retry-btn:hover {
+      background: #3dbba9;
+      transform: scale(1.05);
+    }
+    .retry-btn:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "len(caughtTypes)==8",
+  "fail_condition": "timer<=0 && len(caughtTypes)<8",
+  "input_types": ["click"],
+  "state_vars": ["score", "caughtTypes", "timer", "phase"],
+  "core_loop": "monsters appear every 2s at random position → click to catch → update collection UI → check win/fail",
+  "clear_trigger": "caughtTypes.size==8",
+  "gameover_trigger": "timer<=0 && caughtTypes.size<8"
+}
+-->
+
+<div id="gameContainer">
+  <div id="startScreen">
+    <h1>MONSTER CATCH</h1>
+    <p>Catch all 8 different monsters before time runs out!<br><br>Click on the monsters to add them to your collection.</p>
+    <button id="startBtn">START</button>
+  </div>
+  
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  
+  <div id="clearScreen">
+    <div class="result-title">COLLECTION COMPLETE!</div>
+    <div class="result-score" id="clearScore">Score: 0</div>
+    <button class="retry-btn" onclick="restartGame()">RETRY</button>
+  </div>
+  
+  <div id="gameOverScreen">
+    <div class="result-title">TIME'S UP!</div>
+    <div class="result-score" id="overScore">Score: 0 | Caught: 0/8</div>
+    <button class="retry-btn" onclick="restartGame()">RETRY</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+
+const gameState = {
+  phase: 'start',
+  score: 0,
+  timer: 90,
+  caughtTypes: new Set(),
+  totalTypes: 8
+};
+
+let monsters = [];
+let monsterSpawnInterval = null;
+let gameLoopInterval = null;
+let timerInterval = null;
+let nextMonsterId = 0;
+const monsterTypes = ['🐉', '🦕', '🐲', '👹', '🧛', '👻', '🤖', '👽'];
+
+function getRandomPosition() {
+  return {
+    x: Math.random() * 700 + 50,
+    y: Math.random() * 200 + 80
+  };
+}
+
+function spawnMonster() {
+  if (gameState.phase !== 'play') return;
+  
+  const typeIndex = Math.floor(Math.random() * monsterTypes.length);
+  const pos = getRandomPosition();
+  
+  monsters.push({
+    id: nextMonsterId++,
+    type: typeIndex,
+    x: pos.x,
+    y: pos.y,
+    spawnTime: Date.now(),
+    caught: false
+  });
+}
+
+function draw() {
+  ctx.fillStyle = 'rgba(10, 25, 41, 0.3)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.fillStyle = '#4ecdc4';
+  ctx.font = 'bold 16px Arial';
+  ctx.fillText('Click on monsters to catch them!', 20, 30);
+  
+  ctx.fillStyle = '#4ecdc4';
+  ctx.font = 'bold 22px Arial';
+  ctx.fillText(`Score: ${gameState.score}`, 20, 60);
+  ctx.fillStyle = gameState.timer > 30 ? '#4ecdc4' : '#ff6b6b';
+  ctx.fillText(`Time: ${Math.max(0, Math.ceil(gameState.timer))}s`, 600, 60);
+  
+  ctx.fillStyle = '#aaa';
+  ctx.font = 'bold 14px Arial';
+  ctx.fillText(`Caught: ${gameState.caughtTypes.size}/8`, 20, 90);
+  
+  ctx.fillStyle = '#333';
+  ctx.fillRect(20, 310, 760, 25);
+  ctx.fillStyle = '#4ecdc4';
+  const progressWidth = (gameState.caughtTypes.size / 8) * 760;
+  ctx.fillRect(20, 310, progressWidth, 25);
+  
+  ctx.fillStyle = '#aaa';
+  ctx.font = 'bold 14px Arial';
+  ctx.fillText('Collection:', 20, 360);
+  
+  for (let i = 0; i < 8; i++) {
+    const x = 20 + i * 95;
+    const y = 370;
+    
+    if (gameState.caughtTypes.has(i)) {
+      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+      ctx.fillStyle = `rgba(78, 205, 196, ${pulse})`;
+      ctx.shadowColor = 'rgba(78, 205, 196, 0.8)';
+      ctx.shadowBlur = 12;
+    } else {
+      ctx.fillStyle = '#2a2a3a';
+      ctx.shadowColor = 'transparent';
+    }
+    
+    ctx.beginPath();
+    ctx.roundRect(x, y, 80, 80, 6);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 38px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(monsterTypes[i], x + 40, y + 55);
+    ctx.textAlign = 'left';
+  }
+  
+  monsters.forEach(monster => {
+    if (monster.caught) return;
+    
+    const elapsed = Date.now() - monster.spawnTime;
+    const opacity = Math.max(0, 1 - (elapsed / 2000));
+    
+    if (opacity <= 0) return;
+    
+    const scale = 0.8 + Math.sin(elapsed / 200) * 0.15;
+    const displaySize = 28 * scale;
+    
+    ctx.fillStyle = `rgba(255, 107, 107, ${opacity * 0.8})`;
+    ctx.beginPath();
+    ctx.arc(monster.x, monster.y, displaySize, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = `rgba(255, 181, 181, ${opacity})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(monster.x, monster.y, displaySize + 4, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(monsterTypes[monster.type], monster.x, monster.y + 12);
+    ctx.textAlign = 'left';
+  });
+}
+
+function update() {
+  if (gameState.phase !== 'play') return;
+  
+  monsters = monsters.filter(m => {
+    const elapsed = Date.now() - m.spawnTime;
+    return elapsed < 2000;
+  });
+  
+  checkWin();
+  checkGameOver();
+  
+  draw();
+}
+
+function checkWin() {
+  if (gameState.caughtTypes.size === gameState.totalTypes && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    if (timerInterval) clearInterval(timerInterval);
+    if (monsterSpawnInterval) clearInterval(monsterSpawnInterval);
+    showClearScreen();
+  }
+}
+
+function checkGameOver() {
+  if (gameState.timer <= 0 && gameState.caughtTypes.size < gameState.totalTypes && gameState.phase === 'play') {
+    gameState.phase = 'over';
+    if (timerInterval) clearInterval(timerInterval);
+    if (monsterSpawnInterval) clearInterval(monsterSpawnInterval);
+    showGameOverScreen();
+  }
+}
+
+function showClearScreen() {
+  document.getElementById('clearScore').textContent = `Score: ${gameState.score}`;
+  clearScreen.style.display = 'flex';
+}
+
+function showGameOverScreen() {
+  document.getElementById('overScore').textContent = `Score: ${gameState.score} | Caught: ${gameState.caughtTypes.size}/8`;
+  gameOverScreen.style.display = 'flex';
+}
+
+function startGame() {
+  gameState.phase = 'play';
+  gameState.score = 0;
+  gameState.timer = 90;
+  gameState.caughtTypes.clear();
+  monsters = [];
+  nextMonsterId = 0;
+  
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  gameOverScreen.style.display = 'none';
+  
+  spawnMonster();
+  monsterSpawnInterval = setInterval(spawnMonster, 2000);
+  gameLoopInterval = setInterval(update, 30);
+  timerInterval = setInterval(() => {
+    gameState.timer -= 0.03;
+  }, 30);
+}
+
+function restartGame() {
+  startGame();
+}
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+  
+  for (let i = monsters.length - 1; i >= 0; i--) {
+    const monster = monsters[i];
+    if (monster.caught) continue;
+    
+    const dist = Math.hypot(clickX - monster.x, clickY - monster.y);
+    
+    if (dist < 40) {
+      monster.caught = true;
+      if (!gameState.caughtTypes.has(monster.type)) {
+        gameState.caughtTypes.add(monster.type);
+        gameState.score += 10;
+      } else {
+        gameState.score += 5;
+      }
+      monsters.splice(i, 1);
+      break;
+    }
+  }
+});
+
+startBtn.addEventListener('click', startGame);
+
+update();
+</script>
+
+</body>
+</html>

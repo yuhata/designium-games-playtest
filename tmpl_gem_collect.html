@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GEM COLLECTOR</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1a1a2e;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #0f3460;
+      border: 3px solid #e94560;
+      box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+      cursor: default;
+      border: none;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 52, 96, 0.98);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #e94560;
+      font-size: 3.5em;
+      margin-bottom: 20px;
+      text-shadow: 0 0 15px #e94560, 0 0 30px #ff006e;
+      letter-spacing: 3px;
+    }
+    #startScreen .subtitle {
+      color: #39e956;
+      font-size: 1.4em;
+      margin-bottom: 30px;
+      text-shadow: 0 0 10px #39e956;
+    }
+    #startScreen p {
+      color: #ccc;
+      font-size: 1.1em;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    #startBtn {
+      padding: 15px 50px;
+      font-size: 1.5em;
+      background: linear-gradient(135deg, #e94560, #ff006e);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 0 20px #e94560;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    #startBtn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 30px #ff006e;
+    }
+    #startBtn:active {
+      transform: scale(0.95);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.92);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 101;
+      animation: victoryFade 0.6s ease-in;
+    }
+    @keyframes victoryFade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    #clearScreen h2 {
+      color: #39ff39;
+      font-size: 3em;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #39ff39;
+      animation: pulse 0.6s ease-in-out;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    #clearScreen p {
+      color: #fff;
+      font-size: 1.2em;
+      margin-bottom: 12px;
+    }
+    #finalScore {
+      color: #ffff00;
+      font-size: 1.4em;
+      font-weight: bold;
+      text-shadow: 0 0 10px #ffff00;
+    }
+    #collectionText {
+      color: #39ff39;
+      font-weight: bold;
+    }
+    #retryBtn {
+      margin-top: 30px;
+      padding: 14px 40px;
+      font-size: 1.3em;
+      background: linear-gradient(135deg, #39ff39, #00dd00);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+    }
+    #retryBtn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 20px #39ff39;
+    }
+    #retryBtn:active {
+      transform: scale(0.95);
+    }
+    #scoreDisplay {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      color: #39ff39;
+      font-size: 1.3em;
+      font-weight: bold;
+      z-index: 10;
+      text-shadow: 0 0 10px #39ff39;
+    }
+    #timerDisplay {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      color: #ffff00;
+      font-size: 1.3em;
+      font-weight: bold;
+      z-index: 10;
+      text-shadow: 0 0 10px #ffff00;
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "collectedGems.size === 5 (all 5 color gems collected)",
+  "fail_condition": "none (relaxed collection mode, no failure)",
+  "input_types": ["click", "mousemove"],
+  "state_vars": ["score", "collectedGems", "phase", "currentGem"],
+  "core_loop": "gem appears -> player clicks gem -> score increases & color added to collection -> new gem spawns after delay -> repeat until all 5 colors collected -> victory",
+  "clear_trigger": "collectedGems.size === 5 after collectGem()",
+  "gameover_trigger": "none"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div id="scoreDisplay">Score: <span id="scoreValue">0</span></div>
+  <div id="timerDisplay">Time: <span id="timerValue">0</span>s</div>
+  
+  <div id="startScreen">
+    <h1>GEM COLLECTOR</h1>
+    <div class="subtitle">✨ Collect all colors ✨</div>
+    <p>Click on gems to collect all 5 colors</p>
+    <p>New gem appears after each collection</p>
+    <button id="startBtn">START GAME</button>
+  </div>
+
+  <div id="clearScreen">
+    <h2>🎉 VICTORY! 🎉</h2>
+    <p>You collected all gems!</p>
+    <p id="finalScore">Final Score: 0</p>
+    <p id="collectionText">All colors complete!</p>
+    <button id="retryBtn">CLICK TO RESTART</button>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const startScreen = document.getElementById('startScreen');
+  const clearScreen = document.getElementById('clearScreen');
+  const startBtn = document.getElementById('startBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  const scoreDisplay = document.getElementById('scoreValue');
+  const timerDisplay = document.getElementById('timerValue');
+  const finalScoreDisplay = document.getElementById('finalScore');
+
+  const COLORS = ['#ff3333', '#3366ff', '#33ff33', '#ffff33', '#ff33ff'];
+  const COLOR_NAMES = ['Red', 'Blue', 'Green', 'Yellow', 'Purple'];
+  const GEM_RADIUS = 25;
+
+  let gameState = {
+    phase: 'start',
+    score: 0,
+    collectedGems: new Set(),
+    currentGem: null,
+    startTime: 0,
+    lastGemColor: -1,
+    gemSpawnTimer: 0,
+    particles: [],
+    elapsedTime: 0
+  };
+
+  function getRandomColor() {
+    let newColor;
+    do {
+      newColor = Math.floor(Math.random() * COLORS.length);
+    } while (newColor === gameState.lastGemColor && COLORS.length > 1);
+    gameState.lastGemColor = newColor;
+    return newColor;
+  }
+
+  function spawnGem() {
+    const colorIndex = getRandomColor();
+    const x = Math.random() * (canvas.width * 0.5) + canvas.width * 0.25;
+    const y = Math.random() * (canvas.height * 0.65) + canvas.height * 0.15;
+    gameState.currentGem = { colorIndex, x, y };
+    gameState.gemSpawnTimer = 0;
+  }
+
+  function collectGem(gem) {
+    if (!gem || gameState.phase !== 'play') return;
+    
+    const colorIndex = gem.colorIndex;
+    gameState.collectedGems.add(colorIndex);
+    gameState.score += 10;
+    
+    // Spawn particles at gem location
+    for (let i = 0; i < 20; i++) {
+      const angle = (Math.PI * 2 * i) / 20;
+      const velocity = 4 + Math.random() * 2;
+      const vx = Math.cos(angle) * velocity;
+      const vy = Math.sin(angle) * velocity;
+      gameState.particles.push({
+        x: gem.x,
+        y: gem.y,
+        vx: vx,
+        vy: vy,
+        life: 35,
+        color: COLORS[colorIndex]
+      });
+    }
+    
+    // Delay before spawning next gem
+    gameState.gemSpawnTimer = 5.5;
+    gameState.currentGem = null;
+    
+    checkWin();
+  }
+
+  function checkWin() {
+    if (gameState.collectedGems.size === COLORS.length) {
+      gameState.phase = 'clear';
+    }
+  }
+
+  function updateParticles() {
+    gameState.particles = gameState.particles.filter(p => {
+      if (!p) return false;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15;
+      p.life--;
+      return p.life > 0;
+    });
+  }
+
+  function drawGame() {
+    // Clear and gradient background
+    const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    bgGradient.addColorStop(0, '#0f3460');
+    bgGradient.addColorStop(1, '#16213e');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw decorative grid
+    ctx.strokeStyle = 'rgba(57, 233, 96, 0.08)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= canvas.width; i += 80) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, canvas.height);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= canvas.height; i += 80) {
+      ctx.beginPath();
+      ctx.moveTo(0, i);
+      ctx.lineTo(canvas.width, i);
+      ctx.stroke();
+    }
+
+    // Draw collected gems display at top
+    const gemDisplayY = 50;
+    const gemDisplayStartX = 100;
+    const gemDisplaySpacing = 120;
+    
+    for (let i = 0; i < COLORS.length; i++) {
+      const x = gemDisplayStartX + i * gemDisplaySpacing;
+      const isCollected = gameState.collectedGems.has(i);
+      
+      if (isCollected) {
+        // Collected gem glow
+        const gradient = ctx.createRadialGradient(x, gemDisplayY, 0, x, gemDisplayY, 22);
+        gradient.addColorStop(0, COLORS[i] + 'aa');
+        gradient.addColorStop(1, COLORS[i] + '00');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, gemDisplayY, 22, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = COLORS[i];
+        ctx.beginPath();
+        ctx.arc(x, gemDisplayY, 15, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Gold outline for collected
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, gemDisplayY, 18, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        // Uncollected gem
+        ctx.fillStyle = COLORS[i] + '44';
+        ctx.beginPath();
+        ctx.arc(x, gemDisplayY, 15, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = COLORS[i] + '88';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, gemDisplayY, 15, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // Draw main playable gem
+    if (gameState.currentGem && gameState.phase === 'play') {
+      const gem = gameState.currentGem;
+      
+      // Large glow
+      const glowGradient = ctx.createRadialGradient(gem.x, gem.y, 0, gem.x, gem.y, GEM_RADIUS + 20);
+      glowGradient.addColorStop(0, COLORS[gem.colorIndex] + '70');
+      glowGradient.addColorStop(1, COLORS[gem.colorIndex] + '00');
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(gem.x, gem.y, GEM_RADIUS + 20, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Main gem
+      ctx.fillStyle = COLORS[gem.colorIndex];
+      ctx.beginPath();
+      ctx.arc(gem.x, gem.y, GEM_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Inner shine
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath();
+      ctx.arc(gem.x - 10, gem.y - 10, 10, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Outer shine
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.beginPath();
+      ctx.arc(gem.x + 8, gem.y + 8, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Draw particles
+    gameState.particles.forEach(p => {
+      if (p && p.life > 0) {
+        const alpha = Math.floor((p.life / 35) * 255).toString(16).padStart(2, '0');
+        ctx.fillStyle = p.color + alpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5 + Math.random() * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Draw instruction text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'center';
+    
+    if (gameState.phase === 'play') {
+      ctx.fillText('Click on the gem to collect it!', canvas.width / 2, canvas.height - 30);
+      
+      ctx.font = 'bold 16px Arial';
+      ctx.fillStyle = '#39ff39';
+      ctx.fillText(`Collected: ${gameState.collectedGems.size} / ${COLORS.length}`, canvas.width / 2, canvas.height - 60);
+    }
+  }
+
+  function gameLoop() {
+    if (gameState.phase === 'play') {
+      gameState.gemSpawnTimer -= 1/60;
+      
+      if (gameState.gemSpawnTimer <= 0 && !gameState.currentGem) {
+        spawnGem();
+      }
+      
+      updateParticles();
+      
+      const elapsed = (Date.now() - gameState.startTime) / 1000;
+      timerDisplay.textContent = Math.floor(elapsed);
+      gameState.elapsedTime = elapsed;
+    }
+
+    drawGame();
+    requestAnimationFrame(gameLoop);
+  }
+
+  function gameReset() {
+    gameState = {
+      phase: 'start',
+      score: 0,
+      collectedGems: new Set(),
+      currentGem: null,
+      startTime: 0,
+      lastGemColor: -1,
+      gemSpawnTimer: 0,
+      particles: [],
+      elapsedTime: 0
+    };
+    
+    startScreen.style.display = 'flex';
+    clearScreen.style.display = 'none';
+    scoreDisplay.textContent = '0';
+    timerDisplay.textContent = '0';
+  }
+
+  // Event listeners
+  startBtn.addEventListener('click', function() {
+    gameState.phase = 'play';
+    gameState.startTime = Date.now();
+    startScreen.style.display = 'none';
+    spawnGem();
+  }, false);
+
+  retryBtn.addEventListener('click', function() {
+    gameReset();
+  }, false);
+
+  // Click to collect gem
+  canvas.addEventListener('click', function(e) {
+    if (gameState.phase !== 'play' || !gameState.currentGem) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const gem = gameState.currentGem;
+    if (!gem) return;
+    
+    const dist = Math.sqrt((x - gem.x) ** 2 + (y - gem.y) ** 2);
+    
+    if (dist <= GEM_RADIUS + 5) {
+      collectGem(gem);
+    }
+  }, false);
+
+  // Mouse move for cursor change
+  canvas.addEventListener('mousemove', function(e) {
+    if (gameState.phase !== 'play' || !gameState.currentGem) {
+      canvas.style.cursor = 'default';
+      return;
+    }
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const gem = gameState.currentGem;
+    if (!gem) {
+      canvas.style.cursor = 'default';
+      return;
+    }
+    
+    const dist = Math.sqrt((x - gem.x) ** 2 + (y - gem.y) ** 2);
+    
+    if (dist <= GEM_RADIUS + 10) {
+      canvas.style.cursor = 'pointer';
+    } else {
+      canvas.style.cursor = 'default';
+    }
+  }, false);
+
+  // Check for win condition and show victory screen
+  let lastPhase = 'start';
+  const winCheckInterval = setInterval(function() {
+    if (gameState.phase === 'clear' && lastPhase !== 'clear') {
+      clearScreen.style.display = 'flex';
+      finalScoreDisplay.textContent = `Final Score: ${gameState.score}`;
+      lastPhase = 'clear';
+    } else if (gameState.phase !== 'clear') {
+      lastPhase = gameState.phase;
+    }
+  }, 50);
+
+  // Update score display
+  const scoreUpdateInterval = setInterval(function() {
+    scoreDisplay.textContent = gameState.score;
+  }, 50);
+
+  // Start game loop
+  gameLoop();
+</script>
+
+</body>
+</html>

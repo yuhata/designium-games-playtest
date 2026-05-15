@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RECIPE BOOK</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: Arial, sans-serif;
+  }
+  #gameContainer {
+    position: relative;
+    display: inline-block;
+  }
+  canvas {
+    border: 8px solid #333;
+    background: white;
+    cursor: pointer;
+    display: block;
+  }
+  #startScreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  #startScreen h1 {
+    color: white;
+    font-size: 56px;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+  }
+  #startScreen .subtext {
+    color: #FFD700;
+    font-size: 18px;
+    margin-bottom: 15px;
+  }
+  #startScreen .instructions {
+    color: #DDD;
+    font-size: 16px;
+    margin-bottom: 50px;
+    text-align: center;
+    line-height: 1.6;
+  }
+  #startBtn {
+    padding: 18px 60px;
+    font-size: 28px;
+    font-weight: bold;
+    background: linear-gradient(135deg, #FFD700 0%, #FFC700 100%);
+    border: 4px solid #333;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #333;
+    transition: all 0.2s;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  }
+  #startBtn:hover {
+    background: linear-gradient(135deg, #FFC700 0%, #FFB700 100%);
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+  }
+  #startBtn:active {
+    transform: scale(0.98);
+  }
+  #clearScreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+  }
+  #clearScreen h1 {
+    color: #FFD700;
+    font-size: 64px;
+    margin-bottom: 30px;
+    text-shadow: 0 0 30px rgba(255, 215, 0, 0.9);
+    animation: glow 0.6s ease-in-out infinite;
+  }
+  #clearScreen .finalScore {
+    color: #FFD700;
+    font-size: 36px;
+    margin-bottom: 40px;
+    font-weight: bold;
+  }
+  #clearScreen .restartText {
+    color: #AAA;
+    font-size: 18px;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes glow {
+    0%, 100% { text-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.4); }
+    50% { text-shadow: 0 0 30px rgba(255, 215, 0, 1), 0 0 60px rgba(255, 215, 0, 0.6); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "recipes.size === 6",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["recipes", "score", "selectedIngredients", "currentIngredients"],
+  "core_loop": "click 2 ingredients -> match validation -> add recipe + animate flying + cycle new ingredients -> repeat until 6 recipes",
+  "clear_trigger": "gameState.recipes.size === 6",
+  "gameover_trigger": "null"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="1280" height="800"></canvas>
+</div>
+
+<div id="startScreen">
+  <h1>🍳 RECIPE BOOK</h1>
+  <div class="subtext">材料を組み合わせてレシピを完成させよう</div>
+  <div class="instructions">
+    2つの材料をクリックして組み合わせ<br>
+    6つのレシピをすべて集めるとクリア！
+  </div>
+  <button id="startBtn">START</button>
+</div>
+
+<div id="clearScreen">
+  <h1>🎉 COMPLETE! 🎉</h1>
+  <div class="finalScore" id="finalScore">Score: 0</div>
+  <div class="restartText">クリックでリスタート</div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const startBtn = document.getElementById('startBtn');
+const finalScore = document.getElementById('finalScore');
+
+// ゲーム定義
+const INGREDIENT_DEFS = [
+  { id: 0, name: 'トマト', color: '#FF6B6B', emoji: '🍅' },
+  { id: 1, name: '卵', color: '#FFE66D', emoji: '🥚' },
+  { id: 2, name: 'チーズ', color: '#FFB366', emoji: '🧀' },
+  { id: 3, name: 'パセリ', color: '#95E1D3', emoji: '🌿' },
+  { id: 4, name: 'ニンニク', color: '#E8D5B7', emoji: '🧄' },
+  { id: 5, name: 'オリーブ', color: '#9B59B6', emoji: '🫒' },
+];
+
+const RECIPE_DEFS = [
+  { id: 0, name: 'トマト卵', ingredients: [0, 1], color: '#FFB6B6' },
+  { id: 1, name: 'チーズトマト', ingredients: [0, 2], color: '#FF9B6B' },
+  { id: 2, name: 'パセリ卵', ingredients: [1, 3], color: '#B6E1D3' },
+  { id: 3, name: 'ニンニク\nチーズ', ingredients: [2, 4], color: '#FFD9B3' },
+  { id: 4, name: 'オリーブ\nパセリ', ingredients: [3, 5], color: '#C9A6D3' },
+  { id: 5, name: '完全レシピ', ingredients: [0, 5], color: '#FFD700' },
+];
+
+const gameState = {
+  phase: 'start',
+  recipes: new Set(),
+  selectedIngredients: [],
+  currentIngredients: [],
+  score: 0,
+  flashCounter: 0,
+  clearPhaseFlash: 0,
+  lastClickTime: 0,
+};
+
+// 材料生成
+function generateNewIngredients() {
+  const indices = Array.from({ length: 6 }, (_, i) => i).sort(() => Math.random() - 0.5);
+  const centerX = 640;
+  const centerY = 350;
+  const radius = 200;
+  
+  gameState.currentIngredients = indices.map((idx, pos) => {
+    const angle = (pos / 6) * Math.PI * 2;
+    return {
+      id: idx,
+      ...INGREDIENT_DEFS[idx],
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+      baseX: centerX + Math.cos(angle) * radius,
+      baseY: centerY + Math.sin(angle) * radius,
+      selected: false,
+      flyingProgress: 0,
+      isFlyingOut: false,
+    };
+  });
+}
+
+// ゲーム初期化
+function initGame() {
+  gameState.phase = 'play';
+  gameState.recipes.clear();
+  gameState.selectedIngredients = [];
+  gameState.score = 0;
+  gameState.flashCounter = 0;
+  generateNewIngredients();
+}
+
+// レシピブック描画
+function drawRecipeBook() {
+  const startX = 280;
+  const startY = 30;
+  const slotW = 140;
+  const slotH = 90;
+  const gap = 15;
+  
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 22px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('📖 レシピブック', startX - 20, startY + 100);
+  
+  for (let i = 0; i < 6; i++) {
+    const row = Math.floor(i / 3);
+    const col = i % 3;
+    const x = startX + col * (slotW + gap);
+    const y = startY + row * (slotH + gap);
+    
+    if (gameState.recipes.has(i)) {
+      const recipe = RECIPE_DEFS[i];
+      ctx.fillStyle = recipe.color;
+      ctx.fillRect(x, y, slotW, slotH);
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x, y, slotW, slotH);
+      
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const lines = recipe.name.split('\n');
+      lines.forEach((line, idx) => {
+        ctx.fillText(line, x + slotW / 2, y + slotH / 2 - (lines.length > 1 ? 10 : 0) + idx * 20);
+      });
+    } else {
+      ctx.fillStyle = '#F5F5F5';
+      ctx.fillRect(x, y, slotW, slotH);
+      ctx.strokeStyle = '#CCC';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, slotW, slotH);
+      
+      ctx.fillStyle = '#AAA';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', x + slotW / 2, y + slotH / 2);
+    }
+  }
+  
+  // 進捗表示
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 28px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${gameState.recipes.size}/6`, canvas.width - 40, 80);
+}
+
+// 材料アイコン描画
+function drawIngredients() {
+  const iconRadius = 48;
+  
+  gameState.currentIngredients.forEach((ing, idx) => {
+    let x = ing.x;
+    let y = ing.y;
+    
+    if (ing.isFlyingOut && ing.flyingProgress < 1) {
+      const slotCol = ing.id % 3;
+      const slotRow = Math.floor(ing.id / 3);
+      const targetX = 280 + 20 + slotCol * 155 + 70;
+      const targetY = 30 + 20 + slotRow * 105 + 45;
+      
+      const progress = ing.flyingProgress;
+      x = ing.baseX + (targetX - ing.baseX) * progress;
+      y = ing.baseY + (targetY - ing.baseY) * progress;
+    }
+    
+    // 円形アイコン
+    ctx.fillStyle = ing.color;
+    ctx.beginPath();
+    ctx.arc(x, y, iconRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 選択時のハイライト
+    if (gameState.selectedIngredients.includes(idx)) {
+      ctx.strokeStyle = '#FFD700';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(x, y, iconRadius + 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    
+    // 絵文字
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ing.emoji, x, y - 2);
+    
+    // 名前
+    ctx.fillStyle = '#333';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(ing.name, x, y + iconRadius + 24);
+  });
+}
+
+// スコア描画
+function drawScore() {
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 26px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`スコア: ${gameState.score}`, 30, 30);
+}
+
+// 操作説明描画
+function drawInstructions() {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.fillRect(0, canvas.height - 65, canvas.width, 65);
+  
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 18px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('📌 材料を2つクリックして組み合わせよう！ 現在：' + gameState.selectedIngredients.length + '/2', 
+    canvas.width / 2, canvas.height - 35);
+}
+
+// クリア画面フラッシュ演出
+function drawClearFlash() {
+  const phase = Math.floor(gameState.clearPhaseFlash / 15);
+  
+  if (phase < 3) {
+    const alpha = (gameState.clearPhaseFlash % 15) / 15;
+    ctx.fillStyle = `rgba(255, 215, 0, ${0.3 * alpha})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+// ゲーム描画
+function drawGame() {
+  ctx.fillStyle = '#FFFEF0';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  if (gameState.phase === 'play') {
+    drawScore();
+    drawRecipeBook();
+    drawIngredients();
+    drawInstructions();
+  } else if (gameState.phase === 'clear') {
+    drawScore();
+    drawRecipeBook();
+    drawIngredients();
+    drawClearFlash();
+  }
+}
+
+// レシピマッチング判定
+function checkRecipe() {
+  const [idx1, idx2] = gameState.selectedIngredients;
+  const ing1 = gameState.currentIngredients[idx1].id;
+  const ing2 = gameState.currentIngredients[idx2].id;
+  
+  let matched = false;
+  
+  for (const recipe of RECIPE_DEFS) {
+    if (!gameState.recipes.has(recipe.id)) {
+      const [a, b] = recipe.ingredients;
+      if ((a === ing1 && b === ing2) || (a === ing2 && b === ing1)) {
+        gameState.recipes.add(recipe.id);
+        gameState.score += 10;
+        matched = true;
+        
+        gameState.currentIngredients[idx1].isFlyingOut = true;
+        gameState.currentIngredients[idx1].flyingProgress = 0;
+        gameState.currentIngredients[idx2].isFlyingOut = true;
+        gameState.currentIngredients[idx2].flyingProgress = 0;
+        
+        break;
+      }
+    }
+  }
+  
+  if (!matched) {
+    gameState.score += 2;
+  }
+  
+  gameState.selectedIngredients = [];
+}
+
+// ウィン判定
+function checkWin() {
+  if (gameState.recipes.size === 6) {
+    gameState.phase = 'clear';
+    gameState.clearPhaseFlash = 0;
+    finalScore.textContent = `スコア: ${gameState.score}`;
+    setTimeout(() => {
+      clearScreen.style.display = 'flex';
+    }, 1500);
+  }
+}
+
+// アニメーション更新
+function updateAnimations() {
+  gameState.flashCounter++;
+  
+  if (gameState.phase === 'clear') {
+    gameState.clearPhaseFlash++;
+  }
+  
+  gameState.currentIngredients.forEach(ing => {
+    if (ing.isFlyingOut && ing.flyingProgress < 1) {
+      ing.flyingProgress += 0.05;
+      
+      if (ing.flyingProgress >= 1) {
+        ing.isFlyingOut = false;
+        ing.flyingProgress = 1;
+      }
+    }
+  });
+  
+  // 新材料生成
+  if (gameState.phase === 'play' && gameState.currentIngredients.every(ing => ing.isFlyingOut === false && ing.flyingProgress === 1)) {
+    if (gameState.selectedIngredients.length === 0) {
+      const allFlown = gameState.currentIngredients.filter(ing => ing.isFlyingOut || ing.flyingProgress === 1).length;
+      if (allFlown === gameState.currentIngredients.filter(ing => ing.flyingProgress === 1).length) {
+        generateNewIngredients();
+      }
+    }
+  }
+}
+
+// クリックハンドラ
+function handleCanvasClick(e) {
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  const iconRadius = 48;
+  
+  for (let idx = 0; idx < gameState.currentIngredients.length; idx++) {
+    const ing = gameState.currentIngredients[idx];
+    const dx = x - ing.x;
+    const dy = y - ing.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist < iconRadius && !gameState.selectedIngredients.includes(idx) && !ing.isFlyingOut) {
+      gameState.selectedIngredients.push(idx);
+      gameState.currentIngredients[idx].selected = true;
+      
+      if (gameState.selectedIngredients.length === 2) {
+        setTimeout(() => {
+          checkRecipe();
+          checkWin();
+        }, 200);
+      }
+      break;
+    }
+  }
+}
+
+// ゲームループ
+function gameLoop() {
+  updateAnimations();
+  drawGame();
+  requestAnimationFrame(gameLoop);
+}
+
+// イベントリスナー
+canvas.addEventListener('click', handleCanvasClick);
+
+startBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  startScreen.style.display = 'none';
+  initGame();
+});
+
+clearScreen.addEventListener('click', () => {
+  clearScreen.style.display = 'none';
+  gameState.phase = 'start';
+  gameState.recipes.clear();
+  gameState.score = 0;
+});
+
+document.addEventListener('mousedown', (e) => {
+  // mousedown では状態変更しない
+});
+
+document.addEventListener('mouseup', (e) => {
+  // mouseup では状態変更しない
+});
+
+// ゲーム開始
+gameLoop();
+</script>
+
+</body>
+</html>
