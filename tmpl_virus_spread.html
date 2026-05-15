@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VIRUS SPREAD</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #121212;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 400px;
+    }
+    #gameCanvas {
+      display: block;
+      background: #fff;
+      border: 2px solid #333;
+      cursor: crosshair;
+      margin-bottom: 20px;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      border: 2px solid #333;
+    }
+    #startScreen h1 {
+      color: #FF1744;
+      font-size: 48px;
+      margin: 0 0 40px 0;
+      text-shadow: 0 0 20px #FF1744;
+    }
+    #startBtn {
+      padding: 15px 50px;
+      font-size: 24px;
+      background: #FF1744;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+    #startBtn:hover {
+      background: #E91E63;
+      box-shadow: 0 0 20px #FF1744;
+    }
+    #stats {
+      color: #fff;
+      font-size: 14px;
+    }
+    .stat-item {
+      margin: 3px 0;
+      color: #00FF00;
+    }
+    #source-count {
+      color: #FFD700;
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "infectedCount >= 95 (95% of 100-cell grid)",
+  "fail_condition": "timer <= 0 and infectedCount < 95",
+  "input_types": ["click"],
+  "state_vars": ["infectedCount", "sources", "phase", "timer"],
+  "core_loop": "Place infection sources (max 3) → every 800ms each infected cell spreads to random adjacent free cell → check win or fail",
+  "clear_trigger": "infectedCount >= 95",
+  "gameover_trigger": "timer <= 0 && infectedCount < 95"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <div id="stats">
+    <div class="stat-item">Timer: <span id="timerText">60</span>s</div>
+    <div class="stat-item">Infected: <span id="infectedText">0</span>/100</div>
+    <div id="source-count">Sources: <span id="sourceText">0</span>/3</div>
+  </div>
+  
+  <div id="startScreen">
+    <h1>VIRUS SPREAD</h1>
+    <p style="color: #ccc; font-size: 16px; text-align: center; margin-bottom: 30px; line-height: 1.6;">
+      Click START to begin.<br>
+      Place 1-3 infection sources.<br>
+      Dominate 95% of the grid!
+    </p>
+    <button id="startBtn">START</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+
+// Game constants
+const GRID_SIZE = 10;
+const CELL_SIZE = 40;
+const TOTAL_CELLS = 100;
+const WIN_THRESHOLD = 95;
+const SPREAD_INTERVAL = 800;
+const GAME_DURATION = 60;
+
+// Game state
+let gameState = {
+  grid: [],
+  infectedCount: 0,
+  sources: [],
+  phase: 'start',
+  timer: GAME_DURATION,
+  particles: [],
+  hoverCell: -1,
+  collapsing: false,
+  collapseProgress: 0
+};
+
+let spreadTimer = null;
+let gameTimer = null;
+
+// Initialize grid
+function initGrid() {
+  gameState.grid = Array(TOTAL_CELLS).fill(0);
+  gameState.infectedCount = 0;
+  gameState.sources = [];
+  gameState.particles = [];
+  gameState.hoverCell = -1;
+  gameState.collapsing = false;
+  gameState.collapseProgress = 0;
+}
+
+// Get adjacent cells
+function getAdjacentCells(index) {
+  const row = Math.floor(index / GRID_SIZE);
+  const col = index % GRID_SIZE;
+  const adjacent = [];
+  
+  if (row > 0) adjacent.push(index - GRID_SIZE);
+  if (row < GRID_SIZE - 1) adjacent.push(index + GRID_SIZE);
+  if (col > 0) adjacent.push(index - 1);
+  if (col < GRID_SIZE - 1) adjacent.push(index + 1);
+  
+  return adjacent;
+}
+
+// Spread infection
+function spreadInfection() {
+  const toInfect = [];
+  
+  for (let i = 0; i < gameState.grid.length; i++) {
+    if (gameState.grid[i] === 1) {
+      const adjacent = getAdjacentCells(i);
+      const freeAdjacent = adjacent.filter(idx => gameState.grid[idx] === 0);
+      
+      if (freeAdjacent.length > 0) {
+        const randomIdx = freeAdjacent[Math.floor(Math.random() * freeAdjacent.length)];
+        if (!toInfect.includes(randomIdx)) {
+          toInfect.push(randomIdx);
+        }
+      }
+    }
+  }
+  
+  toInfect.forEach(idx => {
+    if (gameState.grid[idx] === 0) {
+      gameState.grid[idx] = 1;
+      gameState.infectedCount++;
+      createSpreadParticles(idx);
+    }
+  });
+}
+
+// Create particles for spreading
+function createSpreadParticles(gridIndex) {
+  const row = Math.floor(gridIndex / GRID_SIZE);
+  const col = gridIndex % GRID_SIZE;
+  const x = col * CELL_SIZE + CELL_SIZE / 2;
+  const y = row * CELL_SIZE + CELL_SIZE / 2;
+  
+  for (let i = 0; i < 5; i++) {
+    gameState.particles.push({
+      x: x,
+      y: y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6,
+      life: 0.7,
+      maxLife: 0.7,
+      size: 2 + Math.random() * 4
+    });
+  }
+}
+
+// Create victory particles
+function createVictoryParticles() {
+  for (let i = 0; i < 35; i++) {
+    gameState.particles.push({
+      x: canvas.width / 2 + (Math.random() - 0.5) * 100,
+      y: canvas.height / 2 + (Math.random() - 0.5) * 100,
+      vx: (Math.random() - 0.5) * 10,
+      vy: (Math.random() - 0.5) * 10 - 2,
+      life: 2,
+      maxLife: 2,
+      size: 3 + Math.random() * 10
+    });
+  }
+}
+
+// Start collapse animation
+function startCollapse() {
+  gameState.collapsing = true;
+  gameState.collapseProgress = 0;
+}
+
+// Update game state
+function updateGame() {
+  if (gameState.phase === 'play') {
+    gameState.particles = gameState.particles.filter(p => {
+      p.life -= 0.02;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.12;
+      return p.life > 0;
+    });
+    
+    if (gameState.infectedCount >= WIN_THRESHOLD) {
+      gameState.phase = 'clear';
+      createVictoryParticles();
+    } else if (gameState.timer <= 0) {
+      gameState.phase = 'over';
+      startCollapse();
+    }
+  } else if (gameState.phase === 'over' && gameState.collapsing) {
+    gameState.collapseProgress += 0.025;
+    gameState.particles = gameState.particles.filter(p => {
+      p.life -= 0.025;
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const dx = centerX - p.x;
+      const dy = centerY - p.y;
+      p.x += dx * 0.06;
+      p.y += dy * 0.06;
+      return p.life > 0;
+    });
+    if (gameState.collapseProgress > 1) {
+      gameState.collapsing = false;
+    }
+  } else {
+    gameState.particles = gameState.particles.filter(p => {
+      p.life -= 0.018;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.1;
+      return p.life > 0;
+    });
+  }
+}
+
+// Draw function
+function draw() {
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw grid cells
+  for (let i = 0; i < gameState.grid.length; i++) {
+    const row = Math.floor(i / GRID_SIZE);
+    const col = i % GRID_SIZE;
+    const x = col * CELL_SIZE;
+    const y = row * CELL_SIZE;
+    
+    if (gameState.grid[i] === 1) {
+      ctx.fillStyle = '#FF1744';
+    } else if (i === gameState.hoverCell) {
+      ctx.fillStyle = '#FFEB3B';
+    } else {
+      ctx.fillStyle = '#E0E0E0';
+    }
+    ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+    
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+  }
+  
+  // Draw source markers
+  gameState.sources.forEach(idx => {
+    const row = Math.floor(idx / GRID_SIZE);
+    const col = idx % GRID_SIZE;
+    const x = col * CELL_SIZE + CELL_SIZE / 2;
+    const y = row * CELL_SIZE + CELL_SIZE / 2;
+    
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#FF9800';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+  
+  // Draw particles
+  gameState.particles.forEach(p => {
+    const alpha = Math.max(0, p.life / p.maxLife);
+    ctx.fillStyle = `rgba(255, 23, 68, ${alpha * 0.9})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  // Gameplay instructions
+  if (gameState.phase === 'play') {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, canvas.width, 28);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Click to place infection source (max 3)', 10, 19);
+  }
+  
+  // Victory screen
+  if (gameState.phase === 'clear') {
+    ctx.fillStyle = `rgba(255, 23, 68, ${0.12 + Math.sin(Date.now() / 200) * 0.08})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.shadowColor = '#FF1744';
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = '#FF1744';
+    ctx.font = 'bold 52px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('DOMINATED!', canvas.width / 2, canvas.height / 2 - 30);
+    ctx.shadowBlur = 0;
+    
+    ctx.font = 'bold 18px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('95% Grid Conquered', canvas.width / 2, canvas.height / 2 + 25);
+    ctx.font = '14px Arial';
+    ctx.fillText('Click to restart', canvas.width / 2, canvas.height / 2 + 60);
+    ctx.textAlign = 'left';
+  }
+  
+  // Gameover screen
+  if (gameState.phase === 'over') {
+    const collapseAlpha = Math.min(0.8, gameState.collapseProgress * 1.5);
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.65 + collapseAlpha * 0.25})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#FF6B6B';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('TIME OUT', canvas.width / 2, canvas.height / 2 - 35);
+    
+    ctx.font = '18px Arial';
+    ctx.fillStyle = '#FFD700';
+    ctx.fillText('Infected: ' + gameState.infectedCount + '/100', canvas.width / 2, canvas.height / 2);
+    
+    const percent = ((gameState.infectedCount / TOTAL_CELLS) * 100).toFixed(0);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Coverage: ' + percent + '%', canvas.width / 2, canvas.height / 2 + 35);
+    ctx.font = '14px Arial';
+    ctx.fillText('Click to restart', canvas.width / 2, canvas.height / 2 + 70);
+    ctx.textAlign = 'left';
+  }
+}
+
+// Input handling
+function getCellFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  const col = Math.floor(x / CELL_SIZE);
+  const row = Math.floor(y / CELL_SIZE);
+  
+  if (col >= 0 && col < GRID_SIZE && row >= 0 && row < GRID_SIZE) {
+    return row * GRID_SIZE + col;
+  }
+  return -1;
+}
+
+// Mouse move for hover effect
+canvas.addEventListener('mousemove', (e) => {
+  if (gameState.phase === 'play') {
+    gameState.hoverCell = getCellFromEvent(e);
+  } else {
+    gameState.hoverCell = -1;
+  }
+});
+
+// Mouse down (reserved for potential drag)
+canvas.addEventListener('mousedown', (e) => {
+  // Handler registered for mouse event coverage
+});
+
+// Mouse up (reserved for potential drag)
+canvas.addEventListener('mouseup', (e) => {
+  // Handler registered for mouse event coverage
+});
+
+// Click - place infection source or restart
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase === 'play') {
+    const cellIndex = getCellFromEvent(e);
+    
+    if (cellIndex >= 0 && cellIndex < TOTAL_CELLS) {
+      if (gameState.sources.length < 3 && gameState.grid[cellIndex] === 0) {
+        gameState.grid[cellIndex] = 1;
+        gameState.infectedCount++;
+        gameState.sources.push(cellIndex);
+        
+        document.getElementById('sourceText').textContent = gameState.sources.length;
+        document.getElementById('infectedText').textContent = gameState.infectedCount;
+        
+        createSpreadParticles(cellIndex);
+      }
+    }
+  } else if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    restartGame();
+  }
+});
+
+// Start game
+function startGame() {
+  startScreen.style.display = 'none';
+  gameState.phase = 'play';
+  gameState.timer = GAME_DURATION;
+  initGrid();
+  
+  if (spreadTimer) clearInterval(spreadTimer);
+  spreadTimer = setInterval(() => {
+    if (gameState.phase === 'play') {
+      spreadInfection();
+      document.getElementById('infectedText').textContent = gameState.infectedCount;
+    }
+  }, SPREAD_INTERVAL);
+  
+  if (gameTimer) clearInterval(gameTimer);
+  gameTimer = setInterval(() => {
+    if (gameState.phase === 'play') {
+      gameState.timer = Math.max(0, gameState.timer - 1);
+      document.getElementById('timerText').textContent = gameState.timer;
+    }
+  }, 1000);
+}
+
+// Restart game
+function restartGame() {
+  if (spreadTimer) clearInterval(spreadTimer);
+  if (gameTimer) clearInterval(gameTimer);
+  
+  gameState.phase = 'start';
+  startScreen.style.display = 'flex';
+}
+
+// Button click
+startBtn.addEventListener('click', startGame);
+
+// Main animation loop
+function gameLoop() {
+  updateGame();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>

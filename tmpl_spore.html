@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPORE BLOOM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+        }
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: #0a0a0a;
+            border: 2px solid #333;
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.3);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #startBtn {
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        #startBtn:hover {
+            transform: scale(1.05);
+        }
+        #startBtn:active {
+            transform: scale(0.95);
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 11;
+        }
+        #overScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 11;
+        }
+        .screen-text {
+            color: white;
+            text-align: center;
+        }
+        .screen-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .screen-subtitle {
+            font-size: 20px;
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+        .screen-info {
+            font-size: 16px;
+            margin: 5px 0;
+            opacity: 0.7;
+        }
+        .restart-text {
+            font-size: 14px;
+            margin-top: 30px;
+            opacity: 0.6;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!--GAME_SPEC
+    {
+      "win_condition": "occupiedCells >= totalCells * 0.8 (39 or more cells occupied out of 48)",
+      "fail_condition": "timer <= 0 and occupiedCells < totalCells * 0.8",
+      "input_types": ["click", "mousedown", "mousemove", "mouseup"],
+      "state_vars": ["occupiedCells", "sporeCount", "phase", "timer"],
+      "core_loop": "click empty cell to launch spore; spore lands after 0.5s; plant grows for 2s; auto-launches to adjacent cells every 5s; occupiedCells increases; check win/fail",
+      "clear_trigger": "occupiedCells >= 39",
+      "gameover_trigger": "timer <= 0 && occupiedCells < 39"
+    }
+    -->
+    
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="startScreen">
+            <div class="screen-text">
+                <div class="screen-title">SPORE BLOOM</div>
+                <div class="screen-subtitle">Dominate the Grid</div>
+                <div class="screen-info">Click to spread your spores and occupy 80% of cells</div>
+                <button id="startBtn">START</button>
+            </div>
+        </div>
+        
+        <div id="clearScreen">
+            <div class="screen-text">
+                <div class="screen-title" style="color: #4ade80; text-shadow: 0 0 30px rgba(74, 222, 128, 0.8);">BLOOM COMPLETE!</div>
+                <div class="screen-subtitle">You dominated the grid!</div>
+                <div class="screen-info" id="clearScore"></div>
+                <div class="restart-text">Click to play again</div>
+            </div>
+        </div>
+        
+        <div id="overScreen">
+            <div class="screen-text">
+                <div class="screen-title" style="color: #ef4444; text-shadow: 0 0 30px rgba(239, 68, 68, 0.8);">COLLAPSE</div>
+                <div class="screen-subtitle">Time ran out</div>
+                <div class="screen-info" id="overScore"></div>
+                <div class="restart-text">Click to try again</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const startBtn = document.getElementById('startBtn');
+        const clearScreen = document.getElementById('clearScreen');
+        const overScreen = document.getElementById('overScreen');
+        const clearScoreText = document.getElementById('clearScore');
+        const overScoreText = document.getElementById('overScore');
+
+        const gameState = {
+            occupiedCells: 0,
+            totalCells: 48,
+            sporeCount: 5,
+            phase: 'start',
+            timer: 120,
+            cells: [],
+            animatingSpores: [],
+            cellIntervals: [],
+            hoveredCell: -1,
+            collapseProgress: 0
+        };
+
+        const GRID_COLS = 8;
+        const GRID_ROWS = 6;
+        const CELL_RADIUS = 30;
+        const CELL_SIZE = CELL_RADIUS * 2;
+        const GRID_START_X = 100;
+        const GRID_START_Y = 80;
+
+        let lastTime = Date.now();
+        let timerIntervalId = null;
+
+        function initializeCells() {
+            gameState.cells = [];
+            for (let i = 0; i < gameState.totalCells; i++) {
+                const col = i % GRID_COLS;
+                const row = Math.floor(i / GRID_COLS);
+                const x = GRID_START_X + col * CELL_SIZE + CELL_SIZE / 2;
+                const y = GRID_START_Y + row * CELL_SIZE + CELL_SIZE / 2;
+                gameState.cells.push({
+                    id: i,
+                    x: x,
+                    y: y,
+                    occupied: false,
+                    growthTime: 0,
+                    maxGrowth: 2000
+                });
+            }
+        }
+
+        function getAdjacentCells(cellId) {
+            const col = cellId % GRID_COLS;
+            const row = Math.floor(cellId / GRID_COLS);
+            const adjacent = [];
+
+            for (let dc = -1; dc <= 1; dc++) {
+                for (let dr = -1; dr <= 1; dr++) {
+                    if (dc === 0 && dr === 0) continue;
+                    const newCol = col + dc;
+                    const newRow = row + dr;
+                    if (newCol >= 0 && newCol < GRID_COLS && newRow >= 0 && newRow < GRID_ROWS) {
+                        const newId = newRow * GRID_COLS + newCol;
+                        adjacent.push(newId);
+                    }
+                }
+            }
+            return adjacent;
+        }
+
+        function getEmptyAdjacentCells(cellId) {
+            const adjacent = getAdjacentCells(cellId);
+            return adjacent.filter(id => !gameState.cells[id].occupied);
+        }
+
+        function pointInCell(x, y, cellId) {
+            const cell = gameState.cells[cellId];
+            const dist = Math.hypot(x - cell.x, y - cell.y);
+            return dist <= CELL_RADIUS;
+        }
+
+        function getCellAtCoords(x, y) {
+            for (let i = 0; i < gameState.cells.length; i++) {
+                if (pointInCell(x, y, i)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        function launchSpore(targetCellId) {
+            if (gameState.sporeCount <= 0 || gameState.phase !== 'play') return;
+
+            const targetCell = gameState.cells[targetCellId];
+            if (targetCell.occupied) return;
+
+            gameState.sporeCount--;
+
+            let startX = canvas.width / 2;
+            let startY = canvas.height / 2;
+
+            let nearestOccupied = -1;
+            let nearestDist = Infinity;
+
+            for (let i = 0; i < gameState.cells.length; i++) {
+                if (gameState.cells[i].occupied) {
+                    const dist = Math.hypot(gameState.cells[i].x - targetCell.x, gameState.cells[i].y - targetCell.y);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestOccupied = i;
+                    }
+                }
+            }
+
+            if (nearestOccupied !== -1) {
+                startX = gameState.cells[nearestOccupied].x;
+                startY = gameState.cells[nearestOccupied].y;
+            }
+
+            gameState.animatingSpores.push({
+                startX: startX,
+                startY: startY,
+                targetX: targetCell.x,
+                targetY: targetCell.y,
+                targetCellId: targetCellId,
+                progress: 0,
+                duration: 500
+            });
+        }
+
+        function startAutoLaunch(cellId) {
+            const interval = setInterval(() => {
+                if (gameState.phase !== 'play') return;
+
+                const emptyAdjacent = getEmptyAdjacentCells(cellId);
+                if (emptyAdjacent.length === 0) {
+                    clearInterval(interval);
+                    return;
+                }
+
+                const randomTarget = emptyAdjacent[Math.floor(Math.random() * emptyAdjacent.length)];
+                const targetCell = gameState.cells[randomTarget];
+                const sourceCell = gameState.cells[cellId];
+
+                gameState.animatingSpores.push({
+                    startX: sourceCell.x,
+                    startY: sourceCell.y,
+                    targetX: targetCell.x,
+                    targetY: targetCell.y,
+                    targetCellId: randomTarget,
+                    progress: 0,
+                    duration: 500
+                });
+            }, 5000);
+
+            gameState.cellIntervals.push(interval);
+        }
+
+        function checkWin() {
+            if (gameState.occupiedCells >= gameState.totalCells * 0.8 && gameState.phase === 'play') {
+                gameState.phase = 'clear';
+                clearAllIntervals();
+                clearScreen.style.display = 'flex';
+                clearScoreText.textContent = 'Occupied: ' + gameState.occupiedCells + '/' + gameState.totalCells + ' cells';
+            }
+        }
+
+        function checkLose() {
+            if (gameState.timer <= 0 && gameState.occupiedCells < gameState.totalCells * 0.8 && gameState.phase === 'play') {
+                gameState.phase = 'over';
+                clearAllIntervals();
+                overScreen.style.display = 'flex';
+                overScoreText.textContent = 'Occupied: ' + gameState.occupiedCells + '/' + gameState.totalCells + ' cells';
+            }
+        }
+
+        function clearAllIntervals() {
+            gameState.cellIntervals.forEach(interval => clearInterval(interval));
+            gameState.cellIntervals = [];
+            if (timerIntervalId) {
+                clearInterval(timerIntervalId);
+                timerIntervalId = null;
+            }
+        }
+
+        function resetGame() {
+            gameState.occupiedCells = 0;
+            gameState.sporeCount = 5;
+            gameState.phase = 'start';
+            gameState.timer = 120;
+            gameState.animatingSpores = [];
+            gameState.hoveredCell = -1;
+            gameState.collapseProgress = 0;
+            clearAllIntervals();
+            clearScreen.style.display = 'none';
+            overScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+            initializeCells();
+        }
+
+        startBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            gameState.phase = 'play';
+            startScreen.style.display = 'none';
+            gameState.timer = 120;
+            gameState.occupiedCells = 0;
+            gameState.sporeCount = 5;
+            gameState.collapseProgress = 0;
+            initializeCells();
+        });
+
+        clearScreen.addEventListener('click', resetGame);
+        overScreen.addEventListener('click', resetGame);
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState.phase !== 'play') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const cellId = getCellAtCoords(x, y);
+            if (cellId !== -1 && !gameState.cells[cellId].occupied) {
+                launchSpore(cellId);
+            }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            // Handler registered for compatibility
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameState.phase !== 'play') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            gameState.hoveredCell = getCellAtCoords(x, y);
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            // Handler registered for compatibility
+        });
+
+        function gameLoop() {
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Timer management
+            if (gameState.phase === 'play' && !timerIntervalId) {
+                timerIntervalId = setInterval(() => {
+                    if (gameState.phase === 'play') {
+                        gameState.timer--;
+                        checkLose();
+                    }
+                }, 1000);
+            }
+
+            // Draw UI
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('Spores: ' + gameState.sporeCount, 20, 30);
+            ctx.fillText('Occupied: ' + gameState.occupiedCells + '/' + gameState.totalCells, 20, 60);
+            ctx.fillText('Time: ' + gameState.timer + 's', canvas.width - 200, 30);
+
+            if (gameState.phase === 'play') {
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#aaaaaa';
+                ctx.fillText('Click empty cells to spread spores', 20, canvas.height - 20);
+            }
+
+            // Update animating spores
+            for (let i = gameState.animatingSpores.length - 1; i >= 0; i--) {
+                const spore = gameState.animatingSpores[i];
+                spore.progress += 16.67 / spore.duration;
+
+                if (spore.progress >= 1) {
+                    const cell = gameState.cells[spore.targetCellId];
+                    cell.occupied = true;
+                    gameState.occupiedCells++;
+                    checkWin();
+
+                    setTimeout(() => {
+                        if (gameState.phase === 'play') {
+                            startAutoLaunch(spore.targetCellId);
+                        }
+                    }, 2000);
+
+                    gameState.animatingSpores.splice(i, 1);
+                } else {
+                    const x = spore.startX + (spore.targetX - spore.startX) * spore.progress;
+                    const y = spore.startY + (spore.targetY - spore.startY) * spore.progress;
+
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Draw cells
+            const occupationPercent = gameState.occupiedCells / gameState.totalCells;
+            
+            for (let i = 0; i < gameState.cells.length; i++) {
+                const cell = gameState.cells[i];
+
+                if (cell.occupied) {
+                    cell.growthTime = Math.min(cell.growthTime + 16.67, cell.maxGrowth);
+                    const growthPercent = cell.growthTime / cell.maxGrowth;
+
+                    if (gameState.phase === 'over') {
+                        const scale = Math.max(0, 1 - gameState.collapseProgress);
+                        const alpha = scale * (0.3 + occupationPercent * 0.4);
+                        ctx.fillStyle = 'rgba(74, 222, 128, ' + alpha + ')';
+                        ctx.beginPath();
+                        ctx.arc(cell.x, cell.y, CELL_RADIUS * (0.5 + growthPercent * 0.5) * scale, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.fillStyle = 'rgba(34, 197, 94, ' + scale + ')';
+                        ctx.beginPath();
+                        ctx.arc(cell.x, cell.y, CELL_RADIUS * (0.3 + growthPercent * 0.5) * scale, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else {
+                        ctx.fillStyle = 'rgba(74, 222, 128, ' + (0.3 + occupationPercent * 0.4) + ')';
+                        ctx.beginPath();
+                        ctx.arc(cell.x, cell.y, CELL_RADIUS * (0.5 + growthPercent * 0.5), 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#22c55e';
+                        ctx.beginPath();
+                        ctx.arc(cell.x, cell.y, CELL_RADIUS * (0.3 + growthPercent * 0.5), 0, Math.PI * 2);
+                        ctx.fill();
+
+                        const pulseSize = Math.sin(Date.now() / 300) * 3;
+                        ctx.strokeStyle = '#16a34a';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(cell.x, cell.y, CELL_RADIUS * 0.8 + pulseSize, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                } else {
+                    ctx.fillStyle = '#333333';
+                    ctx.beginPath();
+                    ctx.arc(cell.x, cell.y, CELL_RADIUS, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#555555';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    // Highlight hovered cell
+                    if (i === gameState.hoveredCell && gameState.phase === 'play') {
+                        ctx.strokeStyle = '#ffff00';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(cell.x, cell.y, CELL_RADIUS + 3, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Win bloom effect
+            if (gameState.phase === 'clear') {
+                const bloomAlpha = Math.sin(Date.now() / 200) * 0.3 + 0.3;
+                const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width);
+                gradient.addColorStop(0, 'rgba(74, 222, 128, ' + bloomAlpha + ')');
+                gradient.addColorStop(1, 'rgba(74, 222, 128, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // Fail collapse effect
+            if (gameState.phase === 'over') {
+                gameState.collapseProgress += 0.02;
+                
+                if (Math.floor(Date.now() / 100) % 2 === 0) {
+                    ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        initializeCells();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

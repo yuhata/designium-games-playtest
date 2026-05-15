@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SWARM MASTER</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #0a0a0a;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #000;
+      border: 2px solid #00ffff;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      font-size: 64px;
+      color: #00ffff;
+      margin-bottom: 20px;
+      text-shadow: 0 0 10px #00ffff;
+    }
+    #startScreen p {
+      font-size: 18px;
+      color: #aaa;
+      margin-bottom: 30px;
+      text-align: center;
+      max-width: 500px;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 24px;
+      background: linear-gradient(to right, #00ffff, #0099ff);
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s;
+      box-shadow: 0 0 20px #00ffff;
+    }
+    #startBtn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 30px #00ffff;
+    }
+    #gameCanvas {
+      display: block;
+      background: #0a0a0a;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "swarmCount >= 150",
+  "fail_condition": "timer <= 0 AND swarmCount < 150",
+  "input_types": ["click"],
+  "state_vars": ["swarmCount", "timer", "phase"],
+  "core_loop": "Click to set destination → swarms move and collide with pellets → units split and increase count → reach 150 to win",
+  "clear_trigger": "swarmCount >= targetCount",
+  "gameover_trigger": "timer <= 0 && swarmCount < targetCount"
+}
+-->
+<div id="gameContainer">
+  <div id="startScreen">
+    <h1>SWARM MASTER</h1>
+    <p>Build your swarm to dominate the arena<br>Start with 10 units, grow to 150<br>Click food to split and multiply<br>90 seconds to conquer!</p>
+    <button id="startBtn">START</button>
+  </div>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+
+let gameState = {
+  phase: 'start',
+  swarmCount: 10,
+  targetCount: 150,
+  timer: 90,
+  swarmDestination: { x: canvas.width / 2, y: canvas.height / 2 },
+  swarms: [],
+  pellets: [],
+  floatingTexts: [],
+  failureAnimPhase: 0
+};
+
+let lastFrameTime = Date.now();
+let gameLoopRunning = true;
+let canRestartClick = false;
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+
+function distance(x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function normalize(dx, dy) {
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len === 0) return { x: 0, y: 0 };
+  return { x: dx / len, y: dy / len };
+}
+
+function initSwarms() {
+  gameState.swarms = [];
+  for (let i = 0; i < gameState.swarmCount; i++) {
+    gameState.swarms.push({
+      x: 50 + Math.random() * (canvas.width - 100),
+      y: 50 + Math.random() * (canvas.height - 100),
+      vx: 0,
+      vy: 0
+    });
+  }
+}
+
+function initPellets() {
+  gameState.pellets = [];
+  const pelletCount = Math.max(15, Math.floor(gameState.swarmCount / 3));
+  for (let i = 0; i < pelletCount; i++) {
+    let validPos = false;
+    let x, y;
+    while (!validPos) {
+      x = Math.random() * canvas.width;
+      y = Math.random() * canvas.height;
+      validPos = true;
+      for (const pellet of gameState.pellets) {
+        if (distance(x, y, pellet.x, pellet.y) < 40) {
+          validPos = false;
+          break;
+        }
+      }
+    }
+    gameState.pellets.push({ x, y });
+  }
+}
+
+function startGame() {
+  gameState.phase = 'play';
+  gameState.timer = 90;
+  gameState.swarmCount = 10;
+  gameState.floatingTexts = [];
+  gameState.failureAnimPhase = 0;
+  gameState.swarmDestination = { x: canvas.width / 2, y: canvas.height / 2 };
+  initSwarms();
+  initPellets();
+  startScreen.style.display = 'none';
+  canRestartClick = false;
+}
+
+function restartGame() {
+  if (!canRestartClick) return;
+  startScreen.style.display = 'flex';
+  gameState.phase = 'start';
+  canRestartClick = false;
+}
+
+startBtn.addEventListener('click', startGame);
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase === 'play') {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    gameState.swarmDestination.x = clamp(x, 0, canvas.width);
+    gameState.swarmDestination.y = clamp(y, 0, canvas.height);
+  } else if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    restartGame();
+  }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (gameState.phase === 'play') {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    // Allow drag direction influence
+    gameState.swarmDestination.x = clamp(x, 0, canvas.width);
+    gameState.swarmDestination.y = clamp(y, 0, canvas.height);
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  // Track for visual feedback only - do NOT trigger game state changes
+  if (gameState.phase === 'play' && e.buttons === 1) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    gameState.swarmDestination.x = clamp(x, 0, canvas.width);
+    gameState.swarmDestination.y = clamp(y, 0, canvas.height);
+  }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  // Do NOT trigger game logic here
+});
+
+function updateGame(deltaTime) {
+  if (gameState.phase !== 'play') return;
+
+  gameState.timer = Math.max(0, gameState.timer - deltaTime);
+
+  // Move swarms toward destination
+  for (const swarm of gameState.swarms) {
+    const dx = gameState.swarmDestination.x - swarm.x;
+    const dy = gameState.swarmDestination.y - swarm.y;
+    const dir = normalize(dx, dy);
+    swarm.vx = dir.x * 2.5;
+    swarm.vy = dir.y * 2.5;
+    swarm.x += swarm.vx;
+    swarm.y += swarm.vy;
+    swarm.x = clamp(swarm.x, 0, canvas.width);
+    swarm.y = clamp(swarm.y, 0, canvas.height);
+  }
+
+  // Collision detection: swarms vs pellets
+  for (let i = gameState.pellets.length - 1; i >= 0; i--) {
+    const pellet = gameState.pellets[i];
+    let collided = false;
+    for (let j = 0; j < gameState.swarms.length; j++) {
+      const swarm = gameState.swarms[j];
+      const dist = distance(swarm.x, swarm.y, pellet.x, pellet.y);
+      if (dist < 13) {
+        // Create new swarm near parent
+        const angle = Math.random() * Math.PI * 2;
+        const offset = 30;
+        gameState.swarms.push({
+          x: swarm.x + Math.cos(angle) * offset,
+          y: swarm.y + Math.sin(angle) * offset,
+          vx: 0,
+          vy: 0
+        });
+        gameState.swarmCount++;
+        gameState.floatingTexts.push({
+          x: swarm.x,
+          y: swarm.y,
+          text: '+1',
+          age: 0,
+          vx: (Math.random() - 0.5) * 2,
+          vy: -3
+        });
+        gameState.pellets.splice(i, 1);
+        collided = true;
+        break;
+      }
+    }
+    if (collided) break;
+  }
+
+  // Spawn new pellets if needed
+  const targetPellets = Math.max(15, Math.floor(gameState.swarmCount / 3));
+  while (gameState.pellets.length < targetPellets && gameState.pellets.length < 50) {
+    let validPos = false;
+    let x, y;
+    while (!validPos) {
+      x = Math.random() * canvas.width;
+      y = Math.random() * canvas.height;
+      validPos = true;
+      for (const pellet of gameState.pellets) {
+        if (distance(x, y, pellet.x, pellet.y) < 40) {
+          validPos = false;
+          break;
+        }
+      }
+    }
+    gameState.pellets.push({ x, y });
+  }
+
+  // Update floating texts
+  for (let i = gameState.floatingTexts.length - 1; i >= 0; i--) {
+    gameState.floatingTexts[i].age += deltaTime;
+    gameState.floatingTexts[i].x += gameState.floatingTexts[i].vx;
+    gameState.floatingTexts[i].y += gameState.floatingTexts[i].vy;
+    if (gameState.floatingTexts[i].age > 1) {
+      gameState.floatingTexts.splice(i, 1);
+    }
+  }
+
+  // Check win/fail conditions ONLY in game logic, not in event handlers
+  if (gameState.swarmCount >= gameState.targetCount) {
+    gameState.phase = 'clear';
+  } else if (gameState.timer <= 0 && gameState.swarmCount < gameState.targetCount) {
+    gameState.phase = 'over';
+    gameState.failureAnimPhase = 0;
+  }
+}
+
+function drawGame() {
+  // Background color based on swarm count (darker to lighter as we dominate)
+  const dominationRatio = Math.min(1, gameState.swarmCount / gameState.targetCount);
+  const bgColor = Math.floor(10 + dominationRatio * 20);
+  ctx.fillStyle = `rgb(${bgColor}, ${bgColor}, ${bgColor * 1.5})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw pellets
+  ctx.fillStyle = '#ffaa00';
+  for (const pellet of gameState.pellets) {
+    ctx.beginPath();
+    ctx.arc(pellet.x, pellet.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw swarms with increasing opacity
+  const swarmOpacity = Math.min(0.85, 0.3 + (gameState.swarmCount / gameState.targetCount) * 0.55);
+  ctx.fillStyle = `rgba(0, 200, 255, ${swarmOpacity})`;
+  ctx.shadowColor = `rgba(0, 200, 255, 0.8)`;
+  ctx.shadowBlur = 10;
+  for (const swarm of gameState.swarms) {
+    ctx.beginPath();
+    ctx.arc(swarm.x, swarm.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowColor = 'transparent';
+
+  // Draw floating texts
+  for (const text of gameState.floatingTexts) {
+    const alpha = Math.max(0, 1 - text.age);
+    ctx.fillStyle = `rgba(0, 255, 100, ${alpha})`;
+    ctx.font = 'bold 24px Arial';
+    ctx.fillText(text.text, text.x, text.y);
+  }
+
+  // Draw instruction text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '16px Arial';
+  if (gameState.phase === 'play') {
+    ctx.fillText('Click canvas to direct swarms | Collect food to multiply', 10, 25);
+  }
+
+  // Draw swarm count (scales up as we grow)
+  const countScale = 1 + (gameState.swarmCount / gameState.targetCount) * 0.5;
+  ctx.save();
+  ctx.translate(canvas.width / 2, 60);
+  ctx.scale(countScale, countScale);
+  ctx.fillStyle = '#00ffff';
+  ctx.font = 'bold 48px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(gameState.swarmCount, 0, 0);
+  ctx.restore();
+  ctx.textAlign = 'left';
+
+  // Draw timer
+  ctx.fillStyle = gameState.timer < 60 ? '#ff4444' : '#ffffff';
+  ctx.font = '36px Arial';
+  ctx.fillText(`${gameState.timer.toFixed(1)}s`, canvas.width - 150, 40);
+
+  // Draw progress bar
+  const progressWidth = (gameState.swarmCount / gameState.targetCount) * 200;
+  ctx.fillStyle = '#333333';
+  ctx.fillRect(canvas.width - 220, 60, 200, 20);
+  ctx.fillStyle = gameState.swarmCount >= gameState.targetCount ? '#00ff00' : '#00ffff';
+  ctx.fillRect(canvas.width - 220, 60, progressWidth, 20);
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(canvas.width - 220, 60, 200, 20);
+
+  // Draw win screen
+  if (gameState.phase === 'clear') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Victory animation
+    const pulse = Math.sin(Date.now() / 200) * 10;
+    ctx.fillStyle = '#00ff00';
+    ctx.font = `bold ${64 + pulse}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU WIN!', canvas.width / 2, canvas.height / 2 - 40);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '20px Arial';
+    ctx.fillText(`Final Swarm Size: ${gameState.swarmCount}`, canvas.width / 2, canvas.height / 2 + 30);
+    ctx.fillText('Click to play again', canvas.width / 2, canvas.height / 2 + 70);
+    canRestartClick = true;
+  }
+
+  // Draw fail screen
+  if (gameState.phase === 'over') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ff4444';
+    ctx.font = '64px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '20px Arial';
+    ctx.fillText(`Final Swarm Size: ${gameState.swarmCount} / ${gameState.targetCount}`, canvas.width / 2, canvas.height / 2 + 30);
+    ctx.fillText('Click to try again', canvas.width / 2, canvas.height / 2 + 70);
+    canRestartClick = true;
+  }
+}
+
+function gameLoop() {
+  const now = Date.now();
+  const deltaTime = Math.min((now - lastFrameTime) / 1000, 0.05);
+  lastFrameTime = now;
+
+  updateGame(deltaTime);
+  drawGame();
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
