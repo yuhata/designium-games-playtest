@@ -311,12 +311,22 @@
         // ==========================================
         function spawnGate() {
             var correctSide = Math.random() < 0.5 ? 'left' : 'right';
+            // 5通過ごとにスピード+0.5、開口幅-10、REVEAL距離-10（難化）
+            var tier = Math.floor(gameState.passed / 5);
+            var speed = Math.min(GATE_SPEED + tier * 0.5, 6);
+            var opening = Math.max(GATE_OPENING - tier * 10, 70);
+            var revealDist = Math.max(REVEAL_Y - RUNNER_Y + 80 - tier * 8, 30);
+            // 出現間隔にランダムジッタ(±15frame)
+            gameState.nextSpawnJitter = Math.floor(Math.random() * 30) - 15;
             gameState.gates.push({
                 y: -GATE_H - 10,
                 correctSide: correctSide,
                 revealed: false,
                 passed: false,
-                missed: false
+                missed: false,
+                speed: speed,
+                opening: opening,
+                revealDist: revealDist
             });
         }
 
@@ -324,21 +334,20 @@
         // ゲートの左壁・右壁・開口部を計算
         // ==========================================
         function getGateLayout(gate) {
-            // 左開口: 左端(0)～開口幅, 壁: 開口幅～CANVAS_W
-            // 右開口: 壁: 0～(CANVAS_W - 開口幅), 右端: (CANVAS_W - 開口幅)～CANVAS_W
+            var op = gate.opening || GATE_OPENING;
             if (gate.correctSide === 'left') {
                 return {
                     openLeft: 0,
-                    openRight: GATE_OPENING,
-                    wallLeft: GATE_OPENING,
+                    openRight: op,
+                    wallLeft: op,
                     wallRight: CANVAS_W
                 };
             } else {
                 return {
-                    openLeft: CANVAS_W - GATE_OPENING,
+                    openLeft: CANVAS_W - op,
                     openRight: CANVAS_W,
                     wallLeft: 0,
-                    wallRight: CANVAS_W - GATE_OPENING
+                    wallRight: CANVAS_W - op
                 };
             }
         }
@@ -410,8 +419,9 @@
                 gameState.invincibleFrames--;
             }
 
-            // ゲートspawn
-            if (gameState.frameCount - gameState.lastSpawnFrame >= GATE_INTERVAL_FRAMES) {
+            // ゲートspawn（ジッタ付き間隔）
+            var spawnThreshold = GATE_INTERVAL_FRAMES + (gameState.nextSpawnJitter || 0);
+            if (gameState.frameCount - gameState.lastSpawnFrame >= spawnThreshold) {
                 spawnGate();
                 gameState.lastSpawnFrame = gameState.frameCount;
             }
@@ -419,10 +429,11 @@
             // ゲート更新
             for (var i = gameState.gates.length - 1; i >= 0; i--) {
                 var gate = gameState.gates[i];
-                gate.y += GATE_SPEED;
+                gate.y += gate.speed || GATE_SPEED;
 
-                // reveal: ランナーY付近1秒前(約60px手前)で正解開示
-                if (!gate.revealed && gate.y >= REVEAL_Y - 60) {
+                // reveal: gate固有のrevealDist、進行度で遅くなる
+                var revealThreshold = RUNNER_Y - (gate.revealDist || 60);
+                if (!gate.revealed && gate.y >= revealThreshold) {
                     gate.revealed = true;
                 }
 

@@ -168,7 +168,7 @@
     transform: translateX(-50%);
     font-size: 20px;
     font-weight: bold;
-    color: #444;
+    color: #888;
     letter-spacing: 0;
     pointer-events: none;
     z-index: 2;
@@ -282,7 +282,7 @@ var beatInterval = null;
 var flashInterval = null;
 
 // Constants
-var TOTAL_NOTES = 20;
+var TOTAL_NOTES = 32;
 var NOTE_SPEED = 5;           // px per frame
 var JUDGE_LINE_BOTTOM = 80;   // px from bottom of laneArea
 var PERFECT_WINDOW = 30;      // px
@@ -334,11 +334,11 @@ function startGame() {
   // Game loop: 16ms ≈ 60fps via setInterval
   gameLoopInterval = setInterval(gameLoop, 16);
 
-  // Spawn notes: every 500ms (BPM120 = 1 beat / 500ms)
-  spawnInterval = setInterval(spawnNote, 500);
+  // Spawn notes: every 250ms (BPM240 = 2 notes/beat, dense visual)
+  spawnInterval = setInterval(spawnNote, 250);
 
-  // Beat visual: every 500ms (sync with spawn)
-  beatInterval = setInterval(tickBeat, 500);
+  // Beat visual: every 250ms (sync with spawn)
+  beatInterval = setInterval(tickBeat, 250);
 
   // Judgment flash clear: check every 16ms
   flashInterval = setInterval(clearFlash, 16);
