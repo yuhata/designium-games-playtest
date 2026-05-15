@@ -1,0 +1,465 @@
+<!--GAME_SPEC
+{
+  "win_condition": "10 perfectly symmetrical patterns completed",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["syncScore", "patterns", "phase"],
+  "core_loop": "click canvas -> draw point + mirror -> check symmetry after 6 clicks -> update score -> repeat",
+  "clear_trigger": "syncScore >= 10",
+  "gameover_trigger": "none"
+}
+-->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIRROR SYNC</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #000;
+      border: 3px solid #fff;
+      box-shadow: 0 0 30px rgba(255,255,255,0.2);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #fff;
+      font-size: 56px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+      letter-spacing: 4px;
+    }
+    #startScreen .subtitle {
+      color: #00ffff;
+      font-size: 14px;
+      margin-bottom: 40px;
+      text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    }
+    #startScreen p {
+      color: #aaa;
+      font-size: 16px;
+      margin-bottom: 30px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    #startBtn {
+      padding: 16px 50px;
+      font-size: 22px;
+      font-weight: bold;
+      background: #00aa00;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.15s;
+      box-shadow: 0 0 20px rgba(0, 170, 0, 0.5);
+    }
+    #startBtn:hover {
+      background: #00dd00;
+      box-shadow: 0 0 30px rgba(0, 220, 0, 0.8);
+      transform: scale(1.05);
+    }
+    #startBtn:active {
+      transform: scale(0.98);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.98);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 101;
+    }
+    #clearScreen h2 {
+      color: #fff;
+      font-size: 64px;
+      margin-bottom: 25px;
+      text-shadow: 0 0 50px rgba(255, 215, 0, 1);
+      animation: perfectGlow 0.8s ease-out;
+    }
+    @keyframes perfectGlow {
+      0% { transform: scale(0.5); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    #clearScreen .finalScore {
+      color: #ffff00;
+      font-size: 28px;
+      margin: 15px;
+      text-shadow: 0 0 20px rgba(255, 255, 0, 0.8);
+    }
+    #clearScreen .restartText {
+      color: #00ffff;
+      font-size: 18px;
+      margin-top: 25px;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    #score {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      color: #00ff00;
+      font-size: 22px;
+      font-weight: bold;
+      z-index: 10;
+      text-shadow: 0 0 10px rgba(0, 255, 0, 0.6);
+    }
+    #patterns {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      color: #00ffff;
+      font-size: 18px;
+      z-index: 10;
+      text-shadow: 0 0 10px rgba(0, 255, 255, 0.6);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="score">Score: 0</div>
+    <div id="patterns">Patterns: 0</div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="startScreen">
+      <h1>MIRROR SYNC</h1>
+      <div class="subtitle">◆ Perfect Symmetry ◆</div>
+      <p>Click on the canvas to create points.<br>
+      A mirrored point appears on the opposite side.<br>
+      Complete 10 perfectly symmetrical patterns to win!</p>
+      <button id="startBtn">START</button>
+    </div>
+    <div id="clearScreen">
+      <h2>✨ PERFECT SYNC! ✨</h2>
+      <div class="finalScore" id="finalScore">Score: 10</div>
+      <div class="restartText">Click anywhere to restart</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const startScreen = document.getElementById('startScreen');
+    const clearScreen = document.getElementById('clearScreen');
+    const scoreDisplay = document.getElementById('score');
+    const patternsDisplay = document.getElementById('patterns');
+    const finalScoreDisplay = document.getElementById('finalScore');
+
+    const gameState = {
+      phase: 'start',
+      syncScore: 0,
+      patterns: [],
+      patternCount: 0,
+      currentPattern: [],
+      startTime: null
+    };
+
+    let particles = [];
+    let perfectMomentActive = false;
+    let perfectMomentTime = 0;
+
+    // START button - green feedback
+    startBtn.addEventListener('click', (e) => {
+      startBtn.style.background = '#90EE90';
+      setTimeout(() => {
+        startBtn.style.background = '#00aa00';
+      }, 100);
+      
+      gameState.phase = 'play';
+      gameState.syncScore = 0;
+      gameState.patterns = [];
+      gameState.patternCount = 0;
+      gameState.currentPattern = [];
+      gameState.startTime = Date.now();
+      particles = [];
+      perfectMomentActive = false;
+      startScreen.style.display = 'none';
+      clearScreen.style.display = 'none';
+      updateScore();
+    });
+
+    // Canvas click - normalized coordinates
+    canvas.addEventListener('click', (e) => {
+      if (gameState.phase !== 'play') return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
+      
+      // Add point
+      gameState.currentPattern.push({x, y});
+      
+      // Add mirror point
+      const mirrorX = canvas.width - x;
+      gameState.currentPattern.push({mirrorX, y});
+      
+      // Visual feedback - white circles
+      drawPoint(x, y, 8);
+      drawPoint(mirrorX, y, 8);
+      
+      // Create particles on click
+      createClickParticles(x, y);
+      
+      // Pattern complete after 6 clicks (12 point entries)
+      if (gameState.currentPattern.length >= 12) {
+        const accuracy = checkSymmetry();
+        
+        if (accuracy >= 80) {
+          gameState.syncScore++;
+          gameState.patternCount++;
+          createSuccessParticles(x, y);
+        } else {
+          gameState.patternCount++;
+        }
+        
+        gameState.patterns.push([...gameState.currentPattern]);
+        gameState.currentPattern = [];
+        updateScore();
+        checkWin();
+      }
+    });
+
+    function drawPoint(x, y, radius) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function checkSymmetry() {
+      const pattern = gameState.currentPattern;
+      if (pattern.length < 4) return 0;
+      
+      // Separate left and right points
+      const leftPoints = [];
+      const rightPoints = [];
+      
+      for (let i = 0; i < pattern.length; i += 2) {
+        if (pattern[i] && pattern[i].x !== undefined) {
+          leftPoints.push(pattern[i].x);
+        }
+      }
+      
+      for (let i = 1; i < pattern.length; i += 2) {
+        if (pattern[i] && pattern[i].mirrorX !== undefined) {
+          rightPoints.push(canvas.width - pattern[i].mirrorX);
+        }
+      }
+      
+      if (leftPoints.length === 0 || rightPoints.length === 0) return 0;
+      
+      // Calculate standard deviation of x differences
+      let sumDiff = 0;
+      const minLen = Math.min(leftPoints.length, rightPoints.length);
+      
+      for (let i = 0; i < minLen; i++) {
+        const diff = Math.abs(leftPoints[i] - rightPoints[i]);
+        sumDiff += diff;
+      }
+      
+      const avgDiff = sumDiff / minLen;
+      
+      // Standard deviation calculation
+      let sumSqDiff = 0;
+      for (let i = 0; i < minLen; i++) {
+        const diff = Math.abs(leftPoints[i] - rightPoints[i]) - avgDiff;
+        sumSqDiff += diff * diff;
+      }
+      
+      const stdDev = Math.sqrt(sumSqDiff / minLen);
+      
+      if (stdDev <= 12) return 100;
+      if (stdDev <= 25) return 50;
+      return 0;
+    }
+
+    function checkWin() {
+      if (gameState.syncScore >= 10 && gameState.phase === 'play') {
+        gameState.phase = 'clear';
+        perfectMomentActive = true;
+        perfectMomentTime = 0;
+        
+        // Create perfect moment particles
+        for (let i = 0; i < 40; i++) {
+          particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            life: 3000,
+            maxLife: 3000,
+            isStarPulse: true
+          });
+        }
+        
+        // Schedule clear screen display
+        setTimeout(() => {
+          clearScreen.style.display = 'flex';
+          finalScoreDisplay.textContent = 'Score: ' + gameState.syncScore;
+        }, 300);
+      }
+    }
+
+    function updateScore() {
+      scoreDisplay.textContent = 'Score: ' + gameState.syncScore;
+      patternsDisplay.textContent = 'Patterns: ' + gameState.patternCount;
+    }
+
+    function createClickParticles(x, y) {
+      for (let i = 0; i < 8; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 4,
+          vy: (Math.random() - 0.5) * 4,
+          life: 500,
+          maxLife: 500
+        });
+      }
+    }
+
+    function createSuccessParticles(x, y) {
+      for (let i = 0; i < 15; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 5,
+          vy: (Math.random() - 0.5) * 5 - 2,
+          life: 800,
+          maxLife: 800
+        });
+      }
+    }
+
+    function updateParticles() {
+      particles = particles.filter(p => {
+        p.life -= 16;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.1; // gravity
+        return p.life > 0;
+      });
+      
+      particles.forEach(p => {
+        const alpha = (p.life / p.maxLife) * 0.9;
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawGameBoard() {
+      // Background
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Center guide line
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 10]);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // Perfect moment glow
+      if (perfectMomentActive && perfectMomentTime < 3000) {
+        const glow = (3000 - perfectMomentTime) / 3000;
+        ctx.fillStyle = `rgba(255, 215, 0, ${glow * 0.2})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // PERFECT SYNC text
+        ctx.fillStyle = `rgba(255, 255, 255, ${glow})`;
+        ctx.font = 'bold 72px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(255, 215, 0, ' + glow + ')';
+        ctx.shadowBlur = 30;
+        ctx.fillText('PERFECT SYNC!', canvas.width / 2, canvas.height / 2);
+        ctx.shadowColor = 'transparent';
+        
+        perfectMomentTime += 16;
+      }
+      
+      // Instructions
+      if (gameState.phase === 'play') {
+        ctx.fillStyle = '#00ffff';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('Click to draw • Complete 10 symmetric patterns', 20, 40);
+        
+        // Current pattern progress
+        const currentProgress = Math.floor((gameState.currentPattern.length / 12) * 100);
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '14px Arial';
+        ctx.fillText('Current: ' + currentProgress + '%', 20, 65);
+      }
+    }
+
+    function gameLoop() {
+      drawGameBoard();
+      updateParticles();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Clear screen click to restart
+    clearScreen.addEventListener('click', () => {
+      startScreen.style.display = 'flex';
+      clearScreen.style.display = 'none';
+      gameState.phase = 'start';
+      perfectMomentActive = false;
+    });
+
+    // Prevent context menu on canvas
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    gameLoop();
+  </script>
+</body>
+</html>

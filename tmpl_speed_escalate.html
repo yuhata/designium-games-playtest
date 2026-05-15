@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SPEED RUN</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #111; }
+    #gameContainer { position: relative; display: inline-block; }
+    canvas { background: #1a1a1a; border: 3px solid #0f0; cursor: crosshair; display: block; }
+    #startScreen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 100; background: rgba(0,0,0,0.95); padding: 50px; border-radius: 10px; color: #0f0; border: 2px solid #0f0; }
+    #startScreen h1 { font-size: 52px; margin-bottom: 20px; text-shadow: 0 0 20px #0f0; font-weight: bold; }
+    #startScreen p { font-size: 18px; margin: 12px 0; color: #aaa; }
+    #startBtn { padding: 15px 50px; font-size: 20px; background: #0f0; color: #000; border: none; cursor: pointer; border-radius: 5px; margin-top: 25px; font-weight: bold; transition: 0.2s; }
+    #startBtn:hover { background: #0d0; transform: scale(1.05); }
+    #clearScreen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 100; background: rgba(0,0,0,0.97); padding: 50px; border-radius: 10px; display: none; border: 3px solid #ffff00; }
+    #clearScreen h2 { font-size: 72px; color: #ffff00; margin-bottom: 20px; text-shadow: 0 0 20px #ffff00; animation: pulse 0.8s infinite; font-weight: bold; }
+    #gameOverScreen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 100; background: rgba(0,0,0,0.97); padding: 50px; border-radius: 10px; display: none; border: 3px solid #ff4444; }
+    #gameOverScreen h2 { font-size: 72px; color: #ff4444; margin-bottom: 20px; text-shadow: 0 0 20px #ff4444; font-weight: bold; }
+    #ui { position: absolute; top: 15px; left: 15px; color: #0f0; font-size: 16px; font-family: 'Courier New', monospace; z-index: 50; font-weight: bold; }
+    #ui > div { margin: 6px 0; }
+    #bestScore { position: absolute; top: 15px; right: 15px; color: #ffff00; font-size: 14px; font-family: 'Courier New', monospace; z-index: 50; font-weight: bold; }
+    #newBestNotif { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); color: #ffff00; font-size: 28px; font-weight: bold; text-shadow: 0 0 15px #ffff00; z-index: 60; display: none; animation: newBestFlash 1s ease-out; }
+    #ranking { position: absolute; bottom: 20px; right: 20px; color: #0f0; font-size: 12px; font-family: 'Courier New', monospace; z-index: 50; background: rgba(0,0,0,0.85); padding: 12px; border-radius: 5px; border: 1px solid #0f0; }
+    #ranking > div:first-child { font-weight: bold; margin-bottom: 6px; color: #ffff00; }
+    .rankLine { margin: 4px 0; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.15); opacity: 0.8; } }
+    @keyframes newBestFlash { 0% { opacity: 0; transform: translateX(-50%) scale(0.5); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) scale(1.2); } }
+    @keyframes clearFlash { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
+    p { color: #0f0; }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "level >= 5",
+  "fail_condition": "consecutive_miss >= 5",
+  "input_types": ["click", "mousedown"],
+  "state_vars": ["score", "level", "consecutive_miss", "targets"],
+  "core_loop": "targets appear at random -> click to hit within time -> score+1 -> every 10 points level++ and speed increase -> reach level 5 to win or miss 5 consecutive to fail",
+  "clear_trigger": "gameState.level >= 5",
+  "gameover_trigger": "gameState.consecutive_miss >= 5"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="canvas" width="800" height="600"></canvas>
+
+  <div id="startScreen" style="display: block;">
+    <h1>SPEED RUN</h1>
+    <p>Click targets before they disappear!</p>
+    <p>Reach Level 5 to win</p>
+    <p>Miss 5 targets to lose</p>
+    <button id="startBtn">START</button>
+  </div>
+
+  <div id="clearScreen">
+    <h2>VICTORY!</h2>
+    <p id="finalScore" style="font-size: 32px; margin: 20px 0; color: #ffff00;"></p>
+    <p style="color: #aaa; margin-top: 15px;">Click to play again</p>
+  </div>
+
+  <div id="gameOverScreen">
+    <h2>GAME OVER</h2>
+    <p id="finalGameOverScore" style="font-size: 32px; margin: 20px 0; color: #ff8888;"></p>
+    <p style="color: #aaa; margin-top: 15px;">Click to play again</p>
+  </div>
+
+  <div id="ui">
+    <div>SCORE: <span id="scoreDisplay">0</span></div>
+    <div>LEVEL: <span id="levelDisplay">1</span></div>
+    <div>SPEED: ×<span id="speedDisplay">1.0</span></div>
+    <div>MISS: <span id="missDisplay">0</span>/5</div>
+  </div>
+
+  <div id="bestScore">
+    <div>BEST: <span id="bestScoreDisplay">0</span></div>
+  </div>
+
+  <div id="newBestNotif">★ NEW BEST! ★</div>
+
+  <div id="ranking">
+    <div>== RANKING ==</div>
+    <div class="rankLine" style="color: #ffff00;">1. <span id="rank1name">Player</span> - <span id="rank1score">0</span></div>
+    <div class="rankLine" style="color: #ffaa00;">2. <span id="rank2name">AI</span> - <span id="rank2score">0</span></div>
+    <div class="rankLine" style="color: #ff8800;">3. <span id="rank3name">Ghost</span> - <span id="rank3score">0</span></div>
+    <div class="rankLine" style="color: #ff6666;">4. <span id="rank4name">Bot</span> - <span id="rank4score">0</span></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const startBtn = document.getElementById('startBtn');
+const newBestNotif = document.getElementById('newBestNotif');
+
+const gameState = {
+  phase: 'start',
+  score: 0,
+  level: 1,
+  speed: 1.0,
+  consecutive_miss: 0,
+  targets: [],
+  particles: [],
+  lastTargetTime: 0,
+  targetInterval: 600,
+  gameStartTime: null,
+  clickX: null,
+  clickY: null,
+  showNewBest: false,
+  newBestTime: 0
+};
+
+const rankingData = [
+  { name: 'Player', score: 0 },
+  { name: 'AI', score: Math.floor(Math.random() * 35) + 5 },
+  { name: 'Ghost', score: Math.floor(Math.random() * 30) + 3 },
+  { name: 'Bot', score: Math.floor(Math.random() * 25) + 2 }
+];
+
+let bestScore = localStorage.getItem('speedRunBest') ? parseInt(localStorage.getItem('speedRunBest')) : 0;
+
+class Target {
+  constructor() {
+    this.x = Math.random() * 700 + 50;
+    this.y = Math.random() * 400 + 150;
+    this.radius = 20;
+    this.hitRadius = 50;
+    this.createdAt = Date.now();
+    this.lifetime = Math.max(400, 1500 - (gameState.level * 150));
+    this.hit = false;
+  }
+
+  getElapsed() {
+    return Date.now() - this.createdAt;
+  }
+
+  isAlive() {
+    return !this.hit && this.getElapsed() < this.lifetime;
+  }
+
+  getAlpha() {
+    const elapsed = this.getElapsed();
+    const remaining = this.lifetime - elapsed;
+    if (remaining < 300) return remaining / 300;
+    return 1;
+  }
+
+  getColor() {
+    if (gameState.level < 3) return '#00ff00';
+    if (gameState.level < 4) return '#ffff00';
+    if (gameState.level < 5) return '#ff8800';
+    return '#ff0000';
+  }
+
+  draw() {
+    if (!this.isAlive()) return;
+    
+    ctx.save();
+    ctx.globalAlpha = this.getAlpha();
+    ctx.fillStyle = this.getColor();
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  checkHit(clickX, clickY) {
+    const dx = clickX - this.x;
+    const dy = clickY - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist < this.hitRadius;
+  }
+}
+
+class Particle {
+  constructor(x, y, type = 'spark') {
+    this.x = x;
+    this.y = y;
+    this.type = type;
+    this.vx = (Math.random() - 0.5) * 8;
+    this.vy = (Math.random() - 0.5) * 8 - 2;
+    this.life = 1;
+    this.maxLife = type === 'spark' ? 40 : 80;
+    this.size = Math.random() * 8 + 3;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.2;
+    this.life -= 1;
+  }
+
+  draw() {
+    if (this.life <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = this.life / this.maxLife;
+    ctx.fillStyle = this.type === 'spark' ? '#ffff00' : '#00ffff';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  isAlive() {
+    return this.life > 0;
+  }
+}
+
+function init() {
+  gameState.phase = 'play';
+  gameState.score = 0;
+  gameState.level = 1;
+  gameState.speed = 1.0;
+  gameState.consecutive_miss = 0;
+  gameState.targets = [];
+  gameState.particles = [];
+  gameState.lastTargetTime = Date.now();
+  gameState.targetInterval = 600;
+  gameState.gameStartTime = Date.now();
+  gameState.showNewBest = false;
+  
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  gameOverScreen.style.display = 'none';
+  newBestNotif.style.display = 'none';
+}
+
+function update() {
+  if (gameState.phase !== 'play') return;
+
+  const now = Date.now();
+  
+  if (now - gameState.lastTargetTime > gameState.targetInterval) {
+    gameState.targets.push(new Target());
+    gameState.lastTargetTime = now;
+  }
+
+  gameState.targets = gameState.targets.filter(target => {
+    if (!target.isAlive() && !target.hit) {
+      gameState.consecutive_miss++;
+      checkGameOver();
+    }
+    return target.isAlive();
+  });
+
+  gameState.particles.forEach(p => p.update());
+  gameState.particles = gameState.particles.filter(p => p.isAlive());
+
+  document.getElementById('scoreDisplay').textContent = gameState.score;
+  document.getElementById('levelDisplay').textContent = gameState.level;
+  document.getElementById('speedDisplay').textContent = gameState.speed.toFixed(1);
+  document.getElementById('missDisplay').textContent = gameState.consecutive_miss;
+
+  if (gameState.showNewBest && Date.now() - gameState.newBestTime > 1500) {
+    gameState.showNewBest = false;
+    newBestNotif.style.display = 'none';
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (gameState.phase === 'play') {
+    gameState.targets.forEach(target => target.draw());
+    gameState.particles.forEach(p => p.draw());
+
+    ctx.save();
+    ctx.fillStyle = '#0f0';
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText('Click the targets!', 20, 120);
+    ctx.restore();
+  }
+}
+
+function checkWin() {
+  if (gameState.level >= 5) {
+    gameState.phase = 'clear';
+    showClear();
+  }
+}
+
+function checkGameOver() {
+  if (gameState.consecutive_miss >= 5) {
+    gameState.phase = 'over';
+    showGameOver();
+  }
+}
+
+function showClear() {
+  clearScreen.style.display = 'block';
+  document.getElementById('finalScore').textContent = `Final Score: ${gameState.score}`;
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < 100; i++) {
+    gameState.particles.push(new Particle(canvas.width / 2, canvas.height / 2, 'star'));
+  }
+
+  if (gameState.score > bestScore) {
+    bestScore = gameState.score;
+    localStorage.setItem('speedRunBest', bestScore);
+    rankingData[0].score = bestScore;
+  }
+
+  updateRanking();
+}
+
+function showGameOver() {
+  gameOverScreen.style.display = 'block';
+  document.getElementById('finalGameOverScore').textContent = `Score: ${gameState.score}`;
+  updateRanking();
+}
+
+function updateRanking() {
+  rankingData[0].score = gameState.score;
+  rankingData.sort((a, b) => b.score - a.score);
+  
+  for (let i = 0; i < 4; i++) {
+    document.getElementById(`rank${i + 1}name`).textContent = rankingData[i].name;
+    document.getElementById(`rank${i + 1}score`).textContent = rankingData[i].score;
+  }
+  
+  document.getElementById('bestScoreDisplay').textContent = bestScore;
+}
+
+startBtn.addEventListener('click', () => {
+  init();
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (gameState.phase !== 'play') return;
+  const rect = canvas.getBoundingClientRect();
+  gameState.clickX = e.clientX - rect.left;
+  gameState.clickY = e.clientY - rect.top;
+});
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase === 'play') {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    let hitTarget = false;
+    for (let target of gameState.targets) {
+      if (target.checkHit(x, y) && !target.hit) {
+        target.hit = true;
+        gameState.score++;
+        gameState.consecutive_miss = 0;
+        hitTarget = true;
+
+        for (let i = 0; i < 20; i++) {
+          gameState.particles.push(new Particle(target.x, target.y, 'spark'));
+        }
+
+        if (gameState.score % 10 === 0) {
+          gameState.level++;
+          gameState.speed = 1 + (gameState.level - 1) * 0.1;
+          gameState.targetInterval = Math.max(300, 600 - (gameState.level * 80));
+        }
+
+        if (gameState.score > bestScore) {
+          bestScore = gameState.score;
+          localStorage.setItem('speedRunBest', bestScore);
+          gameState.showNewBest = true;
+          gameState.newBestTime = Date.now();
+          newBestNotif.style.display = 'block';
+        }
+
+        checkWin();
+        break;
+      }
+    }
+  } else if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    init();
+  }
+});
+
+updateRanking();
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIZE RUSH</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1a1a2e;
+      font-family: Arial, sans-serif;
+    }
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+      cursor: crosshair;
+      border: 2px solid #e94560;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 52, 96, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #e94560;
+      font-size: 56px;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    #startScreen p {
+      color: #fff;
+      font-size: 18px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 20px;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    #startBtn:hover {
+      background: #ff5577;
+      transform: scale(1.05);
+    }
+    #clearScreen, #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+    #clearScreen h2 {
+      color: #1edc61;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #1edc61;
+    }
+    #gameOverScreen h2 {
+      color: #ff6b6b;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #ff6b6b;
+    }
+    #clearScreen p, #gameOverScreen p {
+      color: #fff;
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .restart-hint {
+      color: #aaa;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "Player size reaches 50",
+  "fail_condition": "Player collides with larger enemy circle",
+  "input_types": ["click", "mousemove", "mousedown", "mouseup"],
+  "state_vars": ["score", "size", "phase", "x", "y"],
+  "core_loop": "Move mouse to guide growing circle; collision with smaller circle increases size and score; reach size 50 to win; collision with larger circle ends game",
+  "clear_trigger": "gameState.size >= 50 && gameState.phase === 'play'",
+  "gameover_trigger": "collision detected where enemy.size > gameState.size"
+}
+-->
+  <div id="gameContainer">
+    <div id="startScreen">
+      <h1>SIZE RUSH</h1>
+      <p>Move your circle to eat smaller ones.</p>
+      <p>Avoid larger circles!</p>
+      <p>Reach size 50 to dominate the arena!</p>
+      <button id="startBtn">START</button>
+    </div>
+    <div id="clearScreen">
+      <h2>YOU WIN!</h2>
+      <p>Final Score: <span id="finalScore">0</span></p>
+      <p>You dominated the arena!</p>
+      <div class="restart-hint">Click to restart</div>
+    </div>
+    <div id="gameOverScreen">
+      <h2>GAME OVER</h2>
+      <p>Final Score: <span id="gameOverScore">0</span></p>
+      <p>You were eaten!</p>
+      <div class="restart-hint">Click to restart</div>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const startBtn = document.getElementById('startBtn');
+    const clearScreen = document.getElementById('clearScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    
+    const gameState = {
+      phase: 'start',
+      size: 5,
+      score: 0,
+      x: 400,
+      y: 300,
+      enemies: [],
+      particles: [],
+      startTime: 0
+    };
+
+    function initEnemies() {
+      gameState.enemies = [];
+      for (let i = 0; i < 30; i++) {
+        gameState.enemies.push({
+          x: Math.random() * (canvas.width - 80) + 40,
+          y: Math.random() * (canvas.height - 80) + 40,
+          size: Math.random() * 4 + 1,
+          vx: (Math.random() - 0.5) * 1.2,
+          vy: (Math.random() - 0.5) * 1.2
+        });
+      }
+    }
+
+    function updateEnemies() {
+      for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+        const enemy = gameState.enemies[i];
+        enemy.x += enemy.vx;
+        enemy.y += enemy.vy;
+
+        if (enemy.x - enemy.size * 2 < 0 || enemy.x + enemy.size * 2 > canvas.width) {
+          enemy.vx *= -1;
+          enemy.x = Math.max(enemy.size * 2, Math.min(canvas.width - enemy.size * 2, enemy.x));
+        }
+        if (enemy.y - enemy.size * 2 < 0 || enemy.y + enemy.size * 2 > canvas.height) {
+          enemy.vy *= -1;
+          enemy.y = Math.max(enemy.size * 2, Math.min(canvas.height - enemy.size * 2, enemy.y));
+        }
+
+        const distance = Math.hypot(gameState.x - enemy.x, gameState.y - enemy.y);
+        const playerRadius = gameState.size * 2;
+        const enemyRadius = enemy.size * 2;
+
+        if (distance < playerRadius + enemyRadius) {
+          if (enemy.size < gameState.size) {
+            gameState.enemies.splice(i, 1);
+            gameState.size += 1;
+            gameState.score += 10;
+            createParticles(enemy.x, enemy.y, 12);
+          } else if (enemy.size >= gameState.size) {
+            gameState.phase = 'over';
+          }
+        }
+      }
+      
+      checkWin();
+    }
+
+    function checkWin() {
+      if (gameState.size >= 50 && gameState.phase === 'play') {
+        gameState.phase = 'clear';
+      }
+    }
+
+    function createParticles(x, y, count) {
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count;
+        const vx = Math.cos(angle) * 4;
+        const vy = Math.sin(angle) * 4;
+        gameState.particles.push({
+          x: x,
+          y: y,
+          vx: vx,
+          vy: vy,
+          life: 30,
+          maxLife: 30,
+          radius: 4
+        });
+      }
+    }
+
+    function updateParticles() {
+      for (let i = gameState.particles.length - 1; i >= 0; i--) {
+        const p = gameState.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) {
+          gameState.particles.splice(i, 1);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = 'rgba(15, 52, 96, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw enemies
+      gameState.enemies.forEach(enemy => {
+        ctx.fillStyle = 'rgba(80, 140, 220, 0.6)';
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, enemy.size * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(120, 180, 255, 1)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+
+      // Draw particles
+      gameState.particles.forEach(p => {
+        const alpha = (p.life / p.maxLife) * 0.9;
+        ctx.fillStyle = `rgba(233, 69, 96, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Draw player circle - domination effect
+      const playerRadius = gameState.size * 2;
+      const hue = Math.min((gameState.size / 50) * 120, 120);
+      
+      ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+      ctx.beginPath();
+      ctx.arc(gameState.x, gameState.y, playerRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glow aura (domination indicator)
+      ctx.strokeStyle = `rgba(233, 69, 96, ${0.3 + (gameState.size / 50) * 0.5})`;
+      ctx.lineWidth = 4 + gameState.size / 10;
+      ctx.beginPath();
+      ctx.arc(gameState.x, gameState.y, playerRadius + 15, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(gameState.x, gameState.y, playerRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Draw UI text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText('Move mouse to guide • Click to eat', 15, 30);
+      
+      ctx.font = '14px Arial';
+      ctx.fillText(`Size: ${gameState.size}/50 | Score: ${gameState.score} | Enemies: ${gameState.enemies.length}`, 15, 55);
+
+      // Size progress bar
+      const barWidth = 180;
+      const barHeight = 12;
+      const barX = canvas.width - barWidth - 15;
+      const barY = 18;
+      
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(barX, barY, barWidth, barHeight);
+      
+      const progress = Math.min(gameState.size / 50, 1);
+      ctx.fillStyle = `hsl(${progress * 120}, 100%, 50%)`;
+      ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+      
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(barX, barY, barWidth, barHeight);
+    }
+
+    function gameLoop() {
+      if (gameState.phase === 'play') {
+        updateEnemies();
+        updateParticles();
+      }
+
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+      gameState.phase = 'play';
+      gameState.size = 5;
+      gameState.score = 0;
+      gameState.x = canvas.width / 2;
+      gameState.y = canvas.height / 2;
+      gameState.particles = [];
+      gameState.startTime = Date.now();
+      initEnemies();
+      startScreen.style.display = 'none';
+      clearScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+    }
+
+    function restartGame() {
+      startGame();
+    }
+
+    function showWinScreen() {
+      clearScreen.style.display = 'flex';
+      document.getElementById('finalScore').textContent = gameState.score;
+    }
+
+    function showGameOverScreen() {
+      gameOverScreen.style.display = 'flex';
+      document.getElementById('gameOverScore').textContent = gameState.score;
+    }
+
+    // Mouse event handlers
+    startBtn.addEventListener('click', startGame);
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameState.phase === 'play') {
+        const rect = canvas.getBoundingClientRect();
+        gameState.x = e.clientX - rect.left;
+        gameState.y = e.clientY - rect.top;
+        gameState.x = Math.max(gameState.size * 2, Math.min(canvas.width - gameState.size * 2, gameState.x));
+        gameState.y = Math.max(gameState.size * 2, Math.min(canvas.height - gameState.size * 2, gameState.y));
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (gameState.phase === 'play') {
+        const rect = canvas.getBoundingClientRect();
+        gameState.x = e.clientX - rect.left;
+        gameState.y = e.clientY - rect.top;
+        gameState.x = Math.max(gameState.size * 2, Math.min(canvas.width - gameState.size * 2, gameState.x));
+        gameState.y = Math.max(gameState.size * 2, Math.min(canvas.height - gameState.size * 2, gameState.y));
+      }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      // Mouseup event processed but no state change needed
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (gameState.phase === 'clear' || gameState.phase === 'over') {
+        restartGame();
+      }
+    });
+
+    // Check game state periodically
+    setInterval(() => {
+      if (gameState.phase === 'clear') {
+        showWinScreen();
+      } else if (gameState.phase === 'over') {
+        showGameOverScreen();
+      }
+    }, 50);
+
+    gameLoop();
+  </script>
+</body>
+</html>
