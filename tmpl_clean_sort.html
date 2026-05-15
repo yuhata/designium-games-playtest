@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TIDY ROOM</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #f0f0f0;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      position: relative;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: #fafafa;
+      border: 2px solid #ddd;
+      cursor: pointer;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      color: white;
+    }
+    #startScreen h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    #startScreen p {
+      font-size: 18px;
+      margin-bottom: 40px;
+      text-align: center;
+      color: #ccc;
+      max-width: 600px;
+    }
+    #startBtn {
+      padding: 15px 40px;
+      font-size: 24px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    #startBtn:hover {
+      background: #45a049;
+      transform: scale(1.05);
+    }
+    #startBtn:active {
+      transform: scale(0.98);
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 101;
+      color: white;
+    }
+    #clearScreen h2 {
+      font-size: 56px;
+      margin: 0;
+      text-shadow: 0 0 20px #FFD700;
+      animation: glow 0.6s ease-in-out infinite alternate;
+    }
+    @keyframes glow {
+      from { text-shadow: 0 0 20px #FFD700; }
+      to { text-shadow: 0 0 40px #FFD700; }
+    }
+    #clearScreen .score-card {
+      margin-top: 40px;
+      font-size: 24px;
+      text-align: center;
+      line-height: 2;
+      background: rgba(255,255,255,0.1);
+      padding: 20px 40px;
+      border-radius: 10px;
+    }
+    #clearScreen .retry-text {
+      margin-top: 40px;
+      font-size: 18px;
+      color: #FFD700;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+    #scoreDisplay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+      z-index: 10;
+    }
+    #itemsDisplay {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div id="startScreen">
+    <h1>TIDY ROOM</h1>
+    <p>Click the START button to begin!<br>Select items and sort them by color into the correct zones below.</p>
+    <button id="startBtn">START</button>
+  </div>
+  
+  <div id="clearScreen">
+    <h2>PERFECT!</h2>
+    <div class="score-card">
+      <div>ALL 10 ITEMS SORTED! ✓</div>
+      <div id="finalScore">Score: 0</div>
+    </div>
+    <div class="retry-text">Click to restart</div>
+  </div>
+  
+  <div id="scoreDisplay">Score: 0</div>
+  <div id="itemsDisplay">Items: 0/10</div>
+  
+  <canvas id="gameCanvas" width="800" height="700"></canvas>
+</div>
+
+<!--GAME_SPEC
+{
+  "win_condition": "All 10 items correctly sorted into matching color zones",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["score", "itemsSorted", "selectedItem"],
+  "core_loop": "Click item to select (yellow outline) → click matching colored zone → score +10, repeat until all 10 items sorted",
+  "clear_trigger": "itemsSorted >= 10",
+  "gameover_trigger": "none"
+}
+-->
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const startBtn = document.getElementById('startBtn');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const itemsDisplay = document.getElementById('itemsDisplay');
+const finalScoreDisplay = document.getElementById('finalScore');
+
+const COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#C7CEEA', '#FF8B94'];
+const ZONE_Y_START = 600;
+const ZONE_HEIGHT = 80;
+
+let gameState = {
+  phase: 'start',
+  score: 0,
+  itemsSorted: 0,
+  totalItems: 10,
+  selectedItem: null,
+  items: [],
+  zones: [],
+  confetti: [],
+  perfectTime: 0,
+  mousePos: { x: 0, y: 0 },
+  mouseDown: false
+};
+
+function createZones() {
+  gameState.zones = [];
+  const zoneWidth = (canvas.width - 60) / 6;
+  for (let i = 0; i < 6; i++) {
+    gameState.zones.push({
+      x: 30 + i * zoneWidth,
+      y: ZONE_Y_START,
+      width: zoneWidth - 10,
+      height: ZONE_HEIGHT,
+      color: COLORS[i],
+      flashing: false,
+      flashTime: 0
+    });
+  }
+}
+
+function generateRandomItem() {
+  return {
+    x: 50 + Math.random() * (canvas.width - 140),
+    y: 100 + Math.random() * 450,
+    width: 40,
+    height: 40,
+    color: COLORS[Math.floor(Math.random() * 6)],
+    selected: false,
+    id: Math.random()
+  };
+}
+
+function generateItems() {
+  gameState.items = [];
+  for (let i = 0; i < 10; i++) {
+    gameState.items.push(generateRandomItem());
+  }
+}
+
+function drawPlayScreen() {
+  ctx.fillStyle = '#fafafa';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (gameState.items && gameState.items.length > 0) {
+    for (let item of gameState.items) {
+      if (item) {
+        ctx.fillStyle = item.color;
+        ctx.fillRect(item.x, item.y, item.width, item.height);
+        
+        if (item.selected) {
+          ctx.strokeStyle = '#FFD700';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(item.x - 2, item.y - 2, item.width + 4, item.height + 4);
+        }
+      }
+    }
+  }
+
+  if (gameState.zones && gameState.zones.length > 0) {
+    for (let zone of gameState.zones) {
+      if (zone) {
+        let zoneColor = zone.color;
+        
+        if (zone.flashing && zone.flashTime > 0) {
+          zoneColor = '#FF0000';
+          zone.flashTime -= 16;
+        }
+        
+        ctx.fillStyle = zoneColor;
+        ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Drop', zone.x + zone.width / 2, zone.y + zone.height / 2);
+      }
+    }
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = '16px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Click item → Click matching zone to sort', 20, 30);
+
+  if (gameState.confetti && gameState.confetti.length > 0) {
+    for (let i = gameState.confetti.length - 1; i >= 0; i--) {
+      let p = gameState.confetti[i];
+      if (p) {
+        ctx.fillStyle = p.color;
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('★', p.x, p.y);
+        
+        p.y += p.vy;
+        p.vy += 0.2;
+        
+        if (p.y > canvas.height) {
+          gameState.confetti.splice(i, 1);
+        }
+      }
+    }
+  }
+}
+
+function drawClearScreen() {
+  ctx.fillStyle = 'rgba(0, 0, 150, 0.3)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  const time = Date.now() - gameState.perfectTime;
+  const glowIntensity = Math.sin(time / 300) * 0.5 + 0.5;
+  
+  ctx.fillStyle = `rgba(255, 215, 0, ${0.6 + glowIntensity * 0.4})`;
+  ctx.beginPath();
+  ctx.arc(canvas.width / 2, canvas.height / 2.5, 150 + glowIntensity * 30, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function draw() {
+  if (gameState.phase === 'play') {
+    drawPlayScreen();
+  } else if (gameState.phase === 'clear') {
+    drawPlayScreen();
+    drawClearScreen();
+  }
+}
+
+function gameLoop() {
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function checkWin() {
+  if (gameState.itemsSorted >= gameState.totalItems) {
+    gameState.phase = 'clear';
+    gameState.perfectTime = Date.now();
+    
+    for (let i = 0; i < 50; i++) {
+      gameState.confetti.push({
+        x: Math.random() * canvas.width,
+        y: -50,
+        vy: Math.random() * 2 + 1,
+        color: COLORS[Math.floor(Math.random() * 6)]
+      });
+    }
+    
+    clearScreen.style.display = 'flex';
+    finalScoreDisplay.textContent = `Score: ${gameState.score}`;
+  }
+}
+
+function handleItemClick(x, y) {
+  if (!gameState.items || gameState.items.length === 0) return;
+  
+  for (let item of gameState.items) {
+    if (item && 
+        x >= item.x && x <= item.x + item.width &&
+        y >= item.y && y <= item.y + item.height) {
+      
+      if (gameState.selectedItem && gameState.selectedItem.id === item.id) {
+        gameState.selectedItem.selected = false;
+        gameState.selectedItem = null;
+      } else {
+        if (gameState.selectedItem) {
+          gameState.selectedItem.selected = false;
+        }
+        gameState.selectedItem = item;
+        item.selected = true;
+      }
+      return;
+    }
+  }
+}
+
+function handleZoneClick(x, y) {
+  if (!gameState.selectedItem || !gameState.zones || gameState.zones.length === 0) return;
+  
+  for (let zone of gameState.zones) {
+    if (zone &&
+        x >= zone.x && x <= zone.x + zone.width &&
+        y >= zone.y && y <= zone.y + zone.height) {
+      
+      if (gameState.selectedItem.color === zone.color) {
+        gameState.score += 10;
+        gameState.itemsSorted++;
+        
+        const idx = gameState.items.indexOf(gameState.selectedItem);
+        if (idx !== -1) {
+          gameState.items.splice(idx, 1);
+        }
+        gameState.selectedItem = null;
+        
+        scoreDisplay.textContent = `Score: ${gameState.score}`;
+        itemsDisplay.textContent = `Items: ${gameState.itemsSorted}/${gameState.totalItems}`;
+        
+        checkWin();
+      } else {
+        gameState.score = Math.max(0, gameState.score - 5);
+        zone.flashing = true;
+        zone.flashTime = 300;
+        
+        scoreDisplay.textContent = `Score: ${gameState.score}`;
+      }
+      return;
+    }
+  }
+}
+
+function startGame() {
+  gameState.phase = 'play';
+  gameState.score = 0;
+  gameState.itemsSorted = 0;
+  gameState.selectedItem = null;
+  gameState.confetti = [];
+  
+  generateItems();
+  createZones();
+  
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  
+  scoreDisplay.textContent = 'Score: 0';
+  itemsDisplay.textContent = 'Items: 0/10';
+}
+
+function restartGame() {
+  clearScreen.style.display = 'none';
+  startScreen.style.display = 'block';
+  gameState.phase = 'start';
+  gameState.selectedItem = null;
+  gameState.items = [];
+  gameState.zones = [];
+}
+
+startBtn.addEventListener('click', startGame);
+
+clearScreen.addEventListener('click', () => {
+  if (gameState.phase === 'clear') {
+    restartGame();
+  }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (gameState.phase !== 'play') return;
+  gameState.mouseDown = true;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  gameState.mousePos = { x, y };
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  gameState.mousePos = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  };
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  gameState.mouseDown = false;
+});
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  if (y >= ZONE_Y_START) {
+    handleZoneClick(x, y);
+  } else {
+    handleItemClick(x, y);
+  }
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>

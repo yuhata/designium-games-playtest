@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>EMPIRE</title>
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; background: #1a1a1a; font-family: Arial, sans-serif; }
+    canvas { display: block; background: #f0f0f0; }
+    #startScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    #startScreen > div { text-align: center; color: white; }
+    #startScreen h1 { font-size: 56px; margin: 0 0 20px 0; color: #FFD700; }
+    #startScreen p { font-size: 16px; margin: 10px 0; color: #ccc; }
+    #startBtn { padding: 15px 50px; font-size: 20px; font-weight: bold; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 5px; margin-top: 20px; transition: background 0.3s; }
+    #startBtn:hover { background: #45a049; }
+    #clearScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; z-index: 1001; cursor: pointer; }
+    #clearScreen > div { text-align: center; color: white; }
+    #clearScreen h1 { font-size: 56px; margin: 0 0 20px 0; color: #FFD700; }
+    #clearScreen p { font-size: 20px; margin: 10px 0; }
+    #clearScreen .subtitle { font-size: 14px; color: #aaa; margin-top: 30px; }
+  </style>
+</head>
+<body>
+<!--GAME_SPEC
+{
+  "win_condition": "Conquer 10 or more territories",
+  "fail_condition": "None (dominate mode - only win condition)",
+  "input_types": ["mousedown", "click", "mousemove"],
+  "state_vars": ["territories", "gold", "income", "turn", "phase", "ownedTerritories"],
+  "core_loop": "Click adjacent unowned territory to expand (cost gold) → END TURN to gain income and proceed → Check if territories >= 10 for victory",
+  "clear_trigger": "gameState.territories >= 10 && gameState.phase === 'play'",
+  "gameover_trigger": "None (dominate mode has no failure condition)"
+}
+-->
+<canvas id="gameCanvas" width="800" height="800"></canvas>
+<div id="startScreen">
+  <div>
+    <h1>⚔️ EMPIRE ⚔️</h1>
+    <p>Expand your territory and dominate the world!</p>
+    <p style="font-size: 14px; color: #aaa; margin-top: 20px;">Click adjacent territories to conquer them<br>Gather 10 territories to win</p>
+    <button id="startBtn">START GAME</button>
+  </div>
+</div>
+<div id="clearScreen">
+  <div>
+    <h1>🏆 DOMINATION COMPLETE! 🏆</h1>
+    <p>You conquered <span id="finalTerritories">10</span> territories!</p>
+    <p>In <span id="finalTurns">0</span> turns</p>
+    <p class="subtitle">Click to play again</p>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const clearScreen = document.getElementById('clearScreen');
+const startBtn = document.getElementById('startBtn');
+
+const GRID_COLS = 4;
+const GRID_ROWS = 4;
+const TERRITORY_SIZE = 130;
+const TERRITORY_MARGIN = 8;
+const GRID_START_X = 15;
+const GRID_START_Y = 15;
+const UI_X = 630;
+const PLAYER_COLOR = '#4CAF50';
+const HOVER_COLOR = '#FFD700';
+const UNOWNED_COLOR = '#ccc';
+
+const gameState = {
+  territories: 0,
+  gold: 50,
+  income: 10,
+  turn: 0,
+  phase: 'start',
+  ownedTerritories: new Set(),
+  hoverTerritoryId: -1
+};
+
+let territories = [];
+let animationStartTime = 0;
+let clearAnimationComplete = false;
+
+function initTerritories() {
+  territories = [];
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      const id = row * GRID_COLS + col;
+      const x = GRID_START_X + col * (TERRITORY_SIZE + TERRITORY_MARGIN);
+      const y = GRID_START_Y + row * (TERRITORY_SIZE + TERRITORY_MARGIN);
+      
+      const adjacentIds = getAdjacentIds(row, col);
+      
+      territories.push({
+        id: id,
+        x: x,
+        y: y,
+        row: row,
+        col: col,
+        adjacentIds: adjacentIds
+      });
+    }
+  }
+}
+
+function getAdjacentIds(row, col) {
+  const adjacent = [];
+  const directions = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+  
+  for (const [dr, dc] of directions) {
+    const nr = row + dr;
+    const nc = col + dc;
+    if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS) {
+      adjacent.push(nr * GRID_COLS + nc);
+    }
+  }
+  return adjacent;
+}
+
+function pointInRect(x, y, tx, ty, size) {
+  return x >= tx && x <= tx + size && y >= ty && y <= ty + size;
+}
+
+function getCost() {
+  return 5 + Math.floor(gameState.territories / 2);
+}
+
+function canExpand(territoryId) {
+  if (gameState.ownedTerritories.has(territoryId)) return false;
+  
+  const cost = getCost();
+  if (gameState.gold < cost) return false;
+  
+  const territory = territories[territoryId];
+  for (const adjId of territory.adjacentIds) {
+    if (gameState.ownedTerritories.has(adjId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function expandTerritory(territoryId) {
+  const cost = getCost();
+  gameState.gold -= cost;
+  gameState.territories += 1;
+  gameState.ownedTerritories.add(territoryId);
+  checkWin();
+}
+
+function checkWin() {
+  if (gameState.territories >= 10 && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    animationStartTime = Date.now();
+    clearAnimationComplete = false;
+  }
+}
+
+function endTurn() {
+  if (gameState.phase !== 'play') return;
+  gameState.gold += gameState.income;
+  gameState.turn += 1;
+  checkWin();
+}
+
+function startGame() {
+  gameState.territories = 1;
+  gameState.gold = 50;
+  gameState.income = 10;
+  gameState.turn = 0;
+  gameState.phase = 'play';
+  gameState.ownedTerritories.clear();
+  gameState.ownedTerritories.add(0);
+  clearAnimationComplete = false;
+  startScreen.style.display = 'none';
+}
+
+function restartGame() {
+  gameState.territories = 0;
+  gameState.gold = 50;
+  gameState.income = 10;
+  gameState.turn = 0;
+  gameState.phase = 'start';
+  gameState.ownedTerritories.clear();
+  gameState.hoverTerritoryId = -1;
+  clearScreen.style.display = 'none';
+  startScreen.style.display = 'flex';
+}
+
+function handleMouseDown(e) {
+  if (gameState.phase !== 'play') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  // Check END TURN button
+  if (x >= 650 && x <= 800 && y >= 700 && y <= 750) {
+    endTurn();
+    return;
+  }
+  
+  // Check territory click
+  for (const t of territories) {
+    if (pointInRect(x, y, t.x, t.y, TERRITORY_SIZE)) {
+      if (canExpand(t.id)) {
+        expandTerritory(t.id);
+      }
+      return;
+    }
+  }
+}
+
+function handleMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  gameState.hoverTerritoryId = -1;
+  for (const t of territories) {
+    if (pointInRect(x, y, t.x, t.y, TERRITORY_SIZE)) {
+      gameState.hoverTerritoryId = t.id;
+      break;
+    }
+  }
+}
+
+function drawTerritory(t, animProgress) {
+  const isOwned = gameState.ownedTerritories.has(t.id);
+  const isHover = gameState.hoverTerritoryId === t.id;
+  const canExp = canExpand(t.id);
+  
+  // Base color
+  let fillColor = isOwned ? PLAYER_COLOR : UNOWNED_COLOR;
+  if (isHover && canExp) {
+    fillColor = HOVER_COLOR;
+  }
+  
+  // Scale animation for clear phase
+  let scale = 1;
+  if (gameState.phase === 'clear' && isOwned) {
+    scale = 1 + animProgress * 0.25;
+  }
+  
+  ctx.save();
+  const centerX = t.x + TERRITORY_SIZE / 2;
+  const centerY = t.y + TERRITORY_SIZE / 2;
+  ctx.translate(centerX, centerY);
+  ctx.scale(scale, scale);
+  
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(-TERRITORY_SIZE / 2, -TERRITORY_SIZE / 2, TERRITORY_SIZE, TERRITORY_SIZE);
+  
+  ctx.strokeStyle = isHover ? '#000' : '#333';
+  ctx.lineWidth = isHover ? 2 : 1;
+  ctx.strokeRect(-TERRITORY_SIZE / 2, -TERRITORY_SIZE / 2, TERRITORY_SIZE, TERRITORY_SIZE);
+  
+  // Territory number
+  if (!isOwned) {
+    ctx.fillStyle = '#666';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('T' + (t.id + 1), 0, 0);
+  }
+  
+  ctx.restore();
+}
+
+function draw() {
+  // Clear canvas
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw territories
+  for (const t of territories) {
+    drawTerritory(t, gameState.phase === 'clear' ? Math.min(1, (Date.now() - animationStartTime) / 1500) : 0);
+  }
+  
+  // Draw UI panel
+  ctx.fillStyle = '#e8e8e8';
+  ctx.fillRect(UI_X, 0, canvas.width - UI_X, canvas.height);
+  
+  // UI Title
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('STATUS', UI_X + 12, 28);
+  
+  // UI Content
+  ctx.font = '12px Arial';
+  ctx.fillText('Territories:', UI_X + 12, 50);
+  ctx.font = 'bold 28px Arial';
+  ctx.fillText(gameState.territories + '', UI_X + 12, 82);
+  
+  ctx.font = '12px Arial';
+  ctx.fillText('Gold: ' + gameState.gold, UI_X + 12, 120);
+  ctx.fillText('Income: +' + gameState.income + '/turn', UI_X + 12, 138);
+  ctx.fillText('Turn: ' + gameState.turn, UI_X + 12, 156);
+  
+  const cost = getCost();
+  ctx.fillStyle = gameState.gold >= cost ? '#000' : '#999';
+  ctx.font = '12px Arial';
+  ctx.fillText('Next cost: ' + cost + 'g', UI_X + 12, 174);
+  ctx.fillStyle = '#000';
+  
+  // END TURN button
+  ctx.fillStyle = '#4CAF50';
+  ctx.fillRect(650, 700, 150, 50);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('END TURN', 725, 730);
+  
+  // Instructions
+  ctx.fillStyle = '#666';
+  ctx.font = '11px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('Click adjacent territory to conquer', 12, 780);
+  
+  // Clear animation overlay
+  if (gameState.phase === 'clear') {
+    const progr = Math.min(1, (Date.now() - animationStartTime) / 1500);
+    
+    if (progr < 0.8) {
+      ctx.fillStyle = 'rgba(76, 175, 80, ' + (progr * 0.4) + ')';
+      ctx.fillRect(0, 0, UI_X, canvas.height);
+      
+      ctx.fillStyle = 'rgba(255, 215, 0, ' + Math.max(0, progr * 1.2) + ')';
+      ctx.font = 'bold 36px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('DOMINATION', 300, 340);
+      ctx.fillText('COMPLETE!', 300, 390);
+      ctx.font = 'bold 18px Arial';
+      ctx.fillText('Turn ' + gameState.turn, 300, 440);
+    }
+    
+    if (progr >= 0.8 && !clearAnimationComplete) {
+      clearAnimationComplete = true;
+      document.getElementById('finalTerritories').textContent = gameState.territories;
+      document.getElementById('finalTurns').textContent = gameState.turn;
+      clearScreen.style.display = 'flex';
+    }
+  }
+}
+
+function gameLoop() {
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// Event listeners
+startBtn.addEventListener('click', startGame);
+clearScreen.addEventListener('click', restartGame);
+canvas.addEventListener('mousedown', handleMouseDown);
+canvas.addEventListener('mousemove', handleMouseMove);
+
+initTerritories();
+gameLoop();
+</script>
+</body>
+</html>

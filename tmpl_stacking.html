@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STACK MASTER</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #111;
+    }
+    #gameContainer {
+      position: relative;
+      width: 400px;
+      height: 600px;
+      border: 3px solid #333;
+      background: #000;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #000;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.98);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #startScreen h1 {
+      color: #0f0;
+      margin-bottom: 20px;
+      font-size: 40px;
+      font-weight: bold;
+      text-shadow: 0 0 10px #0f0;
+    }
+    #startBtn {
+      padding: 12px 36px;
+      font-size: 20px;
+      background: #f00;
+      color: #fff;
+      border: 2px solid #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 30px;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+    #startBtn:hover { 
+      background: #c00;
+      box-shadow: 0 0 10px rgba(255,0,0,0.8);
+    }
+    #startScreen p {
+      color: #aaa;
+      text-align: center;
+      max-width: 320px;
+      line-height: 1.7;
+      font-size: 13px;
+    }
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.98);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #clearScreen.victory {
+      background: radial-gradient(circle, rgba(0,255,150,0.3) 0%, rgba(0,0,0,0.95) 100%);
+    }
+    #clearScreen.gameover {
+      background: radial-gradient(circle, rgba(255,0,0,0.3) 0%, rgba(0,0,0,0.95) 100%);
+    }
+    #clearScreen h2 {
+      color: #fff;
+      font-size: 44px;
+      margin-bottom: 15px;
+      font-weight: bold;
+      text-shadow: 0 0 10px currentColor;
+    }
+    #clearScreen.victory h2 { color: #0f0; }
+    #clearScreen.gameover h2 { color: #f00; }
+    #clearScreen p {
+      color: #fff;
+      font-size: 18px;
+      margin: 8px 0;
+    }
+    #clearScreen .hint {
+      margin-top: 25px;
+      color: #666;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "Stack height reaches 15 blocks",
+  "fail_condition": "Player misses 3 consecutive block placements while height stays 0",
+  "input_types": ["click"],
+  "state_vars": ["height", "score", "combo", "phase"],
+  "core_loop": "Block swings horizontally; player clicks to drop; lands on stack; alignment determines perfect/trim/miss; height increases on landing; check win/fail each drop",
+  "clear_trigger": "height >= 15",
+  "gameover_trigger": "missCount >= 3 && height == 0"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <div id="startScreen">
+    <h1>STACK MASTER</h1>
+    <button id="startBtn">START</button>
+    <p>🎯 Click to drop the swinging block<br/>Build a perfect stack to height 15<br/>Perfect alignment = +10 pts &amp; combo<br/>Miss 3 times = Game Over</p>
+  </div>
+  <div id="clearScreen">
+    <h2 id="resultTitle">VICTORY!</h2>
+    <p>Score: <span id="finalScore">0</span></p>
+    <p>Max Combo: <span id="finalCombo">0</span></p>
+    <p>Height: <span id="finalHeight">0</span> / 15</p>
+    <p class="hint">Click anywhere to play again</p>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+
+let gameState = {
+  phase: 'start',
+  height: 0,
+  score: 0,
+  combo: 0,
+  maxCombo: 0,
+  missCount: 0,
+  gameTime: 0,
+  lastUpdateTime: 0,
+};
+
+let blocks = [];
+let particles = [];
+let floatingTexts = [];
+let currentBlock = null;
+let gameLoopId = null;
+
+const BLOCK_WIDTH = 40;
+const BLOCK_HEIGHT = 30;
+const BLOCK_SPEED = 5;
+const CANVAS_WIDTH = canvas.width;
+const CANVAS_HEIGHT = canvas.height;
+const CENTER_X = CANVAS_WIDTH / 2;
+const STACK_BOTTOM = CANVAS_HEIGHT - 10;
+const PERFECT_THRESHOLD = 3;
+const TRIM_THRESHOLD = 10;
+const WIN_HEIGHT = 15;
+const MISS_LIMIT = 3;
+
+let flashEffect = 0;
+let perfectGlow = 0;
+let bgGlowAlpha = 0;
+
+function getAudioContext() {
+  if (!window.audioCtx) {
+    window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return window.audioCtx;
+}
+
+function playTone(freq, duration, volume = 0.1) {
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+    
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch (e) {}
+}
+
+function createBlock() {
+  const targetX = blocks.length > 0 ? blocks[blocks.length - 1].x : CENTER_X;
+  return {
+    x: CENTER_X,
+    targetX: targetX,
+    y: STACK_BOTTOM - (blocks.length * BLOCK_HEIGHT) - BLOCK_HEIGHT - 10,
+    vx: 0,
+    vy: 0,
+    width: BLOCK_WIDTH,
+    height: BLOCK_HEIGHT,
+    falling: false,
+    landed: false,
+  };
+}
+
+function updateGameLogic(dt) {
+  if (gameState.phase !== 'play' || !currentBlock) return;
+  
+  gameState.gameTime += dt * 1000;
+  
+  if (!currentBlock.falling) {
+    const swingAmount = 40 * Math.sin(gameState.gameTime * 0.003);
+    currentBlock.x = CENTER_X + swingAmount;
+  } else {
+    currentBlock.vy += 0.4;
+    currentBlock.y += currentBlock.vy;
+    
+    const stackTopY = STACK_BOTTOM - (blocks.length * BLOCK_HEIGHT);
+    if (currentBlock.y + currentBlock.height >= stackTopY) {
+      currentBlock.y = stackTopY - currentBlock.height;
+      currentBlock.landed = true;
+      currentBlock.falling = false;
+      
+      processBlockLanding();
+    }
+  }
+}
+
+function processBlockLanding() {
+  if (!currentBlock || blocks.length === 0) {
+    blocks.push({...currentBlock, falling: false, vy: 0});
+    gameState.height++;
+    gameState.score += 10;
+    gameState.combo++;
+    gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
+    triggerPerfectEffect();
+    playTone(800, 0.12);
+  } else {
+    const belowBlock = blocks[blocks.length - 1];
+    const alignment = Math.abs(currentBlock.x - belowBlock.x);
+    
+    if (alignment < PERFECT_THRESHOLD) {
+      gameState.score += 10;
+      gameState.combo++;
+      gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
+      triggerPerfectEffect();
+      playTone(800, 0.12);
+      blocks.push({...currentBlock, falling: false, vy: 0, width: BLOCK_WIDTH});
+      gameState.height++;
+    } else if (alignment < TRIM_THRESHOLD) {
+      const trimWidth = Math.max(10, BLOCK_WIDTH - alignment);
+      gameState.score += 5;
+      gameState.combo = 0;
+      playTone(600, 0.1);
+      blocks.push({...currentBlock, falling: false, vy: 0, width: trimWidth, trimmed: true});
+      gameState.height++;
+      createTrimParticles(currentBlock, alignment);
+    } else {
+      gameState.combo = 0;
+      gameState.missCount++;
+      playTone(300, 0.15);
+      createMissParticles(currentBlock);
+      if (gameState.height === 0 && gameState.missCount >= MISS_LIMIT) {
+        gameState.phase = 'over';
+      }
+    }
+  }
+  
+  if (gameState.phase === 'play' && gameState.height >= WIN_HEIGHT) {
+    gameState.phase = 'clear';
+    triggerVictoryEffect();
+  }
+  
+  if (gameState.phase === 'play') {
+    currentBlock = createBlock();
+  }
+}
+
+function triggerPerfectEffect() {
+  flashEffect = 1.0;
+  perfectGlow = 1.0;
+  floatingTexts.push({
+    text: '+10 PERFECT!',
+    x: currentBlock.x,
+    y: currentBlock.y - 50,
+    life: 1.0,
+    color: '#ffff00',
+    size: 18,
+  });
+}
+
+function triggerVictoryEffect() {
+  bgGlowAlpha = 1.0;
+  floatingTexts.push({
+    text: '🌟 PERFECT STACK! 🌟',
+    x: CENTER_X,
+    y: CANVAS_HEIGHT / 2 - 60,
+    life: 2.0,
+    color: '#00ff00',
+    size: 24,
+  });
+}
+
+function createTrimParticles(block, amount) {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x: block.x + (Math.random() - 0.5) * block.width,
+      y: block.y + block.height / 2,
+      vx: (Math.random() - 0.5) * 6,
+      vy: Math.random() * -4 - 1,
+      life: 1.0,
+      size: 3 + Math.random() * 3,
+      color: `hsl(${Math.random() * 30 + 40}, 100%, 50%)`,
+    });
+  }
+}
+
+function createMissParticles(block) {
+  for (let i = 0; i < 12; i++) {
+    particles.push({
+      x: block.x,
+      y: block.y,
+      vx: (Math.random() - 0.5) * 8,
+      vy: Math.random() * -5 - 2,
+      life: 1.0,
+      size: 4 + Math.random() * 4,
+      color: '#ff4444',
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.vx *= 0.98;
+    p.vy += 0.2;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= dt / 0.7;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function updateFloatingTexts(dt) {
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const t = floatingTexts[i];
+    t.y -= 2;
+    t.life -= dt / 1.2;
+    if (t.life <= 0) floatingTexts.splice(i, 1);
+  }
+}
+
+function drawGame() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  
+  if (bgGlowAlpha > 0) {
+    ctx.fillStyle = `rgba(0, 255, 100, ${bgGlowAlpha * 0.15})`;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    bgGlowAlpha -= 0.02;
+  }
+  
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT - 60);
+  
+  ctx.fillStyle = '#00ff00';
+  ctx.font = 'bold 14px monospace';
+  ctx.fillText(`Score: ${gameState.score}`, 12, 22);
+  ctx.fillText(`Height: ${gameState.height}/${WIN_HEIGHT}`, 12, 42);
+  ctx.fillText(`Combo: ${gameState.combo}`, 12, 62);
+  ctx.fillText(`Misses: ${gameState.missCount}/${MISS_LIMIT}`, 12, 82);
+  
+  ctx.font = '13px Arial';
+  ctx.fillStyle = '#ffff00';
+  ctx.fillText('Click to drop the block', CANVAS_WIDTH / 2 - 65, CANVAS_HEIGHT - 15);
+  
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const stackY = STACK_BOTTOM - (i + 1) * BLOCK_HEIGHT;
+    
+    if (block.trimmed) {
+      ctx.fillStyle = '#ffaa00';
+      ctx.strokeStyle = '#ff8800';
+    } else {
+      ctx.fillStyle = '#00dd00';
+      ctx.strokeStyle = '#00ff00';
+    }
+    
+    ctx.fillRect(block.x - block.width / 2, stackY, block.width, block.height);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(block.x - block.width / 2, stackY, block.width, block.height);
+  }
+  
+  if (currentBlock && gameState.phase === 'play') {
+    if (flashEffect > 0) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashEffect * 0.4})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      flashEffect -= 0.08;
+    }
+    
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(currentBlock.x - currentBlock.width / 2, currentBlock.y, currentBlock.width, currentBlock.height);
+    ctx.strokeStyle = '#ffaaaa';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(currentBlock.x - currentBlock.width / 2, currentBlock.y, currentBlock.width, currentBlock.height);
+    
+    if (currentBlock.falling) {
+      ctx.fillStyle = 'rgba(255, 107, 107, 0.3)';
+      ctx.fillRect(currentBlock.x - currentBlock.width / 2, currentBlock.y - 80, currentBlock.width, 80);
+    }
+  }
+  
+  for (const p of particles) {
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+  
+  ctx.font = 'bold 16px Arial';
+  for (const t of floatingTexts) {
+    ctx.fillStyle = t.color;
+    ctx.globalAlpha = Math.max(0, t.life);
+    ctx.font = `bold ${t.size}px Arial`;
+    const w = ctx.measureText(t.text).width;
+    ctx.fillText(t.text, t.x - w / 2, t.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function gameLoop(now) {
+  const dt = Math.min((now - (gameState.lastUpdateTime || now)) / 1000, 0.05);
+  gameState.lastUpdateTime = now;
+  
+  if (gameState.phase === 'play') {
+    updateGameLogic(dt);
+    updateParticles(dt);
+    updateFloatingTexts(dt);
+  }
+  
+  drawGame();
+  
+  if (gameState.phase === 'play' || gameState.phase === 'start') {
+    gameLoopId = requestAnimationFrame(gameLoop);
+  } else {
+    showClearScreen();
+  }
+}
+
+function showClearScreen() {
+  if (gameState.phase === 'clear') {
+    clearScreen.className = 'victory';
+    document.getElementById('resultTitle').textContent = '🏆 VICTORY! 🏆';
+  } else {
+    clearScreen.className = 'gameover';
+    document.getElementById('resultTitle').textContent = '💥 GAME OVER 💥';
+  }
+  document.getElementById('finalScore').textContent = gameState.score;
+  document.getElementById('finalCombo').textContent = gameState.maxCombo;
+  document.getElementById('finalHeight').textContent = gameState.height;
+  clearScreen.style.display = 'flex';
+}
+
+function startGame() {
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  
+  gameState.phase = 'play';
+  gameState.height = 0;
+  gameState.score = 0;
+  gameState.combo = 0;
+  gameState.maxCombo = 0;
+  gameState.missCount = 0;
+  gameState.gameTime = 0;
+  gameState.lastUpdateTime = 0;
+  
+  blocks = [];
+  particles = [];
+  floatingTexts = [];
+  currentBlock = createBlock();
+  
+  startScreen.style.display = 'none';
+  clearScreen.style.display = 'none';
+  
+  flashEffect = 0;
+  perfectGlow = 0;
+  bgGlowAlpha = 0;
+  
+  gameLoopId = requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', startGame);
+
+canvas.addEventListener('click', (e) => {
+  if (gameState.phase === 'play' && currentBlock && !currentBlock.falling && !currentBlock.landed) {
+    currentBlock.falling = true;
+    currentBlock.vy = 0;
+  }
+});
+
+clearScreen.addEventListener('click', (e) => {
+  if (gameState.phase === 'clear' || gameState.phase === 'over') {
+    startGame();
+  }
+});
+
+document.addEventListener('mousemove', () => {});
+document.addEventListener('mouseup', () => {});
+document.addEventListener('mousedown', (e) => {
+  if (gameState.phase === 'play' && currentBlock && !currentBlock.falling && !currentBlock.landed) {
+    e.preventDefault();
+  }
+});
+
+drawGame();
+</script>
+
+</body>
+</html>

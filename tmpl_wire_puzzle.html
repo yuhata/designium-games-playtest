@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WIRE CONNECT</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      background: #0a0a0a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #1a1a1a;
+      border: 2px solid #333;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+    }
+    
+    canvas {
+      display: block;
+      background: #1a1a1a;
+      cursor: pointer;
+    }
+    
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(26, 26, 26, 0.98);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    
+    #startScreen h1 {
+      color: #FFD700;
+      font-size: 52px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+      font-weight: bold;
+    }
+    
+    #startScreen p {
+      color: #bbb;
+      font-size: 16px;
+      margin-bottom: 40px;
+      text-align: center;
+      line-height: 1.8;
+      max-width: 500px;
+    }
+    
+    #startBtn {
+      padding: 16px 60px;
+      font-size: 20px;
+      font-weight: bold;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 0 20px rgba(52, 152, 219, 0.3);
+    }
+    
+    #startBtn:hover {
+      background: #2980b9;
+      box-shadow: 0 0 30px rgba(52, 152, 219, 0.7);
+      transform: scale(1.05);
+    }
+    
+    #clearScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(26, 26, 26, 0.98);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    
+    #clearScreen h1 {
+      color: #FFD700;
+      font-size: 80px;
+      margin-bottom: 30px;
+      text-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
+      font-weight: bold;
+      animation: perfectGlow 1.2s ease-in-out;
+    }
+    
+    @keyframes perfectGlow {
+      0% { opacity: 0; transform: scale(0.3); text-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
+      50% { text-shadow: 0 0 80px rgba(255, 215, 0, 1); }
+      100% { opacity: 1; transform: scale(1); text-shadow: 0 0 50px rgba(255, 215, 0, 0.8); }
+    }
+    
+    #clearScreen .score {
+      color: #3498db;
+      font-size: 32px;
+      margin-bottom: 40px;
+      font-weight: bold;
+    }
+    
+    #clearScreen .retry-text {
+      color: #888;
+      font-size: 14px;
+      margin-top: 30px;
+      animation: retryBlink 1.2s infinite;
+    }
+    
+    @keyframes retryBlink {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!--GAME_SPEC
+{
+  "win_condition": "connectedPairs >= totalPairs (6)",
+  "fail_condition": "none",
+  "input_types": ["click"],
+  "state_vars": ["connectedPairs", "totalPairs", "score", "phase"],
+  "core_loop": "click nodeA → click nodeB → detect crossing → if no crossing: draw wire, score++, check win",
+  "clear_trigger": "connectedPairs >= 6",
+  "gameover_trigger": "none"
+}
+-->
+
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  
+  <div id="startScreen">
+    <h1>WIRE CONNECT</h1>
+    <p>Connect all 6 nodes with wires without crossing.<br><br>Click one node, then click another to create a connection.<br>Each successful connection earns 100 points.</p>
+    <button id="startBtn">START</button>
+  </div>
+  
+  <div id="clearScreen">
+    <h1>PERFECT!</h1>
+    <div class="score">Score: <span id="finalScore">0</span></div>
+    <div class="retry-text">Click to play again</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const startBtn = document.getElementById('startBtn');
+const clearScreen = document.getElementById('clearScreen');
+const finalScoreSpan = document.getElementById('finalScore');
+
+// Game state
+const gameState = {
+  phase: 'start',
+  score: 0,
+  connectedPairs: 0,
+  totalPairs: 6,
+  nodes: [],
+  connections: [],
+  firstClickNode: null,
+  animationTime: 0,
+  clearStartTime: null
+};
+
+function initializeNodes() {
+  gameState.nodes = [];
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const radius = 140;
+  const nodeRadius = 15;
+  
+  for (let i = 0; i < gameState.totalPairs; i++) {
+    const angle = (i / gameState.totalPairs) * Math.PI * 2 - Math.PI / 2;
+    const x = centerX + Math.cos(angle) * radius;
+    const y = centerY + Math.sin(angle) * radius;
+    gameState.nodes.push({
+      id: i,
+      x: x,
+      y: y,
+      radius: nodeRadius,
+      connected: false
+    });
+  }
+}
+
+function ccw(A, B, C) {
+  return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+}
+
+function segmentsIntersect(A, B, C, D) {
+  if (A.id === C.id || A.id === D.id || B.id === C.id || B.id === D.id) return false;
+  return ccw(A, C, D) !== ccw(B, C, D) && ccw(A, B, C) !== ccw(A, B, D);
+}
+
+function checkLinesCrossing(newLine) {
+  for (let conn of gameState.connections) {
+    if (segmentsIntersect(newLine.from, newLine.to, conn.from, conn.to)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  return { x, y };
+}
+
+function getNodeAtPosition(x, y) {
+  for (let node of gameState.nodes) {
+    const dist = Math.hypot(x - node.x, y - node.y);
+    if (dist < node.radius + 8) {
+      return node;
+    }
+  }
+  return null;
+}
+
+function checkWin() {
+  if (gameState.connectedPairs >= gameState.totalPairs && gameState.phase === 'play') {
+    gameState.phase = 'clear';
+    gameState.clearStartTime = gameState.animationTime;
+  }
+}
+
+function drawGame() {
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.fillStyle = '#666';
+  ctx.font = 'bold 14px Arial';
+  ctx.fillText('Click a node to start', 30, 35);
+  
+  ctx.fillStyle = '#3498db';
+  ctx.fillText(`Score: ${gameState.score}`, 30, 60);
+  ctx.fillText(`Connections: ${gameState.connectedPairs}/6`, 30, 85);
+  
+  if (gameState.phase === 'clear') {
+    const elapsed = gameState.animationTime - gameState.clearStartTime;
+    const glowIntensity = Math.sin(elapsed * 0.08) * 0.4 + 0.5;
+    ctx.shadowColor = `rgba(255, 215, 0, ${glowIntensity * 0.6})`;
+    ctx.shadowBlur = 25 + glowIntensity * 15;
+  } else {
+    ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+    ctx.shadowBlur = 0;
+  }
+  
+  ctx.strokeStyle = '#3498db';
+  ctx.lineWidth = 3;
+  for (let conn of gameState.connections) {
+    ctx.beginPath();
+    ctx.moveTo(conn.from.x, conn.from.y);
+    ctx.lineTo(conn.to.x, conn.to.y);
+    ctx.stroke();
+  }
+  
+  ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+  ctx.shadowBlur = 0;
+  
+  for (let node of gameState.nodes) {
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = node.connected ? '#2ecc71' : '#3498db';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  
+  if (gameState.firstClickNode) {
+    const node = gameState.firstClickNode;
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, node.radius + 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function gameLoop() {
+  gameState.animationTime++;
+  drawGame();
+  requestAnimationFrame(gameLoop);
+}
+
+function handleCanvasClick(e) {
+  if (gameState.phase !== 'play') return;
+  
+  const pos = getMousePos(e);
+  const clickedNode = getNodeAtPosition(pos.x, pos.y);
+  
+  if (!clickedNode) return;
+  
+  if (!gameState.firstClickNode) {
+    gameState.firstClickNode = clickedNode;
+  } else {
+    if (clickedNode.id === gameState.firstClickNode.id) {
+      gameState.firstClickNode = null;
+      return;
+    }
+    
+    const newLine = {
+      from: gameState.firstClickNode,
+      to: clickedNode
+    };
+    
+    if (!checkLinesCrossing(newLine)) {
+      gameState.connections.push(newLine);
+      gameState.connectedPairs++;
+      gameState.score += 100;
+      gameState.firstClickNode.connected = true;
+      clickedNode.connected = true;
+      checkWin();
+    }
+    
+    gameState.firstClickNode = null;
+  }
+}
+
+startBtn.addEventListener('click', function() {
+  startScreen.style.display = 'none';
+  gameState.phase = 'play';
+  gameState.connectedPairs = 0;
+  gameState.score = 0;
+  gameState.connections = [];
+  gameState.firstClickNode = null;
+  gameState.animationTime = 0;
+  gameState.clearStartTime = null;
+  
+  for (let node of gameState.nodes) {
+    node.connected = false;
+  }
+});
+
+clearScreen.addEventListener('click', function() {
+  clearScreen.style.display = 'none';
+  startScreen.style.display = 'flex';
+  gameState.phase = 'start';
+  gameState.connectedPairs = 0;
+  gameState.score = 0;
+  gameState.connections = [];
+  gameState.firstClickNode = null;
+  gameState.animationTime = 0;
+  gameState.clearStartTime = null;
+  
+  for (let node of gameState.nodes) {
+    node.connected = false;
+  }
+});
+
+canvas.addEventListener('click', handleCanvasClick);
+
+const displayObserver = setInterval(() => {
+  if (gameState.phase === 'clear' && clearScreen.style.display === 'none') {
+    finalScoreSpan.textContent = gameState.score;
+    clearScreen.style.display = 'flex';
+  }
+}, 100);
+
+initializeNodes();
+gameLoop();
+</script>
+
+</body>
+</html>

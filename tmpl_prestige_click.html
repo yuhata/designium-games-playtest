@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PRESTIGE CLICKER</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    #container { position: relative; }
+    canvas { display: block; background: #16213e; border: 3px solid #0f3460; }
+    #startScreen, #clearScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); display: flex; align-items: center; justify-content: center; flex-direction: column; z-index: 100; color: #fff; }
+    #startScreen h1, #clearScreen h1 { font-size: 48px; margin-bottom: 20px; color: #00ffff; }
+    #startScreen p, #clearScreen p { font-size: 18px; margin: 10px 0; text-align: center; color: #aaa; }
+    #startBtn { padding: 15px 40px; font-size: 24px; background: #00ffff; color: #000; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 20px; transition: all 0.3s; }
+    #startBtn:hover { background: #0080ff; transform: scale(1.1); }
+    #clearScreen { display: none; }
+    #finalScore { font-size: 28px; margin: 20px 0; color: #ffd700; }
+  </style>
+</head>
+<body>
+  <!--GAME_SPEC
+  {
+    "win_condition": "prestige >= 3",
+    "fail_condition": "none",
+    "input_types": ["click"],
+    "state_vars": ["clicks", "prestige", "multiplier", "score"],
+    "core_loop": "click button -> clicks++ -> score+=multiplier -> prestige available -> prestige -> multiplier*2 -> clicks=0 -> check win",
+    "clear_trigger": "prestige >= 3",
+    "gameover_trigger": "none"
+  }
+  -->
+
+  <div id="container">
+    <div id="startScreen">
+      <h1>PRESTIGE CLICKER</h1>
+      <p>Click the BIG BUTTON to accumulate points</p>
+      <p>Reach 100 clicks to unlock PRESTIGE</p>
+      <p>Prestige doubles your multiplier and resets clicks</p>
+      <p>Reach Prestige Level 3 to WIN!</p>
+      <button id="startBtn">START GAME</button>
+    </div>
+
+    <div id="clearScreen">
+      <h1>🎉 YOU WIN! 🎉</h1>
+      <div id="finalScore"></div>
+      <p>Click anywhere to play again</p>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const clearScreen = document.getElementById('clearScreen');
+    const startBtn = document.getElementById('startBtn');
+
+    const gameState = {
+      clicks: 0,
+      prestige: 0,
+      multiplier: 1,
+      score: 0,
+      phase: 'start',
+      particles: [],
+      sessionStartTime: 0
+    };
+
+    const prestigeColors = ['#00ffff', '#0080ff', '#8000ff', '#ffd700'];
+    const prestigeNames = ['ROOKIE', 'ADVANCED', 'MASTER', 'LEGEND'];
+
+    function drawGame() {
+      ctx.fillStyle = '#16213e';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState.phase === 'play') {
+        drawPlayScreen();
+        drawConfetti();
+      }
+    }
+
+    function drawPlayScreen() {
+      // Top info bar
+      ctx.fillStyle = '#0f3460';
+      ctx.fillRect(0, 0, canvas.width, 120);
+
+      // Title
+      ctx.fillStyle = '#00ffff';
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('PRESTIGE CLICKER', canvas.width / 2, 35);
+
+      // Evolution stage display
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('EVOLUTION STAGE:', 20, 65);
+      
+      const stageName = prestigeNames[gameState.prestige] || 'GODLIKE';
+      const stageColor = prestigeColors[Math.min(gameState.prestige, 3)];
+      ctx.fillStyle = stageColor;
+      ctx.fillText(stageName, 180, 65);
+
+      // Progress bar
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(180, 75, 200, 20);
+      const fillWidth = (gameState.prestige / 3) * 200;
+      ctx.fillStyle = stageColor;
+      ctx.fillRect(180, 75, fillWidth, 20);
+
+      // Stats - right side
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText('Score: ' + gameState.score, canvas.width - 20, 50);
+      ctx.fillText('Clicks: ' + gameState.clicks + '/100', canvas.width - 20, 70);
+      ctx.fillText('Multiplier: x' + gameState.multiplier, canvas.width - 20, 90);
+
+      // Game objective
+      ctx.fillStyle = '#aaddff';
+      ctx.font = '13px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Goal: Reach Evolution Stage 3 (Prestige Level 3)', canvas.width / 2, 110);
+
+      // Main button
+      const buttonRadius = gameState.prestige === 3 ? 150 : 100;
+      const buttonY = 300;
+      const buttonX = canvas.width / 2;
+      const buttonColor = prestigeColors[Math.min(gameState.prestige, 3)];
+      
+      // Button shadow/glow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.beginPath();
+      ctx.arc(buttonX + 5, buttonY + 5, buttonRadius + 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Button
+      const gradient = ctx.createRadialGradient(buttonX - 30, buttonY - 30, 10, buttonX, buttonY, buttonRadius);
+      gradient.addColorStop(0, buttonColor);
+      gradient.addColorStop(1, buttonColor.replace('#', '#').substring(0, 7));
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Button outer glow
+      ctx.strokeStyle = buttonColor;
+      ctx.globalAlpha = 0.4;
+      ctx.lineWidth = 15;
+      ctx.beginPath();
+      ctx.arc(buttonX, buttonY, buttonRadius + 12, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+
+      // Button text
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('CLICK!', buttonX, buttonY);
+
+      // Instruction
+      ctx.fillStyle = '#88ccff';
+      ctx.font = '13px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Click the button to gain points (each click +' + gameState.multiplier + ' score)', canvas.width / 2, 480);
+
+      // Prestige button
+      if (gameState.clicks >= 100 && gameState.prestige < 3) {
+        drawPrestigeButton();
+      } else if (gameState.prestige < 3) {
+        ctx.fillStyle = '#666';
+        ctx.font = '13px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Reach 100 clicks to unlock PRESTIGE (' + gameState.clicks + '/100)', canvas.width / 2, 550);
+      }
+    }
+
+    function drawPrestigeButton() {
+      const buttonX = canvas.width / 2;
+      const buttonY = canvas.height - 60;
+      const buttonWidth = 180;
+      const buttonHeight = 50;
+
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillRect(buttonX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight);
+
+      ctx.strokeStyle = '#ffaaaa';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(buttonX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('PRESTIGE', buttonX, buttonY - 8);
+
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#ffcccc';
+      ctx.fillText('x' + (gameState.multiplier * 2), buttonX, buttonY + 12);
+    }
+
+    function drawConfetti() {
+      if (gameState.prestige >= 3 && gameState.particles.length === 0) {
+        for (let i = 0; i < 40; i++) {
+          gameState.particles.push({
+            x: canvas.width / 2 + (Math.random() - 0.5) * 100,
+            y: 300,
+            vx: (Math.random() - 0.5) * 12,
+            vy: (Math.random() - 0.5) * 12 - 6,
+            life: 1.0,
+            color: prestigeColors[Math.floor(Math.random() * 4)],
+            size: Math.random() * 4 + 3
+          });
+        }
+      }
+
+      gameState.particles = gameState.particles.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.15;
+        p.life -= 0.015;
+
+        if (p.life > 0) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1.0;
+          return true;
+        }
+        return false;
+      });
+    }
+
+    function checkWin() {
+      if (gameState.prestige >= 3 && gameState.phase === 'play') {
+        gameState.phase = 'clear';
+        showClear();
+      }
+    }
+
+    function showClear() {
+      clearScreen.style.display = 'flex';
+      const finalScoreDiv = document.getElementById('finalScore');
+      finalScoreDiv.innerHTML = `
+        <p>Final Score: <span style="color: #ffd700; font-size: 36px;">${gameState.score}</span></p>
+        <p style="font-size: 20px; margin-top: 15px;">Multiplier Achieved: x${gameState.multiplier}</p>
+        <p style="font-size: 20px;">Evolution Level: ${gameState.prestige}</p>
+      `;
+    }
+
+    function resetGame() {
+      gameState.clicks = 0;
+      gameState.prestige = 0;
+      gameState.multiplier = 1;
+      gameState.score = 0;
+      gameState.phase = 'play';
+      gameState.particles = [];
+      gameState.sessionStartTime = Date.now();
+      clearScreen.style.display = 'none';
+      startScreen.style.display = 'none';
+    }
+
+    function handleCanvasClick(e) {
+      if (gameState.phase !== 'play') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Check big button click (distance formula)
+      const distance = Math.hypot(x - (canvas.width / 2), y - 300);
+      const clickRadius = gameState.prestige === 3 ? 150 : 100;
+      
+      if (distance < clickRadius) {
+        gameState.clicks++;
+        gameState.score += gameState.multiplier;
+        checkWin();
+        return;
+      }
+
+      // Check prestige button click
+      if (gameState.clicks >= 100 && gameState.prestige < 3) {
+        const buttonX = canvas.width / 2;
+        const buttonY = canvas.height - 60;
+        const buttonWidth = 180;
+        const buttonHeight = 50;
+
+        if (x >= buttonX - buttonWidth / 2 && x <= buttonX + buttonWidth / 2 &&
+            y >= buttonY - buttonHeight / 2 && y <= buttonY + buttonHeight / 2) {
+          gameState.multiplier *= 2;
+          gameState.clicks = 0;
+          gameState.prestige++;
+          checkWin();
+        }
+      }
+    }
+
+    function handleClearScreenClick() {
+      if (gameState.phase === 'clear') {
+        resetGame();
+      }
+    }
+
+    // Event listeners
+    startBtn.addEventListener('click', () => {
+      startScreen.style.display = 'none';
+      gameState.phase = 'play';
+      gameState.sessionStartTime = Date.now();
+    });
+
+    canvas.addEventListener('click', handleCanvasClick);
+    clearScreen.addEventListener('click', handleClearScreenClick);
+
+    // Prevent double-fire issues
+    let lastClickTime = 0;
+    canvas.addEventListener('mousedown', (e) => {
+      const now = Date.now();
+      if (now - lastClickTime < 50) return;
+      lastClickTime = now;
+    });
+
+    // Game loop
+    function gameLoop() {
+      drawGame();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
