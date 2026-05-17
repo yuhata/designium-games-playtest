@@ -1,357 +1,410 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>REFLEX ZONE</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      background-color: #0f0f23;
-      font-family: Arial, sans-serif;
-      color: white;
-    }
-    
-    .game-container {
-      position: relative;
-      width: 400px;
-      height: 500px;
-      background-color: #0f0f23;
-      border: 2px solid #6366f1;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    
-    .stats {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      right: 10px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 14px;
-      z-index: 100;
-    }
-    
-    .stat-item {
-      background: rgba(99, 102, 241, 0.2);
-      padding: 5px 10px;
-      border-radius: 4px;
-    }
-    
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      background-color: #0f0f23;
-    }
-    
-    .overlay-screen {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: none;
-      background-color: rgba(15, 15, 35, 0.95);
-      z-index: 200;
-      text-align: center;
-      padding: 60px 20px;
-    }
-    
-    .overlay-screen h1 {
-      font-size: 32px;
-      margin-bottom: 20px;
-      color: #6366f1;
-      margin-top: 80px;
-    }
-    
-    .overlay-screen p {
-      font-size: 16px;
-      margin-bottom: 10px;
-      color: #aaa;
-    }
-    
-    .overlay-screen .btn {
-      margin-top: 20px;
-      padding: 10px 30px;
-      font-size: 18px;
-      background-color: #6366f1;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-    
-    .overlay-screen .btn:hover {
-      background-color: #4f46e5;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REFLEX ZONE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #0a0a0a;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 400px;
+            height: 500px;
+            background-color: #0f0f23;
+            border: 2px solid #6366f1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f23 100%);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+        }
+        #startScreen h1 {
+            font-size: 48px;
+            color: #6366f1;
+            text-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+            letter-spacing: 2px;
+        }
+        #startScreen p {
+            color: #a0aec0;
+            font-size: 13px;
+            text-align: center;
+            max-width: 300px;
+            line-height: 1.6;
+        }
+        .btn {
+            padding: 12px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.6);
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        #gameOverScreen h2 {
+            font-size: 36px;
+            color: #ef4444;
+            text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+        #gameOverScore {
+            font-size: 24px;
+            color: #a0aec0;
+        }
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        #clearScreen h2 {
+            font-size: 36px;
+            color: #22c55e;
+            text-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+            animation: pulse 0.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        #clearScore {
+            font-size: 24px;
+            color: #a0aec0;
+        }
+    </style>
 </head>
 <body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="500"></canvas>
+        
+        <div id="startScreen" style="display: none;">
+            <h1>REFLEX ZONE</h1>
+            <p>クリックのタイミングを合わせろ！<br>リングが的円の大きさになった瞬間にクリック</p>
+            <button class="btn" id="startBtn">START</button>
+        </div>
+        
+        <div id="gameOverScreen">
+            <h2>GAME OVER</h2>
+            <div id="gameOverScore"></div>
+            <button class="btn" id="retryBtn">RETRY</button>
+        </div>
+        
+        <div id="clearScreen">
+            <h2>CLEAR!</h2>
+            <div id="clearScore"></div>
+            <button class="btn" id="clearRetryBtn">PLAY AGAIN</button>
+        </div>
+    </div>
 
-<div class="game-container">
-  <div class="stats">
-    <div class="stat-item">Score: <span id="scoreValue">0</span></div>
-    <div class="stat-item">Streak: <span id="streakValue">0</span></div>
-    <div class="stat-item">Misses: <span id="missesValue">0</span></div>
-  </div>
-  
-  <canvas id="gameCanvas" width="400" height="500"></canvas>
-  
-  <div id="startScreen" class="overlay-screen" style="display: block;">
-    <h1>REFLEX ZONE</h1>
-    <p>クリックのタイミングを合わせろ！</p>
-    <p>リングが中央の的に重なったときにクリック</p>
-    <button class="btn">START</button>
-  </div>
-  
-  <div id="gameOverScreen" class="overlay-screen">
-    <h1>GAME OVER</h1>
-    <p>You reached <span id="gameOverScore">0</span> points</p>
-    <button class="btn">RETRY</button>
-  </div>
-  
-  <div id="clearScreen" class="overlay-screen">
-    <h1>CLEAR!</h1>
-    <p>Final Score: <span id="clearScore">0</span></p>
-    <button class="btn">PLAY AGAIN</button>
-  </div>
-</div>
+    <script>
+        const config = {
+            title: 'REFLEX ZONE',
+            bg_color: '#0f0f23',
+            ring_color: '#6366f1',
+            hit_zone_color: '#22c55e',
+            miss_color: '#ef4444',
+            win_count: 15,
+            ring_min_ms: 800,
+            ring_max_ms: 2000,
+            hit_window_ms: 300
+        };
 
-<script>
-const config = {
-  title: 'REFLEX ZONE',
-  bg_color: '#0f0f23',
-  ring_color: '#6366f1',
-  hit_zone_color: '#22c55e',
-  miss_color: '#ef4444',
-  win_count: 15,
-  ring_min_ms: 800,
-  ring_max_ms: 2000,
-  hit_window_ms: 300
-};
+        var gameState = {
+            running: false,
+            score: 0,
+            miss: 0,
+            successCount: 0,
+            ringStartTime: 0,
+            ringDuration: 0,
+            ringMinRadius: 50,
+            ringMaxRadius: 200,
+            targetRadius: 100,
+            comboCount: 0,
+            isOnFire: false,
+            showMessage: false,
+            messageText: '',
+            messageTime: 0,
+            flashColor: null,
+            flashTime: 0
+        };
 
-var gameState = {
-  running: false,
-  score: 0,
-  misses: 0,
-  successCount: 0,
-  ringRadius: 50,
-  targetRadius: 100,
-  ringStartTime: 0,
-  ringDuration: 0,
-  hitWindow: 300,
-  combo: 0,
-  onFire: false,
-  flashTime: 0,
-  flashColor: '#ffffff',
-  messageText: '',
-  messageTime: 0
-};
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const clearScreen = document.getElementById('clearScreen');
+        const startBtn = document.getElementById('startBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const clearRetryBtn = document.getElementById('clearRetryBtn');
 
-var canvas = document.getElementById('gameCanvas');
-var ctx = canvas.getContext('2d');
+        function startRound() {
+            gameState.ringStartTime = Date.now();
+            gameState.ringDuration = config.ring_min_ms + Math.random() * (config.ring_max_ms - config.ring_min_ms);
+        }
 
-var startButton = document.querySelector('#startScreen .btn');
-var gameOverButton = document.querySelector('#gameOverScreen .btn');
-var clearButton = document.querySelector('#clearScreen .btn');
+        function startGame() {
+            gameState.running = true;
+            gameState.score = 0;
+            gameState.miss = 0;
+            gameState.successCount = 0;
+            gameState.comboCount = 0;
+            gameState.isOnFire = false;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            clearScreen.style.display = 'none';
+            startRound();
+        }
 
-startButton.addEventListener('click', function() {
-  document.getElementById('startScreen').style.display = 'none';
-  gameState.running = true;
-});
+        function retryGame() {
+            gameState.running = false;
+            startGame();
+        }
 
-gameOverButton.addEventListener('click', retryGame);
-clearButton.addEventListener('click', retryGame);
+        function showGameOver() {
+            gameState.running = false;
+            document.getElementById('gameOverScore').innerText = 'Score: ' + gameState.score;
+            gameOverScreen.style.display = 'flex';
+        }
 
-canvas.addEventListener('click', function(e) {
-  if (!gameState.running) return;
-  
-  var elapsedTime = Date.now() - gameState.ringStartTime;
-  var ringProgress = elapsedTime / gameState.ringDuration;
-  var currentRadius = gameState.ringRadius + (200 - gameState.ringRadius) * ringProgress;
-  var targetSize = gameState.targetRadius;
-  var diff = Math.abs(currentRadius - targetSize);
-  
-  if (diff < gameState.hitWindow / 2) {
-    gameState.score += 2;
-    gameState.successCount++;
-    gameState.combo++;
-    gameState.flashColor = '#22c55e';
-    gameState.messageText = 'PERFECT!';
-    gameState.flashTime = 30;
-    
-    if (gameState.combo >= 10) {
-      gameState.onFire = true;
-    }
-    
-    if (gameState.successCount >= config.win_count) {
-      gameState.running = false;
-      showClearScreen();
-    } else {
-      startNewRound();
-    }
-  } else if (diff < gameState.hitWindow) {
-    gameState.score += 1;
-    gameState.successCount++;
-    gameState.combo++;
-    gameState.flashColor = '#3b82f6';
-    gameState.messageText = 'GOOD!';
-    gameState.flashTime = 20;
-    
-    if (gameState.successCount >= config.win_count) {
-      gameState.running = false;
-      showClearScreen();
-    } else {
-      startNewRound();
-    }
-  } else {
-    gameState.misses++;
-    gameState.combo = 0;
-    gameState.onFire = false;
-    gameState.flashColor = '#ef4444';
-    gameState.messageText = 'MISS...';
-    gameState.flashTime = 30;
-    
-    if (gameState.misses >= 3) {
-      gameState.running = false;
-      showGameOverScreen();
-    } else {
-      startNewRound();
-    }
-  }
-  
-  gameState.messageTime = 60;
-  updateUI();
-});
+        function showClear() {
+            gameState.running = false;
+            document.getElementById('clearScore').innerText = 'Final Score: ' + gameState.score;
+            clearScreen.style.display = 'flex';
+        }
 
-function startNewRound() {
-  gameState.ringStartTime = Date.now();
-  gameState.ringDuration = Math.random() * (config.ring_max_ms - config.ring_min_ms) + config.ring_min_ms;
-}
+        function getRingRadius(elapsedMs) {
+            const progress = Math.min(elapsedMs / gameState.ringDuration, 1);
+            return gameState.ringMinRadius + (gameState.ringMaxRadius - gameState.ringMinRadius) * progress;
+        }
 
-function gameLoop() {
-  ctx.fillStyle = config.bg_color;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-  if (gameState.onFire && gameState.running) {
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-  
-  if (gameState.flashTime > 0) {
-    var alpha = gameState.flashTime / 30;
-    var colorStr;
-    if (gameState.flashColor === '#22c55e') {
-      colorStr = 'rgba(34, 197, 94, ' + (alpha * 0.4) + ')';
-    } else if (gameState.flashColor === '#3b82f6') {
-      colorStr = 'rgba(59, 130, 246, ' + (alpha * 0.4) + ')';
-    } else {
-      colorStr = 'rgba(239, 68, 68, ' + (alpha * 0.4) + ')';
-    }
-    ctx.fillStyle = colorStr;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    gameState.flashTime--;
-  }
-  
-  if (gameState.running) {
-    var elapsedTime = Date.now() - gameState.ringStartTime;
-    var ringProgress = Math.min(elapsedTime / gameState.ringDuration, 1);
-    var currentRadius = gameState.ringRadius + (200 - gameState.ringRadius) * ringProgress;
-    
-    ctx.fillStyle = config.hit_zone_color;
-    ctx.globalAlpha = 0.3;
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, gameState.targetRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1.0;
-    
-    ctx.strokeStyle = config.hit_zone_color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, gameState.targetRadius, 0, Math.PI * 2);
-    ctx.stroke();
-    
-    var hueProgress = ringProgress;
-    var ringColor;
-    if (hueProgress < 0.5) {
-      var p = hueProgress * 2;
-      ringColor = 'hsl(270, 100%, ' + (50 - p * 20) + '%)';
-    } else {
-      var p = (hueProgress - 0.5) * 2;
-      ringColor = 'hsl(' + (60 - p * 120) + ', 100%, ' + (30 + p * 20) + '%)';
-    }
-    
-    ctx.strokeStyle = ringColor;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, currentRadius, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  
-  if (gameState.messageTime > 0) {
-    var alpha = gameState.messageTime / 60;
-    ctx.fillStyle = 'rgba(255, 255, 255, ' + alpha + ')';
-    ctx.font = 'bold 32px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(gameState.messageText, canvas.width / 2, 100);
-    gameState.messageTime--;
-  }
-  
-  if (gameState.combo >= 5 && gameState.running) {
-    ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
-    ctx.font = 'bold 24px Arial';
-    ctx.textAlign = 'center';
-    if (gameState.combo >= 10) {
-      ctx.fillText('ON FIRE! x' + gameState.combo, canvas.width / 2, canvas.height / 2 - 150);
-    } else {
-      ctx.fillText('COMBO x' + gameState.combo, canvas.width / 2, canvas.height / 2 - 150);
-    }
-  }
-}
+        function getRingColor(ringRadius) {
+            const diff = Math.abs(ringRadius - gameState.targetRadius);
+            if (diff < 10) {
+                return '#22c55e';
+            } else if (diff < 30) {
+                return '#eab308';
+            } else {
+                return '#6366f1';
+            }
+        }
 
-function updateUI() {
-  document.getElementById('scoreValue').textContent = gameState.score;
-  document.getElementById('streakValue').textContent = gameState.successCount;
-  document.getElementById('missesValue').textContent = gameState.misses;
-}
+        function handleCanvasClick(e) {
+            if (!gameState.running) return;
 
-function showGameOverScreen() {
-  document.getElementById('gameOverScore').textContent = gameState.score;
-  document.getElementById('gameOverScreen').style.display = 'block';
-}
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
 
-function showClearScreen() {
-  document.getElementById('clearScore').textContent = gameState.score;
-  document.getElementById('clearScreen').style.display = 'block';
-}
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2.5;
 
-function retryGame() {
-  gameState.running = false;
-  gameState.score = 0;
-  gameState.misses = 0;
-  gameState.successCount = 0;
-  gameState.combo = 0;
-  gameState.onFire = false;
-  gameState.messageText = '';
-  gameState.messageTime = 0;
-  
-  document.getElementById('gameOverScreen').style.display = 'none';
-  document.getElementById('clearScreen').style.display = 'none';
-  document.getElementById('startScreen').style.display = 'block';
-  
-  updateUI();
-}
+            const distance = Math.sqrt((clickX - centerX) * (clickX - centerX) + (clickY - centerY) * (clickY - centerY));
 
-setInterval(gameLoop, 16);
-startNewRound();
-</script>
+            if (distance < 250) {
+                const elapsedMs = Date.now() - gameState.ringStartTime;
+                const ringRadius = getRingRadius(elapsedMs);
+                const diff = Math.abs(ringRadius - gameState.targetRadius);
 
+                if (diff < config.hit_window_ms / 4) {
+                    gameState.score += 2;
+                    gameState.successCount++;
+                    gameState.comboCount++;
+                    gameState.messageText = 'PERFECT!';
+                    gameState.flashColor = '#22c55e';
+                    gameState.flashTime = 10;
+
+                    if (gameState.successCount >= config.win_count) {
+                        showClear();
+                    } else {
+                        startRound();
+                    }
+                } else if (diff < config.hit_window_ms / 2) {
+                    gameState.score += 1;
+                    gameState.successCount++;
+                    gameState.comboCount++;
+                    gameState.messageText = 'GOOD!';
+                    gameState.flashColor = '#3b82f6';
+                    gameState.flashTime = 10;
+
+                    if (gameState.successCount >= config.win_count) {
+                        showClear();
+                    } else {
+                        startRound();
+                    }
+                } else {
+                    gameState.miss++;
+                    gameState.comboCount = 0;
+                    gameState.isOnFire = false;
+                    gameState.messageText = 'MISS...';
+                    gameState.flashColor = '#ef4444';
+                    gameState.flashTime = 10;
+
+                    if (gameState.miss >= 3) {
+                        showGameOver();
+                    } else {
+                        startRound();
+                    }
+                }
+                gameState.showMessage = true;
+                gameState.messageTime = 60;
+            }
+        }
+
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            ctx.fillStyle = config.bg_color;
+            if (gameState.isOnFire) {
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
+            }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState.flashTime > 0) {
+                ctx.fillStyle = gameState.flashColor + '40';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                gameState.flashTime--;
+            }
+
+            const elapsedMs = Date.now() - gameState.ringStartTime;
+            const ringRadius = getRingRadius(elapsedMs);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2.5;
+
+            ctx.strokeStyle = config.hit_zone_color + '60';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, gameState.targetRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = getRingColor(ringRadius);
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#a0aec0';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Score: ' + gameState.score, 15, 25);
+            ctx.fillText('Success: ' + gameState.successCount + '/' + config.win_count, 15, 45);
+            ctx.fillText('Miss: ' + gameState.miss + '/3', 15, 65);
+
+            if (gameState.comboCount >= 5) {
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                if (gameState.comboCount >= 10) {
+                    ctx.fillStyle = '#ef4444';
+                    gameState.isOnFire = true;
+                    ctx.fillText('ON FIRE!', centerX, centerY - 180);
+                } else {
+                    ctx.fillStyle = '#eab308';
+                    ctx.fillText('COMBO x' + gameState.comboCount + '!', centerX, centerY - 180);
+                }
+            }
+
+            if (gameState.showMessage) {
+                const alpha = gameState.messageTime / 60;
+                ctx.fillStyle = 'rgba(160, 174, 192, ' + alpha + ')';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(gameState.messageText, centerX, centerY + 200);
+                gameState.messageTime--;
+                if (gameState.messageTime <= 0) {
+                    gameState.showMessage = false;
+                }
+            }
+
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Ring matches target = PERFECT!', centerX, canvas.height - 15);
+
+            if (elapsedMs >= gameState.ringDuration) {
+                gameState.miss++;
+                gameState.comboCount = 0;
+                gameState.isOnFire = false;
+                gameState.messageText = 'TOO SLOW!';
+                gameState.flashColor = '#ef4444';
+                gameState.flashTime = 10;
+                gameState.showMessage = true;
+                gameState.messageTime = 60;
+
+                if (gameState.miss >= 3) {
+                    showGameOver();
+                } else {
+                    startRound();
+                }
+            }
+        }
+
+        startBtn.addEventListener('click', startGame);
+        retryBtn.addEventListener('click', retryGame);
+        clearRetryBtn.addEventListener('click', retryGame);
+        canvas.addEventListener('click', handleCanvasClick);
+
+        window.addEventListener('load', function() {
+            startScreen.style.display = 'flex';
+            setInterval(gameLoop, 16);
+        });
+    </script>
 </body>
 </html>
