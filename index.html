@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ゲームプレイテスト — 89本 Layer 1完成</title>
+<title>ゲームプレイテスト — 189本 D01-D10完成</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, sans-serif; background: #0f0f13; color: #eee; padding: 24px; }
@@ -34,19 +34,53 @@
   a.card:hover { background: #22222c; border-color: #444; color: #fff; }
   a.card.gap { border-color: #1e3a4a; }
   a.card.gap:hover { border-color: #38bdf8; }
+  a.card.new { border-color: #2a3a1e; }
+  a.card.new:hover { border-color: #6bdf38; }
 </style>
 </head>
 <body>
 
 <h1>ゲームプレイテスト</h1>
-<p class="meta">112本 — desire別 / Layer 1完成（全13 desire × 最低2本以上）/ 2026-05-15 (GACHA RPG KILL)</p>
+<p class="meta">189本 — 全desire網羅 / D01-D10 Playwright4段階テスト済み(+41本) / 2026-05-16</p>
+
+<!-- dominate -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">支配する</span>
+    <span class="desire-en">dominate</span>
+    <span class="count">5本</span>
+  </div>
+  <div class="grid">
+    <a class="card gap new" href="tmpl_virus_spread.html" target="_blank">VIRUS SPREAD［D01］</a>
+    <a class="card gap new" href="tmpl_swarm.html" target="_blank">SWARM MASTER［D01］</a>
+    <a class="card gap new" href="tmpl_spore.html" target="_blank">SPORE BLOOM［D01］</a>
+    <a class="card gap new" href="tmpl_size_rush.html" target="_blank">SIZE RUSH［D10］</a>
+    <a class="card gap new" href="tmpl_chain_max.html" target="_blank">CHAIN MAX［D10］</a>
+  </div>
+</div>
+
+<!-- protect -->
+<div class="section">
+  <div class="section-title">
+    <span class="desire-label">守る</span>
+    <span class="desire-en">protect</span>
+    <span class="count">5本</span>
+  </div>
+  <div class="grid">
+    <a class="card gap new" href="tmpl_escort.html" target="_blank">ESCORT MISSION［D06］</a>
+    <a class="card gap new" href="tmpl_bomb_defuse.html" target="_blank">BOMB SQUAD［D06］</a>
+    <a class="card gap new" href="tmpl_guardian.html" target="_blank">GUARDIAN［D06］</a>
+    <a class="card gap new" href="tmpl_firewall.html" target="_blank">FIREWALL［D06］</a>
+    <a class="card gap new" href="tmpl_medic_rush.html" target="_blank">MEDIC RUSH［D06］</a>
+  </div>
+</div>
 
 <!-- scale -->
 <div class="section">
   <div class="section-title">
     <span class="desire-label">増やす</span>
     <span class="desire-en">scale</span>
-    <span class="count">7本</span>
+    <span class="count">11本</span>
   </div>
   <div class="grid">
     <a class="card" href="01_ニャン突破.html" target="_blank">ニャン突破</a>
@@ -57,18 +91,18 @@
     <a class="card gap" href="tmpl_tycoon.html" target="_blank">SHOP TYCOON［テンプレ検証］</a>
     <a class="card gap" href="tmpl_arcade_idle.html" target="_blank">ARCADE IDLE［テンプレ検証］</a>
     <a class="card gap" href="tmpl_rpg_autoplay.html" target="_blank">AUTO BATTLE RPG［テンプレ検証 S04］</a>
+    <a class="card gap new" href="tmpl_stacking.html" target="_blank">STACK MASTER［D07］</a>
+    <a class="card gap new" href="tmpl_prestige_click.html" target="_blank">PRESTIGE CLICKER［D07］</a>
+    <a class="card gap new" href="tmpl_empire_expand.html" target="_blank">EMPIRE EXPAND［D07］</a>
   </div>
 </div>
 
 <!-- destroy -->
-  <a href="tmpl_chain_destroy.html" class="game-card desire-destroy">CHAIN BLAST</a>
-  <a href="tmpl_stomp.html" class="game-card desire-destroy">STOMP CITY</a>
-  <a href="tmpl_demolish.html" class="game-card desire-destroy">DEMOLISH</a>
 <div class="section">
   <div class="section-title">
     <span class="desire-label">壊す</span>
     <span class="desire-en">destroy</span>
-    <span class="count">6本</span>
+    <span class="count">9本</span>
   </div>
   <div class="grid">
     <a class="card" href="04_墨斬り.html" target="_blank">墨斬り</a>
@@ -77,17 +111,18 @@
     <a class="card" href="23_ワンショット.html" target="_blank">ワンショット</a>
     <a class="card" href="30_爆破清掃隊.html" target="_blank">爆破清掃隊</a>
     <a class="card" href="regen_破壊ピン.html" target="_blank">破壊ピン</a>
+    <a class="card gap new" href="tmpl_demolish.html" target="_blank">DEMOLISH［D04］</a>
+    <a class="card gap new" href="tmpl_stomp.html" target="_blank">STOMP CITY［D04］</a>
+    <a class="card gap new" href="tmpl_chain_destroy.html" target="_blank">CHAIN BLAST［D04］</a>
   </div>
 </div>
 
 <!-- tidy -->
-  <a href="tmpl_sort_pipeline.html" class="game-card desire-tidy">SORT IT</a>
-  <a href="tmpl_number_link.html" class="game-card desire-tidy">NUMBER LINK</a>
 <div class="section">
   <div class="section-title">
     <span class="desire-label">整える</span>
     <span class="desire-en">tidy</span>
-    <span class="count">9本</span>
+    <span class="count">11本</span>
   </div>
   <div class="grid">
     <a class="card" href="21_積み逃げ_.html" target="_blank">積み逃げ</a>
@@ -98,6 +133,9 @@
     <a class="card" href="regen_ドットロジ.html" target="_blank">ドットロジ</a>
     <a class="card gap" href="tmpl_jigsaw.html" target="_blank">JIGSAW［テンプレ検証］</a>
     <a class="card gap" href="tmpl_color_by_num.html" target="_blank">COLOR BY NUMBER［テンプレ検証 S01］</a>
+    <a class="card gap new" href="tmpl_number_link.html" target="_blank">NUMBER LINK［D05］</a>
+    <a class="card gap new" href="tmpl_sort_pipeline.html" target="_blank">SORT IT［D05］</a>
+    <a class="card gap new" href="tmpl_clean_sort.html" target="_blank">TIDY ROOM［D07］</a>
   </div>
 </div>
 
@@ -106,7 +144,7 @@
   <div class="section-title">
     <span class="desire-label">育てる</span>
     <span class="desire-en">nurture</span>
-    <span class="count">8本</span>
+    <span class="count">11本</span>
   </div>
   <div class="grid">
     <a class="card" href="regen_駿馬伝説GI.html" target="_blank">駿馬伝説GI</a>
@@ -115,37 +153,36 @@
     <a class="card gap" href="tmpl_farm.html" target="_blank">FARM LIFE［テンプレ検証］</a>
     <a class="card gap" href="tmpl_life_sim.html" target="_blank">LIFE SIM［テンプレ検証］</a>
     <a class="card gap" href="tmpl_pet.html" target="_blank">PET CARE［テンプレ検証］</a>
-    <a class="card gap" href="tmpl_ikusei_sport.html" target="_blank">SPORTS STAR［テンプレ検証］</a>
-    <a class="card gap" href="tmpl_collection.html" target="_blank">COLLECTOR［テンプレ検証］</a>
+    <a class="card gap new" href="tmpl_garden_grow.html" target="_blank">GARDEN GROW［D08］</a>
+    <a class="card gap new" href="tmpl_creature_train.html" target="_blank">CREATURE TRAINER［D08］</a>
+    <a class="card gap new" href="tmpl_dynasty.html" target="_blank">DYNASTY［D08］</a>
   </div>
 </div>
 
 <!-- collect -->
-  <a href="tmpl_recipe_collect.html" class="game-card desire-collect">RECIPE BOOK</a>
-  <a href="tmpl_gem_collect.html" class="game-card desire-collect">GEM COLLECTOR</a>
-  <a href="tmpl_bug_catch.html" class="game-card desire-collect">BUG CATCH</a>
-  <a href="tmpl_monster_catch.html" class="game-card desire-collect">MONSTER CATCH</a>
 <div class="section">
   <div class="section-title">
     <span class="desire-label">集める</span>
     <span class="desire-en">collect</span>
-    <span class="count">3本</span>
+    <span class="count">7本</span>
   </div>
   <div class="grid">
     <a class="card" href="16_たねコレ_.html" target="_blank">たねコレ！</a>
     <a class="card" href="01_妖怪図鑑ガチャ.html" target="_blank">妖怪図鑑ガチャ</a>
     <a class="card" href="regen_アヤカシ狩.html" target="_blank">アヤカシ狩</a>
+    <a class="card gap new" href="tmpl_monster_catch.html" target="_blank">MONSTER CATCH［D02］</a>
+    <a class="card gap new" href="tmpl_bug_catch.html" target="_blank">BUG CATCH［D02］</a>
+    <a class="card gap new" href="tmpl_gem_collect.html" target="_blank">GEM COLLECTOR［D02］</a>
+    <a class="card gap new" href="tmpl_recipe_collect.html" target="_blank">RECIPE BOOK［D02］</a>
   </div>
 </div>
 
 <!-- build -->
-  <a href="tmpl_dungeon_builder.html" class="game-card desire-build">DUNGEON FORGE</a>
-  <a href="tmpl_pixel_art.html" class="game-card desire-build">PIXEL STUDIO</a>
 <div class="section">
   <div class="section-title">
     <span class="desire-label">作る</span>
     <span class="desire-en">build</span>
-    <span class="count">8本</span>
+    <span class="count">10本</span>
   </div>
   <div class="grid">
     <a class="card" href="regen_なぞリン.html" target="_blank">なぞリン</a>
@@ -156,6 +193,8 @@
     <a class="card gap" href="tmpl_breakout_builder.html" target="_blank">BLOCK BUILDER BREAKOUT［テンプレ検証 S04］</a>
     <a class="card gap" href="tmpl_parking.html" target="_blank">PARKING［テンプレ検証 S03］</a>
     <a class="card gap" href="tmpl_city_builder_lite.html" target="_blank">CITY BUILDER［テンプレ検証 S03］</a>
+    <a class="card gap new" href="tmpl_pixel_art.html" target="_blank">PIXEL STUDIO［D04］</a>
+    <a class="card gap new" href="tmpl_dungeon_builder.html" target="_blank">DUNGEON FORGE［D04］</a>
   </div>
 </div>
 
@@ -193,6 +232,8 @@
     <a class="card gap" href="tmpl_escape.html" target="_blank">ESCAPE ROOM［テンプレ検証 S01］</a>
     <a class="card gap" href="tmpl_word_trivia.html" target="_blank">WORD QUIZ［テンプレ検証 S01］</a>
     <a class="card gap" href="tmpl_pencil_puzzle.html" target="_blank">PICROSS［テンプレ検証 S01］</a>
+    <a class="card gap new" href="tmpl_wire_puzzle.html" target="_blank">WIRE CONNECT［D07］</a>
+    <a class="card gap new" href="tmpl_mirror_sync.html" target="_blank">MIRROR SYNC［D10］</a>
   </div>
 </div>
 
@@ -201,7 +242,7 @@
   <div class="section-title">
     <span class="desire-label">勝つ</span>
     <span class="desire-en">beat</span>
-    <span class="count">32本</span>
+    <span class="count">33本</span>
   </div>
   <div class="grid">
     <a class="card" href="regen_ドタバタシェフ.html" target="_blank">ドタバタシェフ</a>
@@ -236,6 +277,7 @@
     <a class="card gap" href="tmpl_runner_gate.html" target="_blank">GATE RUNNER［テンプレ検証 S03］</a>
     <a class="card gap" href="tmpl_vertical_shooter.html" target="_blank">VERTICAL SHOOTER［テンプレ検証 S03］</a>
     <a class="card gap" href="tmpl_rhythm.html" target="_blank">RHYTHM MASTER［テンプレ検証 S03］</a>
+    <a class="card gap new" href="tmpl_speed_escalate.html" target="_blank">SPEED ESCALATE［D10］</a>
   </div>
 </div>
 
@@ -244,7 +286,7 @@
   <div class="section-title">
     <span class="desire-label">生き延びる</span>
     <span class="desire-en">survive</span>
-    <span class="count">16本</span>
+    <span class="count">18本</span>
   </div>
   <div class="grid">
     <a class="card" href="01_クラッシュドロップ.html" target="_blank">クラッシュドロップ</a>
@@ -269,12 +311,11 @@
 </div>
 
 <!-- feel -->
-  <a href="tmpl_memory_book.html" class="game-card desire-feel">MEMORY LANE</a>
 <div class="section">
   <div class="section-title">
     <span class="desire-label">没入する</span>
     <span class="desire-en">feel</span>
-    <span class="count">12本</span>
+    <span class="count">16本</span>
   </div>
   <div class="grid">
     <a class="card" href="regen_コスモズーム.html" target="_blank">コスモズーム</a>
@@ -289,16 +330,19 @@
     <a class="card gap" href="tmpl_maze.html" target="_blank">MAZE EXPLORER［テンプレ検証 S01］</a>
     <a class="card gap" href="tmpl_visual_novel.html" target="_blank">放課後の物語［テンプレ検証 S03］</a>
     <a class="card gap" href="tmpl_minigame_party.html" target="_blank">MINIGAME PARTY［テンプレ検証 S03］</a>
+    <a class="card gap new" href="tmpl_memory_book.html" target="_blank">MEMORY LANE［D05］</a>
+    <a class="card gap new" href="tmpl_melody_tap.html" target="_blank">MELODY MAKER［D09］</a>
+    <a class="card gap new" href="tmpl_room_deco.html" target="_blank">ROOM DESIGNER［D09］</a>
+    <a class="card gap new" href="tmpl_haiku_compose.html" target="_blank">HAIKU GARDEN［D09］</a>
   </div>
 </div>
 
 <!-- relax -->
-  <a href="tmpl_balloon_pop.html" class="game-card desire-relax">BALLOON POP</a>
 <div class="section">
   <div class="section-title">
     <span class="desire-label">癒される</span>
     <span class="desire-en">relax</span>
-    <span class="count">11本</span>
+    <span class="count">12本</span>
   </div>
   <div class="grid">
     <a class="card" href="12_うみつり館.html" target="_blank">うみつり館</a>
@@ -311,6 +355,8 @@
     <a class="card gap" href="tmpl_scratch_luck.html" target="_blank">SCRATCH LUCK［テンプレ検証］</a>
     <a class="card gap" href="tmpl_suika.html" target="_blank">SUIKA DROP［テンプレ検証］</a>
     <a class="card gap" href="tmpl_falling.html" target="_blank">CATCH IT［テンプレ検証 S01］</a>
+    <a class="card gap new" href="tmpl_balloon_pop.html" target="_blank">BALLOON POP［D05］</a>
+    <a class="card gap" href="tmpl_fishing_cast.html" target="_blank">FISHING CAST［テンプレ検証 S04b］</a>
   </div>
 </div>
 
@@ -330,47 +376,24 @@
 </div>
 
 <!-- laugh -->
-  <a href="tmpl_fail_physics.html" class="game-card desire-laugh">FAIL WALKER</a>
-  <a href="tmpl_absurd_goal.html" class="game-card desire-laugh">ABSURD QUEST</a>
-  <a href="tmpl_escalation.html" class="game-card desire-laugh">ESCALATION</a>
-  <a href="tmpl_job_sim_chaos.html" class="game-card desire-laugh">CHAOS JOB</a>
-  <a href="tmpl_weird_physics.html" class="game-card desire-laugh">WEIRD WORLD</a>
 <div class="section">
   <div class="section-title">
     <span class="desire-label">笑う</span>
     <span class="desire-en">laugh</span>
-    <span class="count">4本</span>
+    <span class="count">9本</span>
   </div>
   <div class="grid">
     <a class="card gap" href="01_おならロケット選手権.html" target="_blank">おならロケット選手権</a>
     <a class="card gap" href="02_ズルい問題ばかり.html" target="_blank">ズルい問題ばかり</a>
     <a class="card gap" href="05_おじさんぶつかり王.html" target="_blank">おじさんぶつかり王</a>
     <a class="card gap" href="tmpl_pimple_destroy.html" target="_blank">PIMPLE DESTROYER［テンプレ検証 S03］</a>
+    <a class="card gap new" href="tmpl_weird_physics.html" target="_blank">WEIRD WORLD［D03］</a>
+    <a class="card gap new" href="tmpl_job_sim_chaos.html" target="_blank">CHAOS JOB［D03］</a>
+    <a class="card gap new" href="tmpl_escalation.html" target="_blank">ESCALATION［D03］</a>
+    <a class="card gap new" href="tmpl_absurd_goal.html" target="_blank">ABSURD QUEST［D03］</a>
+    <a class="card gap new" href="tmpl_fail_physics.html" target="_blank">FAIL WALKER［D03］</a>
   </div>
 </div>
 
-  <a href="tmpl_virus_spread.html" class="game-card desire-dominate">VIRUS SPREAD</a>
-  <a href="tmpl_swarm.html" class="game-card desire-dominate">SWARM MASTER</a>
-  <a href="tmpl_spore.html" class="game-card desire-dominate">SPORE BLOOM</a>
-  <a href="tmpl_escort.html" class="game-card desire-protect">ESCORT MISSION</a>
-  <a href="tmpl_bomb_defuse.html" class="game-card desire-protect">BOMB SQUAD</a>
-  <a href="tmpl_guardian.html" class="game-card desire-protect">GUARDIAN</a>
-  <a href="tmpl_firewall.html" class="game-card desire-protect">FIREWALL</a>
-  <a href="tmpl_medic_rush.html" class="game-card desire-protect">MEDIC RUSH</a>
-  <a href="tmpl_stacking.html" class="game-card desire-perfect">STACK MASTER</a>
-  <a href="tmpl_wire_puzzle.html" class="game-card desire-perfect">WIRE CONNECT</a>
-  <a href="tmpl_clean_sort.html" class="game-card desire-perfect">TIDY ROOM</a>
-  <a href="tmpl_prestige_click.html" class="game-card desire-evolve">PRESTIGE CLICKER</a>
-  <a href="tmpl_empire_expand.html" class="game-card desire-dominate">EMPIRE</a>
-  <a href="tmpl_garden_grow.html" class="game-card desire-evolve">GARDEN GROW</a>
-  <a href="tmpl_creature_train.html" class="game-card desire-evolve">CREATURE TRAINER</a>
-  <a href="tmpl_dynasty.html" class="game-card desire-evolve">DYNASTY</a>
-  <a href="tmpl_melody_tap.html" class="game-card desire-discover">MELODY MAKER</a>
-  <a href="tmpl_room_deco.html" class="game-card desire-discover">ROOM DESIGNER</a>
-  <a href="tmpl_haiku_compose.html" class="game-card desire-discover">HAIKU GARDEN</a>
-  <a href="tmpl_size_rush.html" class="game-card desire-dominate">SIZE RUSH</a>
-  <a href="tmpl_speed_escalate.html" class="game-card desire-compete">SPEED RUN</a>
-  <a href="tmpl_mirror_sync.html" class="game-card desire-perfect">MIRROR SYNC</a>
-  <a href="tmpl_chain_max.html" class="game-card desire-dominate">CHAIN MAX</a>
 </body>
 </html>

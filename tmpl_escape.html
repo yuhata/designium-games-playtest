@@ -1,156 +1,163 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESCAPE ROOM</title>
     <style>
-        body {
+        * {
             margin: 0;
-            padding: 20px;
-            background: #1a1a2e;
-            font-family: Arial, sans-serif;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0a0e27;
+            font-family: 'Arial', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            color: white;
         }
-        #gameContainer {
+        #container {
             position: relative;
-            background: #16213e;
-            border: 2px solid #e94560;
-            border-radius: 8px;
-            box-shadow: 0 0 30px rgba(233, 69, 96, 0.3);
+            width: 660px;
+            height: 400px;
+            background: #1a1a2e;
         }
         canvas {
             display: block;
-            background: #16213e;
-            cursor: crosshair;
+            border: 2px solid #e94560;
+            float: left;
         }
         #rightPanel {
-            position: absolute;
-            right: 0;
-            top: 0;
+            float: left;
             width: 160px;
             height: 400px;
-            background: rgba(0, 0, 0, 0.6);
-            border-left: 1px solid #e94560;
-            padding: 10px;
-            box-sizing: border-box;
+            background: #16213e;
+            border-left: 2px solid #e94560;
+            padding: 20px 10px;
             overflow-y: auto;
+        }
+        #itemsList {
+            list-style: none;
+        }
+        .item-slot {
+            margin: 10px 0;
+            padding: 8px;
+            background: #0f3460;
+            border-radius: 4px;
             font-size: 12px;
-            color: #ccc;
-        }
-        .itemDisplay {
-            background: #333;
-            margin: 5px 0;
-            padding: 5px;
-            border-radius: 4px;
-            border-left: 3px solid #999;
-        }
-        .itemDisplay.found {
-            background: rgba(34, 197, 94, 0.2);
-            border-left-color: #22c55e;
-            color: #22c55e;
-        }
-        #startScreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            z-index: 1000;
-        }
-        #startScreen h1 {
-            color: #e94560;
-            font-size: 48px;
-            margin-bottom: 20px;
-            text-shadow: 0 0 20px #e94560;
-        }
-        #startScreen p {
-            color: #ccc;
-            font-size: 16px;
-            margin-bottom: 30px;
             text-align: center;
-            max-width: 300px;
         }
-        .btn {
-            background: #e94560;
-            color: white;
-            border: none;
-            padding: 12px 40px;
-            font-size: 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.3s;
+        .item-slot.found {
+            background: #22c55e;
+            color: #000;
+            font-weight: bold;
         }
-        .btn:hover {
-            background: #ff5a75;
-            box-shadow: 0 0 15px #e94560;
+        #timerDisplay {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #e94560;
+            z-index: 10;
         }
-        #gameOverScreen, #clearScreen {
-            position: fixed;
+        #hint {
+            position: absolute;
+            bottom: 10px;
+            left: 20px;
+            font-size: 14px;
+            color: #fbbf24;
+            font-weight: bold;
+            max-width: 420px;
+            z-index: 10;
+        }
+        #startScreen, #gameOverScreen, #clearScreen {
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.95);
             display: none;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            z-index: 999;
-        }
-        #gameOverScreen h2, #clearScreen h2 {
-            color: #e94560;
-            font-size: 40px;
-            margin-bottom: 20px;
-        }
-        #clearScreen h2 {
-            color: #22c55e;
-            text-shadow: 0 0 20px #22c55e;
-        }
-        .screen-text {
-            color: #ccc;
-            font-size: 18px;
-            margin-bottom: 30px;
+            z-index: 100;
             text-align: center;
+        }
+        #startScreen {
+            display: flex;
+        }
+        h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+        .subtitle {
+            font-size: 18px;
+            margin: 20px 0;
+            color: #aaa;
+        }
+        .btn {
+            margin-top: 30px;
+            padding: 12px 30px;
+            font-size: 16px;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #ff6b7a;
+        }
+        .game-over-msg, .clear-msg {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+        .clear-msg {
+            color: #22c55e;
+        }
+        .score-text {
+            font-size: 16px;
+            margin: 15px 0;
+            color: #aaa;
         }
     </style>
 </head>
 <body>
-    <div id="startScreen">
-        <h1>🔓 ESCAPE ROOM</h1>
-        <p>Find all 5 hidden items to escape the room!<br>You have 120 seconds.</p>
-        <button class="btn">START</button>
-    </div>
-
-    <div id="gameOverScreen">
-        <h2>⏱️ TIME'S UP</h2>
-        <p class="screen-text">You couldn't escape in time...</p>
-        <button class="btn" id="retryBtn1">TRY AGAIN</button>
-    </div>
-
-    <div id="clearScreen">
-        <h2>🎉 ESCAPED!</h2>
-        <p class="screen-text" id="clearText">Great job!</p>
-        <button class="btn" id="retryBtn2">PLAY AGAIN</button>
-    </div>
-
-    <div id="gameContainer">
+    <div id="container">
         <canvas id="gameCanvas" width="500" height="400"></canvas>
         <div id="rightPanel">
-            <div style="color: #e94560; font-weight: bold; margin-bottom: 10px;">Items Found:</div>
-            <div id="itemList"></div>
-            <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #666;">
-                <div style="color: #999; font-size: 10px; margin-bottom: 5px;">Time:</div>
-                <div id="timeDisplay" style="color: #22c55e; font-size: 18px; font-weight: bold;">120</div>
-            </div>
+            <div style="text-align: center; margin-bottom: 10px; font-weight: bold; color: #e94560;">Items</div>
+            <ul id="itemsList"></ul>
+        </div>
+        <div id="timerDisplay">120s</div>
+        <div id="hint"></div>
+
+        <div id="startScreen">
+            <h1>🚪 ESCAPE ROOM 🚪</h1>
+            <p class="subtitle">5つのアイテムを探して部屋から脱出しよう！</p>
+            <p class="subtitle" style="color: #fbbf24;">制限時間：120秒</p>
+            <button class="btn">START</button>
+        </div>
+
+        <div id="gameOverScreen">
+            <div class="game-over-msg">⏰ TIME UP!</div>
+            <p class="score-text" id="gameOverScore"></p>
+            <button class="btn">RETRY</button>
+        </div>
+
+        <div id="clearScreen">
+            <div class="clear-msg">✨ ESCAPE SUCCESS! ✨</div>
+            <p class="score-text" id="clearTime"></p>
+            <button class="btn">RETRY</button>
         </div>
     </div>
 
@@ -167,176 +174,171 @@
         var gameState = {
             running: false,
             time: 120,
-            items: [],
-            collectCount: 0,
-            gameOver: false,
-            cleared: false,
-            messageTime: 0,
-            lastFoundMessage: ''
+            lastTime: 0,
+            foundCount: 0,
+            items: [
+                { name: '鍵', emoji: '🔑', x: 420, y: 100, radius: 12, found: false },
+                { name: '懐中電灯', emoji: '🔦', x: 380, y: 200, radius: 12, found: false },
+                { name: 'ノート', emoji: '📝', x: 150, y: 280, radius: 12, found: false },
+                { name: 'ビン', emoji: '🧪', x: 250, y: 150, radius: 12, found: false },
+                { name: 'チェーン', emoji: '⛓️', x: 120, y: 350, radius: 12, found: false }
+            ],
+            doorOpen: false
         };
 
         var canvas = document.getElementById('gameCanvas');
         var ctx = canvas.getContext('2d');
-
-        function initItems() {
-            gameState.items = [
-                { name: 'Gold Key', x: 200, y: 80, radius: 10, found: false, emoji: '🔑' },
-                { name: 'Flashlight', x: 350, y: 150, radius: 8, found: false, emoji: '🔦' },
-                { name: 'Ancient Letter', x: 150, y: 250, radius: 12, found: false, emoji: '📜' },
-                { name: 'Magnet', x: 420, y: 280, radius: 9, found: false, emoji: '🧲' },
-                { name: 'Mystery Stone', x: 80, y: 320, radius: 11, found: false, emoji: '💎' }
-            ];
-        }
+        var startScreen = document.getElementById('startScreen');
+        var gameOverScreen = document.getElementById('gameOverScreen');
+        var clearScreen = document.getElementById('clearScreen');
 
         function drawRoom() {
             ctx.fillStyle = config.room_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, 500, 400);
 
-            ctx.fillStyle = '#0f1624';
-            ctx.fillRect(0, 300, canvas.width, 100);
-            ctx.strokeStyle = '#2a3f5f';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < canvas.width; i += 40) {
-                ctx.beginPath();
-                ctx.moveTo(i, 300);
-                ctx.lineTo(i, 400);
-                ctx.stroke();
-            }
-
-            ctx.fillStyle = '#1a2a4a';
-            ctx.fillRect(0, 0, 40, canvas.height);
-            ctx.fillRect(460, 0, 40, canvas.height);
-
-            ctx.fillStyle = '#0f1a3a';
-            ctx.fillRect(0, 0, canvas.width, 30);
-
-            ctx.fillStyle = '#8b4513';
-            ctx.fillRect(420, 150, 50, 130);
-            ctx.strokeStyle = gameState.cleared ? '#22c55e' : '#e94560';
+            ctx.strokeStyle = '#444';
             ctx.lineWidth = 2;
-            ctx.strokeRect(420, 150, 50, 130);
-            
-            ctx.fillStyle = '#d4af37';
-            ctx.beginPath();
-            ctx.arc(460, 215, 5, 0, Math.PI * 2);
-            ctx.fill();
 
-            if (gameState.cleared) {
-                ctx.fillStyle = '#22c55e';
-                ctx.font = 'bold 14px Arial';
-                ctx.fillText('OPEN', 425, 195);
-            } else {
-                ctx.fillStyle = '#e94560';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText('LOCKED', 423, 195);
-            }
+            ctx.strokeRect(20, 20, 460, 360);
 
-            ctx.fillStyle = '#654321';
-            ctx.fillRect(80, 150, 150, 100);
-            ctx.strokeStyle = '#8b4513';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(80, 150, 150, 100);
+            ctx.fillStyle = '#2a4060';
+            ctx.fillRect(420, 80, 50, 280);
 
-            ctx.fillStyle = '#4a2511';
-            ctx.fillRect(85, 225, 140, 20);
-            ctx.strokeStyle = '#d4af37';
+            ctx.fillStyle = '#3a5070';
+            ctx.fillRect(50, 120, 120, 250);
+
+            ctx.fillStyle = '#2a4060';
+            ctx.fillRect(80, 280, 200, 80);
+
+            ctx.fillStyle = '#1a3050';
+            ctx.fillRect(350, 30, 80, 60);
+
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(420, 80, 50, 280);
+
+            ctx.strokeStyle = '#666';
             ctx.lineWidth = 1;
-            ctx.strokeRect(85, 225, 140, 20);
-
-            ctx.fillStyle = '#2d1810';
-            ctx.fillRect(280, 80, 150, 180);
-            ctx.strokeStyle = '#654321';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < 4; i++) {
-                ctx.beginPath();
-                ctx.moveTo(280, 100 + i * 50);
-                ctx.lineTo(430, 100 + i * 50);
-                ctx.stroke();
-            }
-
-            ctx.fillStyle = '#4a7c9e';
-            ctx.fillRect(50, 30, 100, 80);
-            ctx.strokeStyle = '#2a5c7e';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(50, 30, 100, 80);
-            ctx.beginPath();
-            ctx.moveTo(100, 30);
-            ctx.lineTo(100, 110);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(50, 70);
-            ctx.lineTo(150, 70);
-            ctx.stroke();
-
-            if (gameState.collectCount >= 3 && gameState.collectCount < 5) {
-                ctx.fillStyle = 'rgba(233, 69, 96, 0.7)';
-                ctx.font = '12px Arial';
-                ctx.fillText('💡 The door awaits...', 300, 340);
-            }
+            ctx.strokeRect(80, 280, 200, 80);
+            ctx.strokeRect(50, 120, 120, 250);
+            ctx.strokeRect(350, 30, 80, 60);
         }
 
         function drawItems() {
-            for (let i = 0; i < gameState.items.length; i++) {
-                var item = gameState.items[i];
-                if (!item.found) {
-                    ctx.fillStyle = config.item_color;
-                    ctx.beginPath();
-                    ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
-                    ctx.fill();
-                    
-                    ctx.strokeStyle = 'rgba(233, 69, 96, 0.4)';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(item.x, item.y, item.radius + 3, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
+            gameState.items.forEach(function(item) {
+                ctx.fillStyle = item.found ? config.found_color : config.item_color;
+                ctx.beginPath();
+                ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.emoji, item.x, item.y);
+            });
+        }
+
+        function drawDoor() {
+            ctx.fillStyle = gameState.doorOpen ? '#22c55e' : '#e94560';
+            ctx.fillRect(420, 80, 50, 280);
+            
+            if (gameState.doorOpen) {
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('OPEN', 445, 220);
+            } else {
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('DOOR', 445, 220);
             }
         }
 
-        function drawUI() {
-            ctx.fillStyle = gameState.time <= 30 ? '#e94560' : '#22c55e';
-            ctx.font = 'bold 24px Arial';
-            ctx.fillText('Time: ' + gameState.time + 's', 20, 30);
+        function updateItemsList() {
+            var itemsList = document.getElementById('itemsList');
+            itemsList.innerHTML = '';
+            gameState.items.forEach(function(item) {
+                var li = document.createElement('li');
+                li.className = 'item-slot' + (item.found ? ' found' : '');
+                li.textContent = (item.found ? '✓ ' : '○ ') + item.name;
+                itemsList.appendChild(li);
+            });
+        }
 
-            ctx.fillStyle = '#e94560';
-            ctx.font = 'bold 16px Arial';
-            ctx.fillText('Items: ' + gameState.collectCount + '/5', 20, 60);
-
-            if (gameState.lastFoundMessage && gameState.messageTime > 0) {
-                ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
-                ctx.font = 'bold 18px Arial';
-                ctx.fillText('✓ Found: ' + gameState.lastFoundMessage, 120, 350);
-                gameState.messageTime--;
+        function updateHint() {
+            var hint = document.getElementById('hint');
+            if (gameState.foundCount === 0) {
+                hint.textContent = '';
+            } else if (gameState.foundCount === 1) {
+                hint.textContent = 'ヒント：まだまだ...';
+            } else if (gameState.foundCount === 2) {
+                hint.textContent = 'ヒント：あと3つ探しましょう...';
+            } else if (gameState.foundCount === 3) {
+                hint.textContent = 'ヒント：鍵を探してドアを開こう！';
+            } else if (gameState.foundCount === 4) {
+                hint.textContent = 'ヒント：あと1つだ！全てを集めれば脱出できる！';
+            } else {
+                hint.textContent = '';
             }
         }
 
-        function updateItemList() {
-            var itemList = document.getElementById('itemList');
-            itemList.innerHTML = '';
-            for (let i = 0; i < gameState.items.length; i++) {
-                var item = gameState.items[i];
-                var div = document.createElement('div');
-                div.className = 'itemDisplay' + (item.found ? ' found' : '');
-                div.innerHTML = item.emoji + ' ' + item.name + (item.found ? ' ✓' : '');
-                itemList.appendChild(div);
+        function gameLoop() {
+            if (!gameState.running) return;
+
+            var now = Date.now();
+            gameState.time -= (now - gameState.lastTime) / 1000;
+            gameState.lastTime = now;
+
+            if (gameState.time <= 0) {
+                gameState.time = 0;
+                gameState.running = false;
+                gameOverScreen.style.display = 'flex';
+                document.getElementById('gameOverScore').textContent = 'アイテム発見数：' + gameState.foundCount + '/5';
+                return;
+            }
+
+            ctx.clearRect(0, 0, 500, 400);
+            drawRoom();
+            drawItems();
+            drawDoor();
+
+            var timerDisplay = document.getElementById('timerDisplay');
+            timerDisplay.textContent = Math.ceil(gameState.time) + 's';
+
+            if (gameState.time < 10) {
+                timerDisplay.style.color = '#ff6b7a';
             }
         }
 
-        function checkItemClick(x, y) {
-            for (let i = gameState.items.length - 1; i >= 0; i--) {
+        function handleCanvasClick(event) {
+            if (!gameState.running) return;
+
+            var rect = canvas.getBoundingClientRect();
+            var x = event.clientX - rect.left;
+            var y = event.clientY - rect.top;
+
+            for (var i = 0; i < gameState.items.length; i++) {
                 var item = gameState.items[i];
                 if (!item.found) {
                     var dx = x - item.x;
                     var dy = y - item.y;
-                    var dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < item.radius + 10) {
+                    var distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < item.radius + 10) {
                         item.found = true;
-                        gameState.collectCount++;
-                        gameState.lastFoundMessage = item.name;
-                        gameState.messageTime = 60;
-                        updateItemList();
-                        if (gameState.collectCount >= 5) {
-                            gameState.cleared = true;
+                        gameState.foundCount++;
+                        updateItemsList();
+                        updateHint();
+
+                        if (gameState.foundCount === config.total_items) {
+                            gameState.doorOpen = true;
+                            gameState.running = false;
+                            var elapsedTime = (120 - gameState.time).toFixed(1);
+                            clearScreen.style.display = 'flex';
+                            document.getElementById('clearTime').textContent = 'クリアタイム：' + elapsedTime + '秒';
                         }
                         break;
                     }
@@ -344,47 +346,24 @@
             }
         }
 
-        function gameLoop() {
-            drawRoom();
-            drawItems();
-            drawUI();
-            document.getElementById('timeDisplay').textContent = gameState.time;
-
-            if (!gameState.running || gameState.gameOver || gameState.cleared) {
-                return;
-            }
-
-            gameState.time--;
-
-            if (gameState.time <= 0) {
-                gameState.running = false;
-                gameState.gameOver = true;
-                document.getElementById('startScreen').style.display = 'none';
-                document.getElementById('gameOverScreen').style.display = 'flex';
-            }
-
-            if (gameState.cleared) {
-                gameState.running = false;
-                var escapedTime = 120 - gameState.time;
-                document.getElementById('clearText').textContent = 'Escaped in ' + escapedTime + ' seconds!';
-                document.getElementById('startScreen').style.display = 'none';
-                document.getElementById('clearScreen').style.display = 'flex';
-            }
-        }
-
         function startGame() {
-            gameState.running = false;
-            gameState.time = 120;
-            gameState.collectCount = 0;
-            gameState.gameOver = false;
-            gameState.cleared = false;
-            gameState.messageTime = 0;
-            initItems();
-            updateItemList();
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
             gameState.running = true;
+            gameState.time = 120;
+            gameState.foundCount = 0;
+            gameState.doorOpen = false;
+            gameState.lastTime = Date.now();
+            gameState.items.forEach(function(item) {
+                item.found = false;
+            });
+
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            clearScreen.style.display = 'none';
+
+            updateItemsList();
+            updateHint();
+
+            document.getElementById('timerDisplay').style.color = '#e94560';
         }
 
         function retryGame() {
@@ -392,28 +371,20 @@
             startGame();
         }
 
-        canvas.addEventListener('click', function(e) {
-            if (!gameState.running) return;
-            var rect = canvas.getBoundingClientRect();
-            var x = e.clientX - rect.left;
-            var y = e.clientY - rect.top;
-            checkItemClick(x, y);
-        });
+        var startBtn = startScreen.querySelector('.btn');
+        startBtn.addEventListener('click', startGame);
 
-        document.getElementById('startScreen').querySelector('.btn').addEventListener('click', function() {
-            startGame();
-        });
+        var gameOverBtn = gameOverScreen.querySelector('.btn');
+        gameOverBtn.addEventListener('click', retryGame);
 
-        document.getElementById('retryBtn1').addEventListener('click', function() {
-            retryGame();
-        });
+        var clearBtn = clearScreen.querySelector('.btn');
+        clearBtn.addEventListener('click', retryGame);
 
-        document.getElementById('retryBtn2').addEventListener('click', function() {
-            retryGame();
-        });
+        canvas.addEventListener('click', handleCanvasClick);
 
-        initItems();
-        updateItemList();
+        updateItemsList();
+        updateHint();
+
         setInterval(gameLoop, 16);
     </script>
 </body>
