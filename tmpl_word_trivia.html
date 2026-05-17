@@ -1,41 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WORD QUIZ</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            background: #0f0f1e;
+            min-height: 100vh;
+            background: #0a0a0a;
             font-family: 'Arial', sans-serif;
         }
-        
-        #container {
+        #gameContainer {
             position: relative;
             width: 480px;
-            height: 600px;
+            height: 480px;
             background: #1a1a2e;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+            border: 2px solid #333;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
         }
-        
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            background: #1a1a2e;
-        }
+        canvas { display: block; width: 100%; height: 100%; }
         
         #startScreen {
             position: absolute;
@@ -43,99 +30,42 @@
             left: 0;
             width: 100%;
             height: 100%;
-            display: none;
             background: #1a1a2e;
-            z-index: 100;
+            display: none;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            gap: 30px;
-        }
-        
-        #startScreen.show {
-            display: flex;
+            z-index: 10;
         }
         
         #startScreen h1 {
             color: #fff;
             font-size: 48px;
-            text-align: center;
-            letter-spacing: 4px;
-            text-shadow: 0 0 20px rgba(34,197,94,0.5);
+            margin-bottom: 30px;
         }
         
         #startScreen p {
             color: #aaa;
-            font-size: 16px;
+            font-size: 14px;
             text-align: center;
+            margin-bottom: 30px;
             line-height: 1.6;
         }
         
         #startScreen .btn {
-            background: linear-gradient(135deg, #22c55e, #16a34a);
-            color: white;
+            padding: 15px 50px;
+            font-size: 20px;
+            background: #22c55e;
+            color: #fff;
             border: none;
-            padding: 16px 48px;
-            font-size: 18px;
-            font-weight: bold;
             border-radius: 8px;
             cursor: pointer;
-            transition: all 0.3s;
-            letter-spacing: 2px;
+            font-weight: bold;
+            transition: background 0.3s;
         }
         
         #startScreen .btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(34,197,94,0.6);
-        }
-        
-        #clearScreen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            background: #1a1a2e;
-            z-index: 100;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            gap: 20px;
-        }
-        
-        #clearScreen.show {
-            display: flex;
-        }
-        
-        #clearScreen h1 {
-            color: #22c55e;
-            font-size: 48px;
-            text-shadow: 0 0 20px rgba(34,197,94,0.8);
-            letter-spacing: 2px;
-        }
-        
-        #clearScreen .score {
-            color: #fff;
-            font-size: 36px;
-            font-weight: bold;
-        }
-        
-        #clearScreen .btn {
-            background: linear-gradient(135deg, #22c55e, #16a34a);
-            color: white;
-            border: none;
-            padding: 12px 36px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-top: 20px;
-            letter-spacing: 1px;
-        }
-        
-        #clearScreen .btn:hover {
-            transform: scale(1.05);
+            background: #16a34a;
         }
         
         #gameOverScreen {
@@ -144,69 +74,94 @@
             left: 0;
             width: 100%;
             height: 100%;
+            background: rgba(0,0,0,0.95);
             display: none;
-            background: #1a1a2e;
-            z-index: 100;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            gap: 20px;
+            z-index: 11;
         }
         
-        #gameOverScreen.show {
-            display: flex;
-        }
-        
-        #gameOverScreen h1 {
+        #gameOverScreen h2 {
             color: #ef4444;
-            font-size: 48px;
-            text-shadow: 0 0 20px rgba(239,68,68,0.8);
-            letter-spacing: 2px;
+            font-size: 40px;
+            margin-bottom: 20px;
         }
         
-        #gameOverScreen .score {
+        #gameOverScreen p {
             color: #fff;
-            font-size: 36px;
-            font-weight: bold;
+            font-size: 22px;
+            margin-bottom: 30px;
         }
         
         #gameOverScreen .btn {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
-            border: none;
-            padding: 12px 36px;
+            padding: 12px 40px;
             font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
-            margin-top: 20px;
-            letter-spacing: 1px;
+            font-weight: bold;
         }
         
-        #gameOverScreen .btn:hover {
-            transform: scale(1.05);
+        #clearScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 11;
+        }
+        
+        #clearScreen h2 {
+            color: #22c55e;
+            font-size: 40px;
+            margin-bottom: 20px;
+        }
+        
+        #clearScreen p {
+            color: #fff;
+            font-size: 22px;
+            margin-bottom: 30px;
+        }
+        
+        #clearScreen .btn {
+            padding: 12px 40px;
+            font-size: 16px;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <canvas id="gameCanvas" width="480" height="600"></canvas>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="480" height="480"></canvas>
         
-        <div id="startScreen" class="show">
+        <div id="startScreen">
             <h1>WORD QUIZ</h1>
-            <p>10 questions<br>Answer 7+ to pass<br>15 seconds per question</p>
+            <p>10問の穴埋めクイズに答えよう！<br>7問以上正解でCLEAR!</p>
             <button class="btn">START</button>
         </div>
         
-        <div id="clearScreen">
-            <h1>CLEAR!</h1>
-            <div class="score" id="clearScore"></div>
-            <button class="btn">REPLAY</button>
+        <div id="gameOverScreen">
+            <h2>GAME OVER</h2>
+            <p id="gameOverScore">Score: 0/10</p>
+            <button class="btn">RETRY</button>
         </div>
         
-        <div id="gameOverScreen">
-            <h1>GAME OVER</h1>
-            <div class="score" id="gameOverScore"></div>
+        <div id="clearScreen">
+            <h2>CLEAR!</h2>
+            <p id="clearScore">Score: 7/10</p>
             <button class="btn">RETRY</button>
         </div>
     </div>
@@ -223,245 +178,252 @@
             time_per_q: 15
         };
 
-        const questions = [
-            { question: 'P E A R', hint: '4 letters, fruit', answer: 'PEAR', choices: ['PEAR', 'BEAR', 'FEAR', 'GEAR'] },
-            { question: 'A P P L E', hint: 'Fruit, 5 letters', answer: 'APPLE', choices: ['APPLE', 'APPLY', 'ANKLE', 'AMPLE'] },
-            { question: 'B A N A N A', hint: 'Yellow fruit', answer: 'BANANA', choices: ['BANANA', 'BANAL', 'BONANZA', 'BANNER'] },
-            { question: 'O R A N G E', hint: 'Citrus fruit', answer: 'ORANGE', choices: ['ORANGE', 'ARRANGE', 'STRANGE', 'STORAGE'] },
-            { question: 'L E M O N', hint: 'Sour citrus', answer: 'LEMON', choices: ['LEMON', 'DEMON', 'LEDGE', 'LEMUR'] },
-            { question: 'M A N G O', hint: 'Tropical fruit', answer: 'MANGO', choices: ['MANGO', 'TANGO', 'BONGO', 'MANGA'] },
-            { question: 'G R A P E', hint: 'Purple fruit', answer: 'GRAPE', choices: ['GRAPE', 'GRACE', 'GRATE', 'GRAND'] },
-            { question: 'P E A C H', hint: 'Fuzzy fruit', answer: 'PEACH', choices: ['PEACH', 'BEACH', 'REACH', 'LEACH'] },
-            { question: 'M E L O N', hint: 'Summer fruit', answer: 'MELON', choices: ['MELON', 'FELON', 'NYLON', 'COLON'] },
-            { question: 'S T R A W B E R R Y', hint: '10 letters, red', answer: 'STRAWBERRY', choices: ['STRAWBERRY', 'BLUEBERRY', 'RASPBERRY', 'BLACKBERRY'] }
+        const quizDatabase = [
+            { question: "A _ P _ E", hint: "赤い果物", answer: "APPLE", wrongAnswers: ["AMPLE", "MAPLE", "AMPLE"] },
+            { question: "B A N A N _", hint: "黄い果物", answer: "BANANA", wrongAnswers: ["BONANA", "CABANA", "BANANA"] },
+            { question: "C A R R O _", hint: "オレンジ色の野菜", answer: "CARROT", wrongAnswers: ["CARRON", "CARROL", "CARROM"] },
+            { question: "M O N K E _", hint: "類人猿", answer: "MONKEY", wrongAnswers: ["MONKES", "MONKER", "DONKEY"] },
+            { question: "B I _ _ C L E", hint: "2輪の乗り物", answer: "BICYCLE", wrongAnswers: ["BIYCLE", "BOTCLE", "BIDCLE"] },
+            { question: "P I _ _ _", hint: "イタリア発祥の食べ物", answer: "PIZZA", wrongAnswers: ["PIOHA", "PITTA", "PIAZA"] },
+            { question: "G U I T A _", hint: "弦楽器", answer: "GUITAR", wrongAnswers: ["GUITAU", "GULTAR", "QUITAR"] },
+            { question: "S U M M E _", hint: "暑い季節", answer: "SUMMER", wrongAnswers: ["SUMMAR", "SUMBER", "SAMMER"] },
+            { question: "W I N T E _", hint: "寒い季節", answer: "WINTER", wrongAnswers: ["WINTAR", "WINDER", "WENTER"] },
+            { question: "T E _ E P H O N E", hint: "通信機器", answer: "TELEPHONE", wrongAnswers: ["TALEPHONE", "TELEFOHE", "TILIPHONE"] }
         ];
 
-        var gameState = {
+        let gameState = {
             running: false,
-            screen: 'start',
             currentQuestion: 0,
             score: 0,
             timeLeft: config.time_per_q,
-            answered: false,
-            selectedAnswer: null,
             questions: [],
+            currentChoices: [],
+            answered: false,
+            flashColor: null,
             flashTimer: 0,
-            flashType: null
+            showingCorrectAnswer: false,
+            answerTimeout: null
         };
 
-        var canvas = document.getElementById('gameCanvas');
-        var ctx = canvas.getContext('2d');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const clearScreen = document.getElementById('clearScreen');
 
-        function initGame() {
-            gameState.questions = questions.slice().sort(function() { return Math.random() - 0.5; });
-            gameState.currentQuestion = 0;
-            gameState.score = 0;
-            gameState.running = true;
-            gameState.screen = 'game';
-            gameState.answered = false;
-            gameState.selectedAnswer = null;
-            gameState.timeLeft = config.time_per_q;
-            gameState.flashTimer = 0;
-            gameState.flashType = null;
-            
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            document.getElementById('gameOverScreen').style.display = 'none';
+        function shuffleArray(arr) {
+            const result = [...arr];
+            for (let i = result.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [result[i], result[j]] = [result[j], result[i]];
+            }
+            return result;
         }
 
-        function nextQuestion() {
-            gameState.currentQuestion++;
-            gameState.answered = false;
-            gameState.selectedAnswer = null;
+        function initializeGame() {
+            gameState.running = true;
+            gameState.currentQuestion = 0;
+            gameState.score = 0;
             gameState.timeLeft = config.time_per_q;
+            gameState.questions = shuffleArray([...quizDatabase]);
+            gameState.answered = false;
+            gameState.flashColor = null;
             gameState.flashTimer = 0;
-            gameState.flashType = null;
+            gameState.showingCorrectAnswer = false;
             
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            clearScreen.style.display = 'none';
+            
+            loadQuestion();
+        }
+
+        function loadQuestion() {
             if (gameState.currentQuestion >= config.total_questions) {
                 endGame();
+                return;
+            }
+
+            const q = gameState.questions[gameState.currentQuestion];
+            const choices = [q.answer, ...q.wrongAnswers];
+            gameState.currentChoices = shuffleArray(choices);
+            gameState.answered = false;
+            gameState.timeLeft = config.time_per_q;
+            gameState.flashColor = null;
+            gameState.flashTimer = 0;
+            gameState.showingCorrectAnswer = false;
+        }
+
+        function checkAnswer(choiceIndex) {
+            if (gameState.answered || !gameState.running) return;
+            gameState.answered = true;
+
+            const currentQ = gameState.questions[gameState.currentQuestion];
+            const selectedAnswer = gameState.currentChoices[choiceIndex];
+            const isCorrect = selectedAnswer === currentQ.answer;
+
+            if (isCorrect) {
+                gameState.score++;
+                gameState.flashColor = config.correct_color;
+                gameState.flashTimer = 0.3;
+                gameState.answerTimeout = setTimeout(() => {
+                    gameState.currentQuestion++;
+                    loadQuestion();
+                }, 500);
+            } else {
+                gameState.flashColor = config.wrong_color;
+                gameState.flashTimer = 0.3;
+                gameState.showingCorrectAnswer = true;
+                gameState.answerTimeout = setTimeout(() => {
+                    gameState.currentQuestion++;
+                    loadQuestion();
+                }, 1500);
             }
         }
 
         function endGame() {
             gameState.running = false;
-            gameState.screen = gameState.score >= config.pass_score ? 'clear' : 'gameover';
-            
-            if (gameState.screen === 'clear') {
-                document.getElementById('clearScore').innerText = gameState.score + ' / ' + config.total_questions;
-                document.getElementById('clearScreen').style.display = 'flex';
+            if (gameState.score >= config.pass_score) {
+                document.getElementById('clearScore').textContent = 'Score: ' + gameState.score + '/10';
+                clearScreen.style.display = 'flex';
             } else {
-                document.getElementById('gameOverScore').innerText = gameState.score + ' / ' + config.total_questions;
-                document.getElementById('gameOverScreen').style.display = 'flex';
-            }
-        }
-
-        function handleAnswer(choiceIndex) {
-            if (!gameState.running || gameState.answered) return;
-            
-            gameState.answered = true;
-            gameState.selectedAnswer = choiceIndex;
-            
-            var current = gameState.questions[gameState.currentQuestion];
-            var isCorrect = current.choices[choiceIndex] === current.answer;
-            
-            if (isCorrect) {
-                gameState.score++;
-                gameState.flashType = 'correct';
-            } else {
-                gameState.flashType = 'wrong';
-            }
-            
-            gameState.flashTimer = 30;
-        }
-
-        function drawStartScreen() {
-        }
-
-        function drawGame() {
-            ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            var current = gameState.questions[gameState.currentQuestion];
-            
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 16px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText('Score: ' + gameState.score + ' / ' + config.total_questions, 20, 30);
-            ctx.fillText('Question: ' + (gameState.currentQuestion + 1) + ' / ' + config.total_questions, 20, 55);
-            
-            var timerWidth = (gameState.timeLeft / config.time_per_q) * 200;
-            var timerColor = gameState.timeLeft > 5 ? '#3b82f6' : '#ef4444';
-            ctx.fillStyle = '#333';
-            ctx.fillRect(240, 15, 220, 20);
-            ctx.fillStyle = timerColor;
-            ctx.fillRect(240, 15, timerWidth, 20);
-            ctx.strokeStyle = '#666';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(240, 15, 220, 20);
-            
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 28px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(current.question, canvas.width / 2, 120);
-            
-            ctx.fillStyle = config.hint_color;
-            ctx.font = 'bold 16px Arial';
-            ctx.fillText('Hint: ' + current.hint, canvas.width / 2, 160);
-            
-            if (gameState.flashTimer > 0) {
-                var flashAlpha = gameState.flashTimer / 30;
-                ctx.fillStyle = gameState.flashType === 'correct' ? 
-                    'rgba(34, 197, 94, ' + flashAlpha + ')' : 
-                    'rgba(239, 68, 68, ' + flashAlpha + ')';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
-            
-            var buttonY = 380;
-            var buttonWidth = 100;
-            var buttonHeight = 50;
-            var buttonGap = 10;
-            var startX = (canvas.width - (buttonWidth * 2 + buttonGap)) / 2;
-            
-            for (var i = 0; i < 4; i++) {
-                var x = startX + (i % 2) * (buttonWidth + buttonGap);
-                var y = buttonY + Math.floor(i / 2) * (buttonHeight + buttonGap);
-                
-                ctx.fillStyle = gameState.selectedAnswer === i ? '#666' : '#2d2d44';
-                ctx.fillRect(x, y, buttonWidth, buttonHeight);
-                ctx.strokeStyle = '#555';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x, y, buttonWidth, buttonHeight);
-                
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 14px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                var letter = String.fromCharCode(65 + i);
-                ctx.fillText(letter, x + 15, y + 25);
-                ctx.font = '12px Arial';
-                ctx.fillText(current.choices[i], x + 50, y + 25);
-            }
-        }
-
-        function drawClearScreen() {
-        }
-
-        function drawGameOverScreen() {
-        }
-
-        function gameLoop() {
-            if (gameState.running) {
-                if (!gameState.answered) {
-                    gameState.timeLeft -= 1 / 60;
-                    if (gameState.timeLeft <= 0) {
-                        gameState.timeLeft = 0;
-                        gameState.answered = true;
-                        gameState.flashType = 'wrong';
-                        gameState.flashTimer = 30;
-                    }
-                } else {
-                    if (gameState.flashTimer > 0) {
-                        gameState.flashTimer--;
-                    } else {
-                        nextQuestion();
-                    }
-                }
-            }
-            
-            ctx.fillStyle = config.bg_color;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            if (gameState.screen === 'game' && gameState.running) {
-                drawGame();
+                document.getElementById('gameOverScore').textContent = 'Score: ' + gameState.score + '/10';
+                gameOverScreen.style.display = 'flex';
             }
         }
 
         function retryGame() {
             gameState.running = false;
-            document.getElementById('startScreen').style.display = 'none';
-            document.getElementById('clearScreen').style.display = 'none';
-            document.getElementById('gameOverScreen').style.display = 'none';
-            initGame();
+            if (gameState.answerTimeout) {
+                clearTimeout(gameState.answerTimeout);
+            }
+            initializeGame();
         }
 
-        canvas.addEventListener('click', function(e) {
-            if (!gameState.running || gameState.answered) return;
-            
-            var rect = canvas.getBoundingClientRect();
-            var x = e.clientX - rect.left;
-            var y = e.clientY - rect.top;
-            
-            var buttonY = 380;
-            var buttonWidth = 100;
-            var buttonHeight = 50;
-            var buttonGap = 10;
-            var startX = (canvas.width - (buttonWidth * 2 + buttonGap)) / 2;
-            
-            for (var i = 0; i < 4; i++) {
-                var bx = startX + (i % 2) * (buttonWidth + buttonGap);
-                var by = buttonY + Math.floor(i / 2) * (buttonHeight + buttonGap);
-                
+        function drawGame() {
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState.flashTimer > 0) {
+                const alpha = (1 - gameState.flashTimer / 0.3) * 100;
+                ctx.fillStyle = gameState.flashColor + Math.floor(alpha).toString(16).padStart(2, '0');
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Q' + (gameState.currentQuestion + 1) + '/' + config.total_questions, 20, 30);
+            ctx.textAlign = 'right';
+            ctx.fillText('Score: ' + gameState.score, 460, 30);
+
+            const barWidth = 440;
+            const barHeight = 8;
+            const barX = 20;
+            const barY = 45;
+            const timePercent = Math.max(0, gameState.timeLeft / config.time_per_q);
+            ctx.fillStyle = '#333';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            ctx.fillStyle = timePercent > 0.3 ? config.correct_color : config.wrong_color;
+            ctx.fillRect(barX, barY, barWidth * timePercent, barHeight);
+
+            if (!gameState.running) return;
+
+            const currentQ = gameState.questions[gameState.currentQuestion];
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(currentQ.question, 240, 140);
+
+            ctx.fillStyle = config.hint_color;
+            ctx.font = '16px Arial';
+            ctx.fillText('ヒント: ' + currentQ.hint, 240, 200);
+
+            const buttonWidth = 100;
+            const buttonHeight = 50;
+            const buttonGap = 10;
+            const startX = (canvas.width - (buttonWidth * 2 + buttonGap)) / 2;
+            const startY = 250;
+
+            for (let i = 0; i < 4; i++) {
+                const row = Math.floor(i / 2);
+                const col = i % 2;
+                const x = startX + col * (buttonWidth + buttonGap);
+                const y = startY + row * (buttonHeight + buttonGap);
+
+                ctx.fillStyle = '#333';
+                ctx.fillRect(x, y, buttonWidth, buttonHeight);
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, buttonWidth, buttonHeight);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(gameState.currentChoices[i], x + buttonWidth / 2, y + buttonHeight / 2);
+            }
+
+            if (gameState.showingCorrectAnswer) {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = config.correct_color;
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('正解: ' + currentQ.answer, 240, 240);
+            }
+        }
+
+        function gameLoop() {
+            if (gameState.running) {
+                gameState.timeLeft -= 0.016;
+                if (gameState.timeLeft <= 0) {
+                    gameState.timeLeft = 0;
+                    if (!gameState.answered) {
+                        checkAnswer(-1);
+                    }
+                }
+                gameState.flashTimer -= 0.016;
+            }
+            drawGame();
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.running) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const buttonWidth = 100;
+            const buttonHeight = 50;
+            const buttonGap = 10;
+            const startX = (canvas.width - (buttonWidth * 2 + buttonGap)) / 2;
+            const startY = 250;
+
+            for (let i = 0; i < 4; i++) {
+                const row = Math.floor(i / 2);
+                const col = i % 2;
+                const bx = startX + col * (buttonWidth + buttonGap);
+                const by = startY + row * (buttonHeight + buttonGap);
+
                 if (x >= bx && x <= bx + buttonWidth && y >= by && y <= by + buttonHeight) {
-                    handleAnswer(i);
-                    break;
+                    checkAnswer(i);
                 }
             }
         });
 
-        document.addEventListener('click', function(e) {
-            var startBtn = document.querySelector('#startScreen .btn');
-            var clearBtn = document.querySelector('#clearScreen .btn');
-            var gameOverBtn = document.querySelector('#gameOverScreen .btn');
-            
-            if (e.target === startBtn) {
-                initGame();
-            } else if (e.target === clearBtn) {
-                retryGame();
-            } else if (e.target === gameOverBtn) {
-                retryGame();
-            }
+        const startBtn = document.querySelector('#startScreen .btn');
+        startBtn.addEventListener('click', initializeGame);
+
+        const retryButtons = document.querySelectorAll('#gameOverScreen .btn, #clearScreen .btn');
+        retryButtons.forEach(btn => {
+            btn.addEventListener('click', retryGame);
         });
 
+        startScreen.style.display = 'flex';
         setInterval(gameLoop, 16);
     </script>
 </body>
