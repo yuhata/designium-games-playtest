@@ -1,564 +1,425 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PICROSS</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Arial', sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      background: #f8f9fa;
-    }
-    #gameContainer {
-      position: relative;
-      background: white;
-      padding: 40px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    #startScreen {
-      text-align: center;
-      min-width: 400px;
-    }
-    #startScreen h1 {
-      font-size: 48px;
-      margin-bottom: 20px;
-      color: #2d3748;
-    }
-    #startScreen p {
-      font-size: 16px;
-      margin-bottom: 30px;
-      color: #4a5568;
-    }
-    #gameScreen {
-      position: relative;
-    }
-    canvas {
-      display: block;
-      border: 2px solid #2d3748;
-      margin-bottom: 20px;
-      cursor: crosshair;
-      background: white;
-    }
-    #controlPanel {
-      text-align: center;
-      display: none;
-    }
-    #controlPanel.active {
-      display: block;
-    }
-    #clearScreen {
-      text-align: center;
-    }
-    #clearScreen h1 {
-      font-size: 48px;
-      margin-bottom: 20px;
-      color: #2d3748;
-    }
-    #silhouetteDisplay {
-      margin: 30px 0;
-      min-height: 200px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .btn {
-      padding: 12px 30px;
-      font-size: 16px;
-      font-weight: bold;
-      background: #4299e1;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn:hover {
-      background: #3182ce;
-    }
-    #checkBtn {
-      padding: 12px 30px;
-      font-size: 16px;
-      font-weight: bold;
-      background: #48bb78;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-right: 10px;
-    }
-    #checkBtn:hover {
-      background: #38a169;
-    }
-    #resetBtn {
-      padding: 12px 30px;
-      font-size: 16px;
-      font-weight: bold;
-      background: #ed8936;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    #resetBtn:hover {
-      background: #dd6b20;
-    }
-    .info {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #718096;
-    }
-    #progressBar {
-      margin-top: 15px;
-      width: 100%;
-      height: 8px;
-      background: #e2e8f0;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    #progressFill {
-      height: 100%;
-      background: #48bb78;
-      width: 0%;
-      transition: width 0.3s;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PICROSS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        #container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            max-width: 900px;
+            width: 100%;
+        }
+        #title {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+        #startScreen {
+            text-align: center;
+            padding: 40px 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        #startScreen h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+        .rule-text {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #4a5568;
+            margin: 20px auto;
+            max-width: 400px;
+            text-align: left;
+            background: white;
+            padding: 15px;
+            border-left: 4px solid #4299e1;
+            border-radius: 4px;
+        }
+        .rule-text strong {
+            color: #2d3748;
+        }
+        .btn {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #3182ce;
+        }
+        #gameContainer {
+            display: none;
+        }
+        #canvas {
+            display: block;
+            margin: 0 auto;
+            background: #f8f9fa;
+            border: 2px solid #cbd5e0;
+            border-radius: 4px;
+        }
+        #clearScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #clearPopup {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        #clearPopup h2 {
+            font-size: 28px;
+            color: #22863a;
+            margin-bottom: 20px;
+        }
+        #silhouetteDisplay {
+            font-size: 80px;
+            margin: 30px 0;
+            font-weight: bold;
+        }
+        .retry-btn {
+            background: #22863a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .retry-btn:hover {
+            background: #1a5e27;
+        }
+    </style>
 </head>
 <body>
-  <div id="gameContainer">
-    <div id="startScreen" style="display: block;">
-      <h1>PICROSS</h1>
-      <p>ヒント数字をたよりに、グリッドを塗りつぶしてシルエットを完成させよう</p>
-      <p style="font-size: 14px; margin-top: 15px; color: #718096;">
-        左クリック: 黒く塗る ｜ 右クリック: ×マーク（空き）
-      </p>
-      <button class="btn" style="margin-top: 30px;">START</button>
-    </div>
+    <div id="container">
+        <div id="title">PICROSS</div>
 
-    <div id="gameScreen" style="display: none;">
-      <canvas id="gameCanvas" width="560" height="560"></canvas>
-      <div id="controlPanel" class="active">
-        <button id="checkBtn">完成判定</button>
-        <button id="resetBtn">リセット</button>
-        <div class="info" id="hintText">ヒント: 数字は行・列の連続した塗りマス数です</div>
-        <div id="progressBar">
-          <div id="progressFill"></div>
+        <div id="startScreen">
+            <h2>ノノグラムパズル</h2>
+            <div class="rule-text">
+                <strong>数字 = その行/列に連続して塗るマス数</strong><br>
+                例: [3] → ■■■　<br>
+                例: [1,2] → ■ ■■<br><br>
+                <strong>操作方法:</strong><br>
+                左クリック: マスを塗る<br>
+                右クリック: ×（空き）
+            </div>
+            <button class="btn" id="startBtn">START</button>
         </div>
-      </div>
+
+        <div id="gameContainer">
+            <canvas id="canvas"></canvas>
+        </div>
     </div>
 
-    <div id="clearScreen" style="display: none;">
-      <h1>完成!</h1>
-      <p style="font-size: 18px; margin: 20px 0; color: #4a5568;">シルエットを見つけました</p>
-      <div id="silhouetteDisplay"></div>
-      <button class="btn" style="margin-top: 20px;">NEXT</button>
+    <div id="clearScreen">
+        <div id="clearPopup">
+            <h2>🎉 完成! 🎉</h2>
+            <div id="silhouetteDisplay"></div>
+            <button class="retry-btn" id="retryBtn">もう一度</button>
+        </div>
     </div>
-  </div>
 
-  <script>
-    const config = {
-      title: 'PICROSS',
-      bg_color: '#f8f9fa',
-      filled_color: '#2d3748',
-      empty_color: '#ffffff',
-      wrong_color: '#ef4444',
-      hint_color: '#4299e1',
-      grid_size: 7
-    };
+    <script>
+        const config = {
+            title: 'PICROSS',
+            bg_color: '#f8f9fa',
+            filled_color: '#2d3748',
+            empty_color: '#ffffff',
+            wrong_color: '#ef4444',
+            hint_color: '#4299e1',
+            grid_size: 7
+        };
 
-    const CELL_SIZE = 70;
-    const HINT_WIDTH = 60;
-    const HINT_HEIGHT = 60;
+        const silhouettes = [
+            { pattern: [[0,3],[1,2],[1,3],[1,4],[2,3],[3,1],[3,2],[3,3],[3,4],[3,5],[4,3],[5,3],[6,3]], emoji: '❤️' },
+            { pattern: [[0,3],[1,2],[1,3],[1,4],[2,1],[2,2],[2,3],[2,4],[2,5],[3,0],[3,1],[3,2],[3,3],[3,4],[3,5],[3,6],[4,1],[4,2],[4,3],[4,4],[4,5],[5,2],[5,3],[5,4],[6,3]], emoji: '⭐' },
+            { pattern: [[1,1],[1,2],[1,3],[1,4],[1,5],[2,1],[2,5],[3,1],[3,2],[3,3],[3,4],[3,5],[4,3],[5,2],[5,3],[5,4],[6,3]], emoji: '🐟' },
+            { pattern: [[0,3],[1,2],[1,3],[1,4],[2,1],[2,3],[2,5],[3,0],[3,3],[3,6],[4,1],[4,3],[4,5],[5,2],[5,3],[5,4],[6,3]], emoji: '🎨' },
+            { pattern: [[0,2],[0,3],[0,4],[1,1],[1,2],[1,3],[1,4],[1,5],[2,1],[2,5],[3,1],[3,2],[3,3],[3,4],[3,5],[4,1],[4,5],[5,1],[5,2],[5,3],[5,4],[5,5],[6,2],[6,3],[6,4]], emoji: '🔔' }
+        ];
 
-    const PATTERNS = [
-      [
-        [0, 0, 1, 0, 0, 0, 0],
-        [0, 1, 1, 1, 0, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [0, 1, 1, 1, 0, 0, 0],
-        [0, 0, 1, 0, 0, 0, 0]
-      ],
-      [
-        [0, 0, 1, 0, 0, 0, 0],
-        [0, 1, 1, 1, 0, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [0, 1, 0, 1, 0, 0, 0],
-        [0, 1, 0, 1, 0, 0, 0]
-      ],
-      [
-        [0, 0, 1, 0, 0, 0, 0],
-        [0, 0, 1, 0, 0, 0, 0],
-        [0, 1, 1, 1, 0, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [1, 1, 1, 1, 1, 0, 0],
-        [0, 1, 1, 1, 0, 0, 0],
-        [0, 0, 1, 0, 0, 0, 0]
-      ],
-      [
-        [1, 0, 0, 0, 0, 0, 1],
-        [1, 1, 0, 0, 0, 1, 1],
-        [1, 1, 1, 0, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1],
-        [0, 1, 1, 1, 1, 1, 0],
-        [0, 0, 1, 1, 1, 0, 0]
-      ],
-      [
-        [0, 1, 1, 1, 1, 1, 0],
-        [1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 0, 1, 0, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1],
-        [0, 1, 1, 1, 1, 1, 0],
-        [0, 0, 1, 1, 1, 0, 0]
-      ]
-    ];
+        let gameState = {
+            running: false,
+            grid: [],
+            solution: [],
+            currentSilhouette: null,
+            gameLoopHandle: null
+        };
 
-    var gameState = {
-      running: false,
-      grid: [],
-      correctPattern: [],
-      patterns: PATTERNS,
-      currentPatternIdx: 0,
-      gridSize: config.grid_size,
-      hintWidth: HINT_WIDTH,
-      hintHeight: HINT_HEIGHT,
-      rowHints: [],
-      colHints: [],
-      rowComplete: [],
-      colComplete: [],
-      lastDrawTime: 0
-    };
+        function initGame() {
+            gameState.running = true;
+            gameState.grid = [];
+            for (let i = 0; i < config.grid_size; i++) {
+                gameState.grid[i] = [];
+                for (let j = 0; j < config.grid_size; j++) {
+                    gameState.grid[i][j] = 0;
+                }
+            }
 
-    var canvas = document.getElementById('gameCanvas');
-    var ctx = canvas.getContext('2d');
+            const silhouetteIdx = Math.floor(Math.random() * silhouettes.length);
+            gameState.currentSilhouette = silhouettes[silhouetteIdx];
 
-    function getRunLengthEncoding(arr) {
-      var result = [];
-      var count = 0;
-      for (var i = 0; i < arr.length; i++) {
-        if (arr[i] === 1) {
-          count++;
-        } else {
-          if (count > 0) {
-            result.push(count);
-            count = 0;
-          }
+            gameState.solution = [];
+            for (let i = 0; i < config.grid_size; i++) {
+                gameState.solution[i] = [];
+                for (let j = 0; j < config.grid_size; j++) {
+                    gameState.solution[i][j] = 0;
+                }
+            }
+
+            gameState.currentSilhouette.pattern.forEach(function(coord) {
+                gameState.solution[coord[0]][coord[1]] = 1;
+            });
         }
-      }
-      if (count > 0) {
-        result.push(count);
-      }
-      return result.length === 0 ? [0] : result;
-    }
 
-    function generateHints() {
-      gameState.rowHints = [];
-      gameState.colHints = [];
-
-      for (var i = 0; i < gameState.gridSize; i++) {
-        gameState.rowHints.push(getRunLengthEncoding(gameState.correctPattern[i]));
-      }
-
-      for (var j = 0; j < gameState.gridSize; j++) {
-        var col = [];
-        for (var i = 0; i < gameState.gridSize; i++) {
-          col.push(gameState.correctPattern[i][j]);
+        function getRunLengths(arr) {
+            const lengths = [];
+            let count = 0;
+            for (let i = 0; i < arr.length; i++) {
+                if (arr[i] === 1) {
+                    count++;
+                } else if (count > 0) {
+                    lengths.push(count);
+                    count = 0;
+                }
+            }
+            if (count > 0) lengths.push(count);
+            return lengths.length === 0 ? [0] : lengths;
         }
-        gameState.colHints.push(getRunLengthEncoding(col));
-      }
 
-      gameState.rowComplete = [];
-      gameState.colComplete = [];
-      for (var i = 0; i < gameState.gridSize; i++) {
-        gameState.rowComplete.push(false);
-        gameState.colComplete.push(false);
-      }
-    }
-
-    function initGame() {
-      gameState.currentPatternIdx = Math.floor(Math.random() * gameState.patterns.length);
-      gameState.correctPattern = gameState.patterns[gameState.currentPatternIdx];
-
-      gameState.grid = [];
-      for (var i = 0; i < gameState.gridSize; i++) {
-        var row = [];
-        for (var j = 0; j < gameState.gridSize; j++) {
-          row.push(0);
+        function isRowComplete(rowIdx) {
+            const playerRow = gameState.grid[rowIdx];
+            const solutionRow = gameState.solution[rowIdx];
+            const playerLengths = getRunLengths(playerRow.map(function(c) { return c === 1 ? 1 : 0; }));
+            const solutionLengths = getRunLengths(solutionRow);
+            return JSON.stringify(playerLengths) === JSON.stringify(solutionLengths);
         }
-        gameState.grid.push(row);
-      }
 
-      generateHints();
-    }
+        function isColComplete(colIdx) {
+            const playerCol = [];
+            const solutionCol = [];
+            for (let i = 0; i < config.grid_size; i++) {
+                playerCol.push(gameState.grid[i][colIdx]);
+                solutionCol.push(gameState.solution[i][colIdx]);
+            }
+            const playerLengths = getRunLengths(playerCol.map(function(c) { return c === 1 ? 1 : 0; }));
+            const solutionLengths = getRunLengths(solutionCol);
+            return JSON.stringify(playerLengths) === JSON.stringify(solutionLengths);
+        }
 
-    function drawGrid() {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function checkWin() {
+            for (let i = 0; i < config.grid_size; i++) {
+                if (!isRowComplete(i) || !isColComplete(i)) {
+                    return false;
+                }
+            }
+            return true;
+        }
 
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 1;
+        function handleCanvasClick(e) {
+            if (!gameState.running) return;
 
-      for (var i = 0; i <= gameState.gridSize; i++) {
-        var y = gameState.hintHeight + i * CELL_SIZE;
-        ctx.beginPath();
-        ctx.moveTo(gameState.hintWidth, y);
-        ctx.lineTo(gameState.hintWidth + gameState.gridSize * CELL_SIZE, y);
-        ctx.stroke();
+            const canvas = document.getElementById('canvas');
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
-        var x = gameState.hintWidth + i * CELL_SIZE;
-        ctx.beginPath();
-        ctx.moveTo(x, gameState.hintHeight);
-        ctx.lineTo(x, gameState.hintHeight + gameState.gridSize * CELL_SIZE);
-        ctx.stroke();
-      }
+            const hintSize = 60;
+            const cellSize = (canvas.width - hintSize) / config.grid_size;
 
-      ctx.strokeStyle = '#2d3748';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(gameState.hintWidth, gameState.hintHeight, gameState.gridSize * CELL_SIZE, gameState.gridSize * CELL_SIZE);
-    }
+            if (x < hintSize || y < hintSize) return;
 
-    function drawCells() {
-      for (var i = 0; i < gameState.gridSize; i++) {
-        for (var j = 0; j < gameState.gridSize; j++) {
-          var x = gameState.hintWidth + j * CELL_SIZE;
-          var y = gameState.hintHeight + i * CELL_SIZE;
+            const col = Math.floor((x - hintSize) / cellSize);
+            const row = Math.floor((y - hintSize) / cellSize);
 
-          var state = gameState.grid[i][j];
+            if (row >= 0 && row < config.grid_size && col >= 0 && col < config.grid_size) {
+                if (e.button === 0) {
+                    gameState.grid[row][col] = gameState.grid[row][col] === 1 ? 0 : 1;
+                } else if (e.button === 2) {
+                    gameState.grid[row][col] = gameState.grid[row][col] === 2 ? 0 : 2;
+                }
 
-          if (state === 1) {
-            ctx.fillStyle = config.filled_color;
-            ctx.fillRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-          } else if (state === 2) {
-            ctx.fillStyle = config.empty_color;
-            ctx.fillRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-            ctx.strokeStyle = '#cbd5e0';
+                if (checkWin()) {
+                    gameState.running = false;
+                    const clearScreen = document.getElementById('clearScreen');
+                    const silhouetteDisplay = document.getElementById('silhouetteDisplay');
+                    silhouetteDisplay.textContent = gameState.currentSilhouette.emoji;
+                    clearScreen.style.display = 'flex';
+                }
+            }
+        }
+
+        function drawGame() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = 700;
+            canvas.height = 700;
+
+            ctx.fillStyle = config.bg_color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const hintSize = 60;
+            const cellSize = (canvas.width - hintSize) / config.grid_size;
+
+            ctx.strokeStyle = '#e2e8f0';
             ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(x + 8, y + 8);
-            ctx.lineTo(x + CELL_SIZE - 8, y + CELL_SIZE - 8);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x + CELL_SIZE - 8, y + 8);
-            ctx.lineTo(x + 8, y + CELL_SIZE - 8);
-            ctx.stroke();
-          }
+            for (let i = 0; i <= config.grid_size; i++) {
+                const pos = hintSize + i * cellSize;
+                ctx.beginPath();
+                ctx.moveTo(pos, hintSize);
+                ctx.lineTo(pos, canvas.height);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(hintSize, pos);
+                ctx.lineTo(canvas.width, pos);
+                ctx.stroke();
+            }
+
+            for (let i = 0; i < config.grid_size; i++) {
+                for (let j = 0; j < config.grid_size; j++) {
+                    const x = hintSize + j * cellSize;
+                    const y = hintSize + i * cellSize;
+
+                    if (gameState.grid[i][j] === 1) {
+                        ctx.fillStyle = config.filled_color;
+                        ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                    } else if (gameState.grid[i][j] === 2) {
+                        ctx.fillStyle = config.empty_color;
+                        ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                        ctx.strokeStyle = '#cbd5e0';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(x + 5, y + 5);
+                        ctx.lineTo(x + cellSize - 5, y + cellSize - 5);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(x + cellSize - 5, y + 5);
+                        ctx.lineTo(x + 5, y + cellSize - 5);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            ctx.fillStyle = '#2d3748';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i < config.grid_size; i++) {
+                const lengths = getRunLengths(gameState.solution[i]);
+                const hint = lengths[0] === 0 ? '0' : lengths.join(' ');
+                const color = isRowComplete(i) ? '#22863a' : '#2d3748';
+                ctx.fillStyle = color;
+                const y = hintSize + (i + 0.5) * cellSize;
+                ctx.fillText(hint, hintSize - 10, y);
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            for (let j = 0; j < config.grid_size; j++) {
+                const col = [];
+                for (let i = 0; i < config.grid_size; i++) {
+                    col.push(gameState.solution[i][j]);
+                }
+                const lengths = getRunLengths(col);
+                const hint = lengths[0] === 0 ? '0' : lengths.join(' ');
+                const color = isColComplete(j) ? '#22863a' : '#2d3748';
+                ctx.fillStyle = color;
+                const x = hintSize + (j + 0.5) * cellSize;
+                ctx.font = '11px Arial';
+                ctx.fillText(hint, x, hintSize - 10);
+            }
         }
-      }
-    }
 
-    function drawHints() {
-      ctx.fillStyle = '#2d3748';
-      ctx.font = 'bold 13px Arial';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-
-      for (var i = 0; i < gameState.gridSize; i++) {
-        var hints = gameState.rowHints[i];
-        var y = gameState.hintHeight + i * CELL_SIZE + CELL_SIZE / 2;
-        var text = hints.join(' ');
-
-        if (gameState.rowComplete[i]) {
-          ctx.fillStyle = '#48bb78';
-        } else {
-          ctx.fillStyle = '#2d3748';
+        function gameLoop() {
+            drawGame();
         }
 
-        ctx.fillText(text, gameState.hintWidth - 8, y);
-      }
-
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      for (var j = 0; j < gameState.gridSize; j++) {
-        var hints = gameState.colHints[j];
-        var x = gameState.hintWidth + j * CELL_SIZE + CELL_SIZE / 2;
-        var text = hints.join(' ');
-
-        if (gameState.colComplete[j]) {
-          ctx.fillStyle = '#48bb78';
-        } else {
-          ctx.fillStyle = '#2d3748';
+        function retryGame() {
+            gameState.running = false;
+            const clearScreen = document.getElementById('clearScreen');
+            clearScreen.style.display = 'none';
+            initGame();
         }
 
-        var hintY = gameState.hintHeight - 16;
-        ctx.fillText(text, x, hintY);
-      }
-    }
+        document.getElementById('startBtn').addEventListener('click', function() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            initGame();
+            if (!gameState.gameLoopHandle) {
+                gameState.gameLoopHandle = setInterval(gameLoop, 16);
+            }
+        });
 
-    function updateProgress() {
-      var completed = 0;
-      for (var i = 0; i < gameState.gridSize; i++) {
-        if (gameState.rowComplete[i]) completed++;
-        if (gameState.colComplete[i]) completed++;
-      }
-      var total = gameState.gridSize * 2;
-      var percentage = (completed / total) * 100;
-      document.getElementById('progressFill').style.width = percentage + '%';
-    }
+        document.getElementById('retryBtn').addEventListener('click', retryGame);
 
-    function checkCompletion() {
-      for (var i = 0; i < gameState.gridSize; i++) {
-        var rowEncoding = getRunLengthEncoding(gameState.grid[i]);
-        var correctEncoding = getRunLengthEncoding(gameState.correctPattern[i]);
-        gameState.rowComplete[i] = JSON.stringify(rowEncoding) === JSON.stringify(correctEncoding);
-      }
+        const canvas = document.getElementById('canvas');
+        canvas.addEventListener('click', handleCanvasClick);
+        canvas.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const hintSize = 60;
+            const cellSize = (canvas.width - hintSize) / config.grid_size;
 
-      for (var j = 0; j < gameState.gridSize; j++) {
-        var col = [];
-        var correctCol = [];
-        for (var i = 0; i < gameState.gridSize; i++) {
-          col.push(gameState.grid[i][j]);
-          correctCol.push(gameState.correctPattern[i][j]);
-        }
-        var colEncoding = getRunLengthEncoding(col);
-        var correctColEncoding = getRunLengthEncoding(correctCol);
-        gameState.colComplete[j] = JSON.stringify(colEncoding) === JSON.stringify(correctColEncoding);
-      }
+            if (x < hintSize || y < hintSize) return;
 
-      updateProgress();
+            const col = Math.floor((x - hintSize) / cellSize);
+            const row = Math.floor((y - hintSize) / cellSize);
 
-      var allComplete = true;
-      for (var i = 0; i < gameState.gridSize; i++) {
-        if (!gameState.rowComplete[i] || !gameState.colComplete[i]) {
-          allComplete = false;
-          break;
-        }
-      }
+            if (row >= 0 && row < config.grid_size && col >= 0 && col < config.grid_size) {
+                gameState.grid[row][col] = gameState.grid[row][col] === 2 ? 0 : 2;
 
-      return allComplete;
-    }
-
-    function gameLoop() {
-      if (!gameState.running) return;
-
-      drawGrid();
-      drawCells();
-      drawHints();
-    }
-
-    function handleClick(e) {
-      if (!gameState.running) return;
-
-      var rect = canvas.getBoundingClientRect();
-      var x = e.clientX - rect.left;
-      var y = e.clientY - rect.top;
-
-      var col = Math.floor((x - gameState.hintWidth) / CELL_SIZE);
-      var row = Math.floor((y - gameState.hintHeight) / CELL_SIZE);
-
-      if (row >= 0 && row < gameState.gridSize && col >= 0 && col < gameState.gridSize) {
-        gameState.grid[row][col] = 1;
-        gameLoop();
-      }
-    }
-
-    function handleRightClick(e) {
-      e.preventDefault();
-      if (!gameState.running) return;
-
-      var rect = canvas.getBoundingClientRect();
-      var x = e.clientX - rect.left;
-      var y = e.clientY - rect.top;
-
-      var col = Math.floor((x - gameState.hintWidth) / CELL_SIZE);
-      var row = Math.floor((y - gameState.hintHeight) / CELL_SIZE);
-
-      if (row >= 0 && row < gameState.gridSize && col >= 0 && col < gameState.gridSize) {
-        gameState.grid[row][col] = gameState.grid[row][col] === 2 ? 0 : 2;
-        gameLoop();
-      }
-    }
-
-    function startGame() {
-      gameState.running = true;
-      document.getElementById('startScreen').style.display = 'none';
-      document.getElementById('gameScreen').style.display = 'block';
-      document.getElementById('clearScreen').style.display = 'none';
-      initGame();
-      gameLoop();
-    }
-
-    function retryGame() {
-      gameState.running = false;
-      startGame();
-    }
-
-    function showClear() {
-      gameState.running = false;
-      document.getElementById('gameScreen').style.display = 'none';
-      document.getElementById('clearScreen').style.display = 'block';
-
-      var silhouetteCanvas = document.createElement('canvas');
-      silhouetteCanvas.width = 280;
-      silhouetteCanvas.height = 280;
-      var sCtx = silhouetteCanvas.getContext('2d');
-
-      sCtx.fillStyle = '#f8f9fa';
-      sCtx.fillRect(0, 0, silhouetteCanvas.width, silhouetteCanvas.height);
-
-      var cellSize = 40;
-      sCtx.fillStyle = '#2d3748';
-      for (var i = 0; i < gameState.gridSize; i++) {
-        for (var j = 0; j < gameState.gridSize; j++) {
-          if (gameState.correctPattern[i][j] === 1) {
-            sCtx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
-          }
-        }
-      }
-
-      sCtx.strokeStyle = '#cbd5e0';
-      sCtx.lineWidth = 1;
-      for (var i = 0; i <= gameState.gridSize; i++) {
-        sCtx.beginPath();
-        sCtx.moveTo(0, i * cellSize);
-        sCtx.lineTo(gameState.gridSize * cellSize, i * cellSize);
-        sCtx.stroke();
-        sCtx.beginPath();
-        sCtx.moveTo(i * cellSize, 0);
-        sCtx.lineTo(i * cellSize, gameState.gridSize * cellSize);
-        sCtx.stroke();
-      }
-
-      document.getElementById('silhouetteDisplay').innerHTML = '';
-      document.getElementById('silhouetteDisplay').appendChild(silhouetteCanvas);
-    }
-
-    canvas.addEventListener('click', handleClick);
-    canvas.addEventListener('contextmenu', handleRightClick);
-
-    document.getElementById('startScreen').addEventListener('click', function(e) {
-      if (e.target.className === 'btn' && !gameState.running) {
-        startGame();
-      }
-    });
-
-    document.getElementById('checkBtn').addEventListener('click', function() {
-      if (checkCompletion()) {
-        showClear();
-      }
-    });
-
-    document.getElementById('resetBtn').addEventListener('click', function() {
-      retryGame();
-    });
-
-    document.getElementById('clearScreen').addEventListener('click', function(e) {
-      if (e.target.className === 'btn') {
-        startGame();
-      }
-    });
-
-    setInterval(gameLoop, 16);
-  </script>
+                if (checkWin()) {
+                    gameState.running = false;
+                    const clearScreen = document.getElementById('clearScreen');
+                    const silhouetteDisplay = document.getElementById('silhouetteDisplay');
+                    silhouetteDisplay.textContent = gameState.currentSilhouette.emoji;
+                    clearScreen.style.display = 'flex';
+                }
+            }
+        });
+    </script>
 </body>
 </html>
