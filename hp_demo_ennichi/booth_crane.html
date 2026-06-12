@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>クレーン景品釣り</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #7b1e1e 0%, #3d0f0f 100%);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 12px 20px 20px;
+    }
+    #gameContainer {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+    }
+    .screen {
+      text-align: center;
+      min-height: 500px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    #startScreen {
+      background: linear-gradient(135deg, #c0392b 0%, #7b1e1e 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 40px 20px;
+    }
+    #gameScreen {
+      background: #fdf6ec;
+    }
+    #clearScreen {
+      background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+      color: #5b2c00;
+      border-radius: 12px;
+      padding: 40px 20px;
+    }
+    #gameOverScreen {
+      background: linear-gradient(135deg, #4b6584 0%, #2d3a4f 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 2.2em;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    p {
+      font-size: 1.1em;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+    button {
+      background: linear-gradient(135deg, #c0392b 0%, #7b1e1e 100%);
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      font-size: 1.1em;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin: 10px;
+      font-weight: bold;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(192, 57, 43, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    #gameCanvas {
+      border: 3px solid #7b1e1e;
+      background: linear-gradient(to bottom, #2c3e50 0%, #4b6584 100%);
+      display: block;
+      margin: 0 auto 20px;
+      border-radius: 8px;
+      max-width: 100%;
+    }
+    .gameHUD {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      font-size: 1.1em;
+      font-weight: bold;
+      color: #333;
+    }
+    .hudItem {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      background: #f7e8d0;
+      border-radius: 6px;
+      margin: 0 5px;
+    }
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .controls button {
+      margin: 5px;
+      padding: 10px 16px;
+      font-size: 1em;
+    }
+    .collectionArea {
+      background: #fff3e0;
+      border: 2px dashed #c0392b;
+      border-radius: 8px;
+      padding: 15px;
+      min-height: 60px;
+      margin-bottom: 15px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
+    }
+    .collectedItem {
+      font-size: 2em;
+      animation: popIn 0.5s ease-out;
+    }
+    @keyframes popIn {
+      0% {
+        transform: scale(0) rotate(0deg);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+      }
+    }
+    @keyframes grab {
+      0% {
+        transform: translateY(0);
+      }
+      100% {
+        transform: translateY(-300px);
+      }
+    }
+    .prizeFloat {
+      position: absolute;
+      font-size: 2em;
+      animation: grab 0.6s ease-out forwards;
+    }
+    .prizeBtn {
+      background: linear-gradient(135deg, #e67e22 0%, #c0392b 100%) !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- START SCREEN -->
+    <div id="startScreen" class="screen">
+      <h1>🧸 クレーン景品釣り</h1>
+      <p>屋台のクレーンで景品をゲット！</p>
+      <p style="font-size: 0.95em;">アームを動かして落とすだけ。<br>10回以内に5個集めれば景品を持ち帰れる。</p>
+      <button onclick="startGame()">あそぶ</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="gameScreen" class="screen" style="display: none;">
+      <div class="gameHUD">
+        <div class="hudItem">ゲット: <span id="collected">0</span>/5</div>
+        <div class="hudItem">残り回数: <span id="attempts">10</span></div>
+      </div>
+      <canvas id="gameCanvas" width="380" height="400"></canvas>
+      <div class="collectionArea" id="collectionArea"></div>
+      <div class="controls">
+        <button onclick="moveCraneLef()">← 左</button>
+        <button id="dropClawBtn" onclick="dropClaw()" style="font-weight: bold;">📍 落とす</button>
+        <button onclick="moveCraneRight()">右 →</button>
+      </div>
+      <p style="font-size: 0.9em; color: #666; margin-top: 10px;">キーボード: A/D または ← →、SPACEで落とす</p>
+    </div>
+
+    <!-- CLEAR SCREEN -->
+    <div id="clearScreen" class="screen" style="display: none;">
+      <h1>🎉 CLEAR!</h1>
+      <p>景品を5個ゲットした！</p>
+      <p id="finalStats" style="font-size: 0.95em;"></p>
+      <button id="takePrizeBtn" class="prizeBtn" onclick="takePrize()">景品を持ち帰る</button>
+      <button id="retryClearBtn" onclick="retryGame()">もう一度</button>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="gameOverScreen" class="screen" style="display: none;">
+      <h1>💔 ざんねん…</h1>
+      <p>回数を使い切った！</p>
+      <p id="finalStats2" style="font-size: 0.95em;"></p>
+      <button id="retryGameOverBtn" onclick="retryGame()">もう一度</button>
+    </div>
+  </div>
+
+  <script>
+    const config = {
+      title: 'クレーン景品釣り',
+      // Colors（縁日テーマ: 紅・提灯色）
+      bg_color: '#7b1e1e',
+      bg_color_end: '#3d0f0f',
+      primary_color: '#c0392b',
+      accent_color: '#7b1e1e',
+      clear_bg_start: '#f6d365',
+      clear_bg_end: '#fda085',
+      gameover_bg_start: '#4b6584',
+      gameover_bg_end: '#2d3a4f',
+      drop_button_gradient_start: '#e67e22',
+      drop_button_gradient_end: '#c0392b',
+      retry_clear_gradient_start: '#f6d365',
+      retry_clear_gradient_end: '#fda085',
+      retry_gameover_gradient_start: '#e67e22',
+      retry_gameover_gradient_end: '#c0392b',
+      crane_arm_color: '#8B4513',
+      crane_base_color: '#D2691E',
+      claw_color: '#FFD700',
+      canvas_bg_start: '#2c3e50',
+      canvas_bg_end: '#4b6584',
+      prize_zone_line_color: 'rgba(255, 255, 255, 0.25)',
+      collection_area_bg: '#fff3e0',
+      collection_area_border: '#c0392b',
+      // Speeds and mechanics
+      move_speed: 3,
+      drop_speed: 4,
+      rise_speed: 5,
+      grab_chance: 0.7,
+      // Theme elements（縁日の景品）
+      prize_emojis: ['🧸', '🍭', '🎈', '🪀', '🎁', '🍬', '🥤', '🎯']
+    };
+
+    document.title = config.title;
+
+    // ── ennichi slot adapter（蓄積＋スロットI/F: init/ready/result） ──
+    const ENS_BOOTH_ID = 'crane';
+    window.addEventListener('message', e => {
+      if (e.data && e.data.ens === 'ennichi' && e.data.type === 'init') { /* v1: no-op */ }
+    });
+    function ensReady() {
+      if (window.parent !== window) window.parent.postMessage({ ens: 'ennichi', type: 'ready', boothId: ENS_BOOTH_ID }, '*');
+    }
+    function takePrize() {
+      if (window.parent !== window) {
+        window.parent.postMessage({ ens: 'ennichi', type: 'result', boothId: ENS_BOOTH_ID, cleared: true, prize: { id: 'plush', emoji: '🧸', label: 'ぬいぐるみ' } }, '*');
+      }
+    }
+
+    // Global game state
+    const gameState = {
+      running: false,
+      phase: 'moving', // moving, dropping, rising
+      craneX: 190,
+      clawY: 50,
+      collected: 0,
+      attempts: 0,
+      grabbed: false,
+      prizes: [],
+      frameCount: 0,
+      selectedPrize: null,
+      prizeEmojis: config.prize_emojis
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Initialize prizes at game start
+    function initPrizes() {
+      gameState.prizes = [];
+      for (let i = 0; i < 5; i++) {
+        gameState.prizes.push({
+          x: Math.random() * (canvas.width - 40) + 20,
+          y: canvas.height - 100 + Math.random() * 80,
+          emoji: gameState.prizeEmojis[Math.floor(Math.random() * gameState.prizeEmojis.length)],
+          grabbed: false
+        });
+      }
+    }
+
+    function initializeTheme() {
+      document.body.style.background = `linear-gradient(135deg, ${config.bg_color} 0%, ${config.bg_color_end} 100%)`;
+      document.getElementById('dropClawBtn').style.background = `linear-gradient(135deg, ${config.drop_button_gradient_start} 0%, ${config.drop_button_gradient_end} 100%)`;
+      document.getElementById('retryClearBtn').style.background = `linear-gradient(135deg, ${config.retry_clear_gradient_start} 0%, ${config.retry_clear_gradient_end} 100%)`;
+      document.getElementById('retryGameOverBtn').style.background = `linear-gradient(135deg, ${config.retry_gameover_gradient_start} 0%, ${config.retry_gameover_gradient_end} 100%)`;
+    }
+
+    function startGame() {
+      gameState.running = true;
+      gameState.phase = 'moving';
+      gameState.craneX = 190;
+      gameState.clawY = 50;
+      gameState.collected = 0;
+      gameState.attempts = 0;
+      gameState.grabbed = false;
+      gameState.frameCount = 0;
+      gameState.selectedPrize = null;
+
+      initPrizes();
+
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'flex';
+      document.getElementById('clearScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('collectionArea').innerHTML = '';
+
+      updateHUD();
+    }
+
+    function updateHUD() {
+      document.getElementById('collected').textContent = gameState.collected;
+      document.getElementById('attempts').textContent = 10 - gameState.attempts;
+    }
+
+    function moveCraneLef() {
+      if (gameState.running && gameState.phase === 'moving') {
+        gameState.craneX = Math.max(30, gameState.craneX - config.move_speed);
+      }
+    }
+
+    function moveCraneRight() {
+      if (gameState.running && gameState.phase === 'moving') {
+        gameState.craneX = Math.min(canvas.width - 30, gameState.craneX + config.move_speed);
+      }
+    }
+
+    function dropClaw() {
+      if (gameState.running && gameState.phase === 'moving') {
+        gameState.phase = 'dropping';
+        gameState.grabbed = false;
+        gameState.selectedPrize = null;
+      }
+    }
+
+    function retryGame() {
+      gameState.running = false;
+      startGame();
+    }
+
+    function checkGameEnd() {
+      if (gameState.collected >= 5) {
+        gameState.running = false;
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('clearScreen').style.display = 'flex';
+        document.getElementById('finalStats').textContent = `使った回数: ${gameState.attempts}回`;
+      } else if (gameState.attempts >= 10) {
+        gameState.running = false;
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+        document.getElementById('finalStats2').textContent = `ゲットした景品: ${gameState.collected}個`;
+      }
+    }
+
+    function gameLoop() {
+      if (!gameState.running) return;
+
+      gameState.frameCount++;
+
+      // Handle dropping phase
+      if (gameState.phase === 'dropping') {
+        gameState.clawY += config.drop_speed;
+
+        // Claw reaches prize zone
+        if (gameState.clawY >= canvas.height - 80 && !gameState.grabbed) {
+          // Check for grab
+          // 素体由来バグ修正: gameState.grabbed を見ないと近接2景品を同時grabして
+          // カウントは1のみ増加 → 景品が枯渇して勝利不能になる（1 drop = 最大1個に制限）
+          gameState.prizes.forEach(prize => {
+            if (!gameState.grabbed && !prize.grabbed &&
+                Math.abs(gameState.craneX - prize.x) < 40 &&
+                Math.abs(gameState.clawY - prize.y) < 40) {
+              if (Math.random() < config.grab_chance) {
+                prize.grabbed = true;
+                gameState.selectedPrize = prize;
+                gameState.grabbed = true;
+              }
+            }
+          });
+        }
+
+        // Start rising
+        if (gameState.clawY >= canvas.height - 20) {
+          gameState.phase = 'rising';
+        }
+      }
+
+      // Handle rising phase
+      if (gameState.phase === 'rising') {
+        gameState.clawY -= config.rise_speed;
+
+        if (gameState.clawY <= 50) {
+          gameState.clawY = 50;
+          gameState.phase = 'moving';
+
+          // Count attempt
+          gameState.attempts++;
+
+          // If grabbed, add to collection
+          if (gameState.grabbed && gameState.selectedPrize) {
+            gameState.collected++;
+            const collectionArea = document.getElementById('collectionArea');
+            const emoji = gameState.selectedPrize.emoji;
+            const item = document.createElement('div');
+            item.className = 'collectedItem';
+            item.textContent = emoji;
+            collectionArea.appendChild(item);
+          }
+
+          updateHUD();
+          checkGameEnd();
+        }
+      }
+
+      drawGame();
+    }
+
+    function drawGame() {
+      // Clear canvas with gradient
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, config.canvas_bg_start);
+      gradient.addColorStop(1, config.canvas_bg_end);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 縁日の提灯（背景演出・静的）
+      for (let i = 0; i < 4; i++) {
+        const lx = 50 + i * 95;
+        ctx.fillStyle = 'rgba(230, 76, 60, 0.55)';
+        ctx.beginPath();
+        ctx.ellipse(lx, 24, 10, 13, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(246, 224, 94, 0.5)';
+        ctx.fillRect(lx - 4, 9, 8, 4);
+      }
+
+      // Draw crane arm (vertical line from top to claw)
+      ctx.strokeStyle = config.crane_arm_color;
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(gameState.craneX, 0);
+      ctx.lineTo(gameState.craneX, gameState.clawY);
+      ctx.stroke();
+
+      // Draw crane base
+      ctx.fillStyle = config.crane_base_color;
+      ctx.fillRect(gameState.craneX - 15, -15, 30, 15);
+
+      // Draw claw (two curved fingers)
+      ctx.strokeStyle = config.claw_color;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(gameState.craneX - 8, gameState.clawY, 8, 0, Math.PI, false);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(gameState.craneX + 8, gameState.clawY, 8, Math.PI, Math.PI * 2, false);
+      ctx.stroke();
+
+      // Draw claw center
+      ctx.fillStyle = config.claw_color;
+      ctx.beginPath();
+      ctx.arc(gameState.craneX, gameState.clawY, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw prizes
+      gameState.prizes.forEach(prize => {
+        if (!prize.grabbed) {
+          ctx.font = 'bold 40px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(prize.emoji, prize.x, prize.y);
+        }
+      });
+
+      // Draw prize zone boundary
+      ctx.strokeStyle = config.prize_zone_line_color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height - 150);
+      ctx.lineTo(canvas.width, canvas.height - 150);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw hint text
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('景品ゾーン', canvas.width / 2, canvas.height - 130);
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+        moveCraneLef();
+      }
+      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+        moveCraneRight();
+      }
+      if (e.key === ' ') {
+        dropClaw();
+        e.preventDefault();
+      }
+    });
+
+    // Initialize theme
+    initializeTheme();
+
+    // Main game loop with setInterval (MANDATORY)
+    setInterval(gameLoop, 16);
+
+    ensReady();
+  </script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金魚すくい屋台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { display: flex; justify-content: center; align-items: flex-start; padding-top: 10px; min-height: 100vh; background: #001a2e; font-family: Arial, sans-serif; }
+        #gameContainer { position: relative; }
+        canvas { display: block; cursor: none; max-width: 100vw; height: auto; }
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; color: #fff; gap: 14px; z-index: 100; text-align: center; padding: 20px; }
+        .screen h1 { font-size: 40px; color: #f6e05e; }
+        .screen p { font-size: 15px; line-height: 1.7; max-width: 300px; }
+        .screen button { padding: 12px 36px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; background: #2b6cb0; color: #fff; }
+        .screen button:hover { background: #4299e1; }
+        .screen button.prizeBtn { background: #c53030; }
+        .screen button.prizeBtn:hover { background: #e53e3e; }
+        #skinToggle { position: absolute; top: 36px; right: 10px; z-index: 200; padding: 8px 14px; font-size: 13px; font-weight: bold; border: 2px solid #f6e05e; border-radius: 20px; background: rgba(0,0,0,0.65); color: #f6e05e; cursor: pointer; }
+        #skinToggle:hover { background: rgba(0,0,0,0.85); }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="startScreen" class="screen" style="display:flex">
+        <h1>🏮 金魚すくい</h1>
+        <p>ポイ（白い輪）を動かして<br>泳いでいるものの上でタップしてすくおう！<br><br>
+        ポイは水に入ると少しずつ弱くなる。<br>外れると大きくダメージ！<br><br>
+        5匹すくえば景品ゲット</p>
+        <button onclick="startGame()">あそぶ</button>
+    </div>
+    <div id="clearScreen" class="screen">
+        <h1>CLEAR!</h1>
+        <p id="clearMsg">5匹ゲット！金魚すくい名人！</p>
+        <button id="takePrizeBtn" class="prizeBtn" onclick="takePrize()">景品を持ち帰る</button>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <div id="gameOverScreen" class="screen">
+        <h1 style="color:#e53e3e">ざんねん…</h1>
+        <p id="overMsg">ポイが破れた…</p>
+        <button onclick="retryGame()">もう一度</button>
+    </div>
+    <button id="skinToggle" onclick="toggleSkin()">だるまに切替</button>
+    <canvas id="gameCanvas"></canvas>
+</div>
+<script>
+const config = {
+    title: "金魚すくい屋台",
+
+    // Theme colors
+    bg_color: "#001a2e",
+    pool_water_color: "rgba(30,100,180,0.82)",
+    pool_border_color: "#5588aa",
+    poi_handle_color: "#c8a060",
+    poi_color_healthy: "#fff",
+    poi_color_warning: "#f6e05e",
+    poi_color_critical: "#fc8181",
+    flash_text_hit_color: "#68d391",
+    flash_text_miss_color: "#fc8181",
+    durability_bar_bg: "#2d3748",
+    durability_bar_healthy: "#48bb78",
+    durability_bar_warning: "#f6e05e",
+    durability_bar_critical: "#e53e3e",
+    durability_bar_border: "#4a5568",
+    score_text_color: "#f6e05e",
+
+    // Game parameters
+    fish_count: 9,
+    drain_rate: 0.08,
+    miss_damage: 18,
+
+    // Fish appearance
+    fish_hue_common_probability: 0.3,
+    fish_hue_common: 30,
+    fish_hue_rare1: 0,
+    fish_hue_rare2: 15,
+
+    // Animation/movement speeds
+    fish_phase_speed: 0.06,
+    fish_sine_amplitude: 0.3,
+    fish_avoid_speed: 0.15,
+    fish_max_speed: 2,
+    scoop_anim_duration_hit: 25,
+    scoop_anim_duration_miss: 20,
+    catch_anim_duration: 50,
+    flash_text_rise_speed: 0.7,
+    flash_text_life_hit: 60,
+    flash_text_life_miss: 50,
+    water_shimmer_speed: 0.04,
+};
+
+// ── ennichi slot adapter（蓄積＋スロットI/F: init/ready/result） ──
+const ENS_BOOTH_ID = 'goldfish';
+const SKINS = {
+    kingyo: { id: 'goldfish', emoji: '🐟', label: '金魚', hudIcon: '🐟', noun: '金魚' },
+    daruma: { id: 'daruma', emoji: '🪆', label: 'だるま', hudIcon: '🪆', noun: 'だるま' },
+};
+let skin = 'kingyo';
+window.addEventListener('message', e => {
+    if (e.data && e.data.ens === 'ennichi' && e.data.type === 'init') { /* v1: no-op */ }
+});
+function ensReady() {
+    if (window.parent !== window) window.parent.postMessage({ ens: 'ennichi', type: 'ready', boothId: ENS_BOOTH_ID }, '*');
+}
+function takePrize() {
+    const s = SKINS[skin];
+    if (window.parent !== window) {
+        window.parent.postMessage({ ens: 'ennichi', type: 'result', boothId: ENS_BOOTH_ID, cleared: true, prize: { id: s.id, emoji: s.emoji, label: s.label } }, '*');
+    }
+}
+function toggleSkin() {
+    skin = (skin === 'kingyo') ? 'daruma' : 'kingyo';
+    document.getElementById('skinToggle').innerText = (skin === 'kingyo') ? 'だるまに切替' : '金魚に切替';
+    if (!gs.running) draw();
+}
+
+const W = 460, H = 540;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+const gc = document.getElementById('gameContainer');
+gc.style.width = 'min(' + W + 'px, 100vw)'; gc.style.height = 'auto';
+
+document.body.style.background = config.bg_color;
+
+const POOL_X = 20, POOL_Y = 80, POOL_W = W - 40, POOL_H = 340;
+const POI_R = 30;
+const FISH_R = 14;
+const CLEAR_COUNT = 5;
+
+function makeFish() {
+    const fish = [];
+    for (let i = 0; i < config.fish_count; i++) {
+        fish.push({
+            x: POOL_X + 40 + Math.random() * (POOL_W - 80),
+            y: POOL_Y + 40 + Math.random() * (POOL_H - 80),
+            vx: (Math.random() - 0.5) * 1.6,
+            vy: (Math.random() - 0.5) * 1.6,
+            phase: Math.random() * Math.PI * 2,
+            hue: Math.random() < config.fish_hue_common_probability ? config.fish_hue_common : (Math.random() < 0.5 ? config.fish_hue_rare1 : config.fish_hue_rare2),
+            caught: false,
+            catchAnim: 0,
+        });
+    }
+    return fish;
+}
+
+const gs = {
+    running: false,
+    mx: W / 2, my: POOL_Y + POOL_H / 2,
+    durability: 100,
+    caught: 0,
+    fish: [],
+    tick: 0,
+    flashTexts: [],
+    scoopAnim: 0,
+    scoopSuccess: false,
+};
+let gameLoop = null;
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    gs.running = true;
+    gs.durability = 100;
+    gs.caught = 0;
+    gs.fish = makeFish();
+    gs.tick = 0;
+    gs.flashTexts = [];
+    gs.scoopAnim = 0;
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(update, 16);
+}
+
+function retryGame() {
+    gs.running = false;
+    document.getElementById('clearScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+}
+
+function inPool(x, y) {
+    return x >= POOL_X + POI_R && x <= POOL_X + POOL_W - POI_R &&
+           y >= POOL_Y + POI_R && y <= POOL_Y + POOL_H - POI_R;
+}
+
+function scoop() {
+    if (!gs.running || !inPool(gs.mx, gs.my)) return;
+    let hit = false;
+    for (const f of gs.fish) {
+        if (f.caught) continue;
+        const dx = gs.mx - f.x, dy = gs.my - f.y;
+        if (Math.sqrt(dx * dx + dy * dy) < POI_R + FISH_R - 8) {
+            f.caught = true; f.catchAnim = config.catch_anim_duration;
+            gs.caught++;
+            gs.scoopAnim = config.scoop_anim_duration_hit; gs.scoopSuccess = true;
+            gs.flashTexts.push({ x: gs.mx, y: gs.my - 30, text: 'すくった！', color: config.flash_text_hit_color, life: config.flash_text_life_hit });
+            hit = true;
+            break;
+        }
+    }
+    if (!hit) {
+        gs.durability = Math.max(0, gs.durability - config.miss_damage);
+        gs.scoopAnim = config.scoop_anim_duration_miss; gs.scoopSuccess = false;
+        gs.flashTexts.push({ x: gs.mx, y: gs.my - 25, text: 'はずれ…', color: config.flash_text_miss_color, life: config.flash_text_life_miss });
+    }
+    checkEnd();
+}
+
+function checkEnd() {
+    if (gs.caught >= CLEAR_COUNT) {
+        gs.running = false; clearInterval(gameLoop);
+        document.getElementById('clearMsg').innerText = '5匹の' + SKINS[skin].noun + 'をすくった！見事な腕前！';
+        document.getElementById('clearScreen').style.display = 'flex';
+    } else if (gs.durability <= 0) {
+        gs.running = false; clearInterval(gameLoop);
+        document.getElementById('overMsg').innerText = gs.caught + '匹すくったところでポイが破れた…';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+}
+
+function update() {
+    if (!gs.running) return;
+    gs.tick++;
+
+    // Drain durability when poi is in pool
+    if (inPool(gs.mx, gs.my)) {
+        gs.durability = Math.max(0, gs.durability - config.drain_rate);
+    }
+
+    if (gs.scoopAnim > 0) gs.scoopAnim--;
+
+    // Move fish
+    for (const f of gs.fish) {
+        if (f.caught) { if (f.catchAnim > 0) f.catchAnim--; continue; }
+        f.phase += config.fish_phase_speed;
+        f.x += f.vx + Math.sin(f.phase) * config.fish_sine_amplitude;
+        f.y += f.vy + Math.cos(f.phase * 0.7) * config.fish_sine_amplitude;
+        // Bounce off pool walls
+        if (f.x < POOL_X + FISH_R) { f.x = POOL_X + FISH_R; f.vx = Math.abs(f.vx); }
+        if (f.x > POOL_X + POOL_W - FISH_R) { f.x = POOL_X + POOL_W - FISH_R; f.vx = -Math.abs(f.vx); }
+        if (f.y < POOL_Y + FISH_R) { f.y = POOL_Y + FISH_R; f.vy = Math.abs(f.vy); }
+        if (f.y > POOL_Y + POOL_H - FISH_R) { f.y = POOL_Y + POOL_H - FISH_R; f.vy = -Math.abs(f.vy); }
+        // Avoid poi slightly
+        const pdx = f.x - gs.mx, pdy = f.y - gs.my;
+        const pd = Math.sqrt(pdx * pdx + pdy * pdy);
+        if (pd < POI_R + FISH_R + 20 && pd > 1) {
+            f.vx += (pdx / pd) * config.fish_avoid_speed;
+            f.vy += (pdy / pd) * config.fish_avoid_speed;
+        }
+        // Speed limit
+        const sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
+        if (sp > config.fish_max_speed) { f.vx = f.vx / sp * config.fish_max_speed; f.vy = f.vy / sp * config.fish_max_speed; }
+    }
+
+    for (let i = gs.flashTexts.length - 1; i >= 0; i--) {
+        const ft = gs.flashTexts[i]; ft.y -= config.flash_text_rise_speed; ft.life--;
+        if (ft.life <= 0) gs.flashTexts.splice(i, 1);
+    }
+
+    if (gs.durability <= 0) checkEnd();
+    draw();
+}
+
+function drawGoldfish(f) {
+    const angle = Math.atan2(f.vy, f.vx);
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(angle);
+
+    // Body
+    ctx.fillStyle = `hsl(${f.hue}, 90%, 55%)`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, FISH_R, FISH_R * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tail fin
+    ctx.fillStyle = `hsl(${f.hue}, 80%, 45%)`;
+    ctx.beginPath();
+    ctx.moveTo(-FISH_R, 0);
+    ctx.lineTo(-FISH_R - 10, -8);
+    ctx.lineTo(-FISH_R - 10, 8);
+    ctx.closePath(); ctx.fill();
+
+    // Eye
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(FISH_R * 0.5, -FISH_R * 0.2, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(FISH_R * 0.5 + 1, -FISH_R * 0.2 - 1, 1.2, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+}
+
+function drawDaruma(f) {
+    // だるまスキン: 直立して波間に揺れる（reskin比較の実演用）
+    const bob = Math.sin(f.phase) * 0.15;
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(bob);
+
+    // Body (red round)
+    ctx.fillStyle = `hsl(${f.hue === 30 ? 45 : 0}, 85%, ${f.hue === 30 ? 55 : 48}%)`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, FISH_R * 0.9, FISH_R, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Face (white patch)
+    ctx.fillStyle = '#fdf6ec';
+    ctx.beginPath();
+    ctx.ellipse(0, -FISH_R * 0.15, FISH_R * 0.55, FISH_R * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(-4, -FISH_R * 0.25, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -FISH_R * 0.25, 2.2, 0, Math.PI * 2); ctx.fill();
+
+    // Belly mark (gold)
+    ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, FISH_R * 0.5, FISH_R * 0.35, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
+
+    ctx.restore();
+}
+
+function draw() {
+    ctx.fillStyle = config.bg_color;
+    ctx.fillRect(0, 0, W, H);
+
+    // Pool water
+    ctx.fillStyle = config.pool_water_color;
+    ctx.fillRect(POOL_X, POOL_Y, POOL_W, POOL_H);
+
+    // Water shimmer
+    const shimmer = Math.sin(gs.tick * config.water_shimmer_speed) * 0.05;
+    const shimmerAlpha = 0.06 + shimmer;
+    ctx.fillStyle = `rgba(100,200,255,${shimmerAlpha})`;
+    ctx.fillRect(POOL_X, POOL_Y, POOL_W, POOL_H / 3);
+
+    // Pool border
+    ctx.strokeStyle = config.pool_border_color; ctx.lineWidth = 3;
+    ctx.strokeRect(POOL_X, POOL_Y, POOL_W, POOL_H);
+
+    // Fish / daruma
+    for (const f of gs.fish) {
+        if (f.caught && f.catchAnim <= 0) continue;
+        const alpha = f.caught ? f.catchAnim / config.catch_anim_duration : 1;
+        ctx.globalAlpha = alpha;
+
+        if (skin === 'daruma') drawDaruma(f); else drawGoldfish(f);
+        ctx.globalAlpha = 1;
+
+        if (f.caught) {
+            ctx.fillStyle = '#f6e05e';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('✨', f.x, f.y - 20);
+        }
+    }
+
+    // Poi (paper net) — follows mouse
+    const poiInPool = inPool(gs.mx, gs.my);
+    if (poiInPool) {
+        const durFrac = gs.durability / 100;
+        const poiColor = durFrac > 0.5 ? config.poi_color_healthy : (durFrac > 0.25 ? config.poi_color_warning : config.poi_color_critical);
+        const scoop = gs.scoopAnim > 0;
+        const poiAlpha = scoop ? (gs.scoopSuccess ? 0.95 : 0.6) : 0.85;
+        ctx.globalAlpha = poiAlpha;
+        ctx.strokeStyle = poiColor;
+        ctx.lineWidth = scoop ? 4 : 2.5;
+        ctx.beginPath(); ctx.arc(gs.mx, gs.my, POI_R, 0, Math.PI * 2); ctx.stroke();
+        // Inner net lines
+        ctx.globalAlpha = poiAlpha * 0.35;
+        ctx.strokeStyle = poiColor; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gs.mx - POI_R, gs.my); ctx.lineTo(gs.mx + POI_R, gs.my); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gs.mx, gs.my - POI_R); ctx.lineTo(gs.mx, gs.my + POI_R); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Poi handle (always visible)
+    ctx.strokeStyle = config.poi_handle_color; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(gs.mx, gs.my + POI_R); ctx.lineTo(gs.mx + 10, gs.my + POI_R + 30); ctx.stroke();
+
+    // Flash texts
+    for (const ft of gs.flashTexts) {
+        ctx.globalAlpha = ft.life / config.flash_text_life_hit;
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(ft.text, ft.x, ft.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // HUD: durability
+    const durW = W - 20;
+    const durFrac = gs.durability / 100;
+    ctx.fillStyle = config.durability_bar_bg; ctx.fillRect(10, 10, durW, 14);
+    ctx.fillStyle = durFrac > 0.5 ? config.durability_bar_healthy : (durFrac > 0.25 ? config.durability_bar_warning : config.durability_bar_critical);
+    ctx.fillRect(10, 10, durW * durFrac, 14);
+    ctx.strokeStyle = config.durability_bar_border; ctx.lineWidth = 1; ctx.strokeRect(10, 10, durW, 14);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('ポイ耐久 ' + Math.ceil(gs.durability) + '%', W / 2, 17);
+
+    // HUD: caught count
+    ctx.fillStyle = config.score_text_color; ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(SKINS[skin].hudIcon + ' すくった: ' + gs.caught + ' / ' + CLEAR_COUNT, 10, 30);
+
+    // Instruction (when outside pool)
+    if (!poiInPool) {
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '13px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText('プールの上で狙ってタップ！', W / 2, H - 8);
+    }
+
+    // Pool label
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '11px Arial';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText('狙ってタップ', POOL_X + POOL_W - 4, POOL_Y + POOL_H - 4);
+}
+
+// CSS縮小表示でも当たり座標がずれないようゲーム座標へスケール変換する
+function toGameXY(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    return [(clientX - r.left) * (W / r.width), (clientY - r.top) * (H / r.height)];
+}
+
+canvas.addEventListener('mousemove', e => {
+    [gs.mx, gs.my] = toGameXY(e.clientX, e.clientY);
+    if (gs.running) draw();
+});
+canvas.addEventListener('click', e => {
+    [gs.mx, gs.my] = toGameXY(e.clientX, e.clientY);
+    scoop();
+});
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    [gs.mx, gs.my] = toGameXY(e.touches[0].clientX, e.touches[0].clientY);
+    if (gs.running) draw();
+}, { passive: false });
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    [gs.mx, gs.my] = toGameXY(e.touches[0].clientX, e.touches[0].clientY);
+    scoop();
+}, { passive: false });
+
+ensReady();
+</script>
+</body>
+</html>

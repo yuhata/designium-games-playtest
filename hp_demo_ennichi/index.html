@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>縁日横丁 — 3つの屋台で棚を埋めよう</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+        background: #160b0b;
+        color: #fff;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+    }
+    #app {
+        width: 100%;
+        max-width: 480px;
+        min-height: 100vh;
+        position: relative;
+        background: linear-gradient(180deg, #2b1414 0%, #160b0b 100%);
+        display: flex;
+        flex-direction: column;
+    }
+    .screen { display: none; flex: 1; flex-direction: column; }
+    .screen.active { display: flex; }
+
+    /* ── 提灯帯（共通ヘッダ装飾） ── */
+    .lantern-row {
+        display: flex;
+        justify-content: space-around;
+        padding: 10px 16px 4px;
+        font-size: 22px;
+        user-select: none;
+    }
+
+    /* ── タイトル ── */
+    #titleScreen { justify-content: center; align-items: center; text-align: center; padding: 24px; gap: 18px; }
+    #titleScreen h1 { font-size: 42px; letter-spacing: 2px; text-shadow: 0 4px 16px rgba(230,126,34,0.45); }
+    #titleScreen .subtitle { font-size: 15px; line-height: 1.8; opacity: 0.9; }
+    .shelf-preview {
+        display: flex; gap: 12px; padding: 14px;
+        background: linear-gradient(180deg, #5b3a1e 0%, #3d2712 100%);
+        border-radius: 10px; border: 2px solid #7c5230;
+    }
+    .shelf-slot {
+        width: 72px; height: 72px; border-radius: 8px;
+        border: 2px dashed rgba(255,255,255,0.35);
+        background: rgba(0,0,0,0.25);
+        display: flex; justify-content: center; align-items: center;
+        font-size: 38px;
+    }
+    .shelf-slot.filled { border-style: solid; border-color: #f6d365; background: rgba(246,211,101,0.12); }
+    .btn-main {
+        background: linear-gradient(135deg, #e67e22 0%, #c0392b 100%);
+        color: #fff; border: none; padding: 16px 52px; border-radius: 50px;
+        font-size: 17px; font-weight: bold; cursor: pointer;
+        box-shadow: 0 8px 22px rgba(192,57,43,0.45);
+        transition: transform 0.15s;
+    }
+    .btn-main:active { transform: scale(0.97); }
+    .btn-sub {
+        background: transparent; color: rgba(255,255,255,0.65);
+        border: 1px solid rgba(255,255,255,0.3); padding: 10px 26px;
+        border-radius: 50px; font-size: 13px; cursor: pointer;
+    }
+    .btn-sub:hover { color: #fff; border-color: rgba(255,255,255,0.6); }
+
+    /* ── 縁日マップ ── */
+    #mapScreen { padding: 0 18px 120px; }
+    #mapScreen h2 { text-align: center; font-size: 22px; margin: 8px 0 4px; letter-spacing: 4px; }
+    #mapScreen .map-note { text-align: center; font-size: 12px; opacity: 0.6; margin-bottom: 14px; }
+    .booth-card {
+        display: flex; align-items: center; gap: 16px;
+        background: linear-gradient(135deg, #4a1f1f 0%, #2b1414 100%);
+        border: 2px solid #7c5230; border-radius: 14px;
+        padding: 18px 20px; margin-bottom: 14px; cursor: pointer;
+        transition: transform 0.15s, border-color 0.15s;
+    }
+    .booth-card:hover { transform: translateY(-2px); border-color: #f6d365; }
+    .booth-card .booth-emoji {
+        font-size: 38px; width: 60px; height: 60px;
+        background: rgba(246,211,101,0.1); border-radius: 50%;
+        display: flex; justify-content: center; align-items: center;
+    }
+    .booth-card .booth-info { flex: 1; text-align: left; }
+    .booth-card .booth-name { font-size: 17px; font-weight: bold; margin-bottom: 4px; }
+    .booth-card .booth-state { font-size: 12px; opacity: 0.7; }
+    .booth-card .booth-prize { font-size: 30px; min-width: 40px; text-align: center; }
+
+    /* ── 戦利品棚（常時表示バー） ── */
+    #shelfBar {
+        position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+        width: 100%; max-width: 480px;
+        background: linear-gradient(180deg, #5b3a1e 0%, #3d2712 100%);
+        border-top: 3px solid #7c5230;
+        padding: 10px 18px 14px;
+        display: none; justify-content: center; align-items: center; gap: 14px;
+        z-index: 50;
+    }
+    #shelfBar.visible { display: flex; }
+    #shelfBar .shelf-label { font-size: 12px; font-weight: bold; opacity: 0.85; writing-mode: horizontal-tb; }
+    #shelfBar .shelf-slot { width: 56px; height: 56px; font-size: 30px; }
+
+    /* ── ゲームオーバーレイ ── */
+    #gameOverlay {
+        position: fixed; inset: 0; z-index: 100;
+        background: #000; display: none; flex-direction: column;
+    }
+    #gameOverlay.visible { display: flex; }
+    #overlayHeader {
+        display: flex; align-items: center; gap: 12px;
+        background: #2b1414; padding: 10px 14px;
+        border-bottom: 2px solid #7c5230;
+    }
+    #overlayHeader button {
+        background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+        padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    }
+    #overlayHeader .overlay-title { font-size: 15px; font-weight: bold; }
+    #gameFrame { flex: 1; width: 100%; border: none; background: #000; }
+
+    /* ── 完成画面 ── */
+    #completeScreen { justify-content: center; align-items: center; text-align: center; padding: 24px; gap: 16px; }
+    #completeScreen h2 { font-size: 26px; text-shadow: 0 4px 16px rgba(246,211,101,0.4); }
+    #completeScreen .complete-sub { font-size: 14px; opacity: 0.85; line-height: 1.7; }
+    #trophyCanvas {
+        border-radius: 12px; border: 3px solid #7c5230;
+        max-width: 100%; height: auto;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    }
+    .cta-box {
+        background: rgba(246,211,101,0.08); border: 1px solid rgba(246,211,101,0.35);
+        border-radius: 12px; padding: 16px 20px; max-width: 360px;
+    }
+    .cta-box p { font-size: 13px; line-height: 1.7; margin-bottom: 12px; opacity: 0.9; }
+    .cta-box a {
+        display: inline-block; background: linear-gradient(135deg, #f6d365 0%, #e67e22 100%);
+        color: #3d1f00; font-weight: bold; text-decoration: none;
+        padding: 12px 28px; border-radius: 50px; font-size: 14px;
+    }
+</style>
+</head>
+<body>
+<div id="app">
+
+    <!-- タイトル: 冒頭10秒予告 = 空の戦利品棚＋ゴール提示 -->
+    <div class="screen active" id="titleScreen">
+        <div class="lantern-row">🏮🏮🏮🏮🏮</div>
+        <h1>縁日横丁</h1>
+        <p class="subtitle">3つの屋台で遊んで<br><b>戦利品棚</b>を埋めよう</p>
+        <div class="shelf-preview" id="titleShelf">
+            <div class="shelf-slot" data-booth="goldfish"></div>
+            <div class="shelf-slot" data-booth="crane"></div>
+            <div class="shelf-slot" data-booth="quiz"></div>
+        </div>
+        <p class="subtitle" style="font-size:12px; opacity:0.6;">所要時間 約3分・とちゅう離脱OK（棚は保存されます）</p>
+        <button class="btn-main" id="startBtn" onclick="enterMap()">のれんをくぐる</button>
+    </div>
+
+    <!-- 縁日マップ -->
+    <div class="screen" id="mapScreen">
+        <div class="lantern-row">🏮🏮🏮🏮🏮</div>
+        <h2>縁日横丁</h2>
+        <p class="map-note">屋台をえらんで遊ぼう</p>
+        <div id="boothList"></div>
+        <div style="text-align:center; margin-top: 8px;">
+            <button class="btn-sub" id="resetBtn" onclick="resetAll()">はじめから（棚をリセット）</button>
+        </div>
+    </div>
+
+    <!-- 完成画面 -->
+    <div class="screen" id="completeScreen">
+        <div class="lantern-row">🎆🏮🎆🏮🎆</div>
+        <h2>戦利品棚 完成！</h2>
+        <p class="complete-sub">3つの屋台を制覇した！</p>
+        <canvas id="trophyCanvas" width="480" height="640"></canvas>
+        <button class="btn-main" id="saveImgBtn" onclick="saveTrophyImage()">画像を保存する</button>
+        <div class="cta-box">
+            <p>このデモのゲームも景品も、<br><b>あなたの街の名物に差し替えられます。</b></p>
+            <a id="ctaLink" href="https://www.designium.jp/xr/contact/?utm_source=xr_games&utm_medium=demo&utm_campaign=ennichi_demo" target="_blank" rel="noopener">体験をつくる相談をする</a>
+        </div>
+        <button class="btn-sub" onclick="resetAll()">もう一度あそぶ（棚をリセット）</button>
+    </div>
+
+    <!-- 戦利品棚バー（マップ表示中の常時表示） -->
+    <div id="shelfBar">
+        <span class="shelf-label">戦利品棚</span>
+        <div class="shelf-slot" data-booth="goldfish"></div>
+        <div class="shelf-slot" data-booth="crane"></div>
+        <div class="shelf-slot" data-booth="quiz"></div>
+    </div>
+
+    <!-- ゲームオーバーレイ -->
+    <div id="gameOverlay">
+        <div id="overlayHeader">
+            <button id="backBtn" onclick="closeBooth()">← 屋台にもどる</button>
+            <span class="overlay-title" id="overlayTitle"></span>
+        </div>
+        <iframe id="gameFrame" src="about:blank" title="屋台ゲーム"></iframe>
+    </div>
+
+</div>
+<script>
+// ════════════════════════════════════════════════════════
+// 縁日横丁 — 器シェル v1（メカニクス＋器のみ / juiceはv2）
+// 蓄積＋スロットI/F: shell→booth {ens,type:'init'} / booth→shell {ens,type:'ready'|'result'}
+// 船場双六のコードは流用していない（I/F型のみ踏襲・新規実装）
+// ════════════════════════════════════════════════════════
+
+const STORAGE_KEY = 'hp_demo_ennichi_v1';
+
+const BOOTHS = [
+    { id: 'goldfish', name: '金魚すくい', emoji: '🐟', file: 'booth_goldfish.html', desc: 'ポイでねらってタップ' },
+    { id: 'crane',    name: 'クレーン景品釣り', emoji: '🧸', file: 'booth_crane.html', desc: 'アームを動かして落とす' },
+    { id: 'quiz',     name: '屋台クイズ', emoji: '🏮', file: 'booth_quiz.html', desc: '45秒で10問に瞬答' },
+];
+
+// 蓄積状態: { prizes: { goldfish: {id,emoji,label}|null, ... }, completedAt: string|null }
+let state = loadState();
+let activeBoothId = null;
+
+function defaultState() {
+    return { prizes: { goldfish: null, crane: null, quiz: null }, completedAt: null };
+}
+
+function loadState() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaultState();
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed.prizes !== 'object') return defaultState();
+        return { ...defaultState(), ...parsed, prizes: { ...defaultState().prizes, ...parsed.prizes } };
+    } catch (e) {
+        return defaultState();
+    }
+}
+
+function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function prizeCount() {
+    return BOOTHS.filter(b => state.prizes[b.id]).length;
+}
+
+// ── 画面遷移 ──
+function switchScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.getElementById('shelfBar').classList.toggle('visible', id === 'mapScreen');
+}
+
+function enterMap() {
+    if (prizeCount() >= BOOTHS.length) { showComplete(); return; }
+    renderBooths();
+    renderShelf();
+    switchScreen('mapScreen');
+}
+
+// ── 屋台一覧・棚の描画 ──
+function renderBooths() {
+    const list = document.getElementById('boothList');
+    list.innerHTML = '';
+    BOOTHS.forEach(b => {
+        const prize = state.prizes[b.id];
+        const card = document.createElement('div');
+        card.className = 'booth-card';
+        card.id = 'booth_' + b.id;
+        card.innerHTML = `
+            <div class="booth-emoji">${b.emoji}</div>
+            <div class="booth-info">
+                <div class="booth-name">${b.name}</div>
+                <div class="booth-state">${prize ? '景品ゲット済み（もう一度遊べる）' : b.desc}</div>
+            </div>
+            <div class="booth-prize">${prize ? prize.emoji : '・'}</div>`;
+        card.addEventListener('click', () => openBooth(b.id));
+        list.appendChild(card);
+    });
+}
+
+function renderShelf() {
+    document.querySelectorAll('.shelf-slot').forEach(slot => {
+        const boothId = slot.dataset.booth;
+        const prize = state.prizes[boothId];
+        slot.textContent = prize ? prize.emoji : '';
+        slot.classList.toggle('filled', !!prize);
+        slot.title = prize ? prize.label : '';
+    });
+}
+
+// ── 屋台の開閉（スロット実行） ──
+function openBooth(boothId) {
+    const booth = BOOTHS.find(b => b.id === boothId);
+    if (!booth) return;
+    activeBoothId = boothId;
+    document.getElementById('overlayTitle').textContent = booth.emoji + ' ' + booth.name;
+    const frame = document.getElementById('gameFrame');
+    frame.src = booth.file;
+    document.getElementById('gameOverlay').classList.add('visible');
+}
+
+function closeBooth() {
+    activeBoothId = null;
+    document.getElementById('gameOverlay').classList.remove('visible');
+    document.getElementById('gameFrame').src = 'about:blank';
+    if (prizeCount() >= BOOTHS.length) {
+        showComplete();
+    } else {
+        enterMap();
+    }
+}
+
+// ── slot I/F 受信 ──
+window.addEventListener('message', e => {
+    const d = e.data;
+    if (!d || d.ens !== 'ennichi') return;
+    if (d.type === 'ready') {
+        // 起動確認に応えて init を返す（v1では設定なし・型の往復のみ）
+        const frame = document.getElementById('gameFrame');
+        if (frame && frame.contentWindow) {
+            frame.contentWindow.postMessage({ ens: 'ennichi', type: 'init', boothId: d.boothId }, '*');
+        }
+    } else if (d.type === 'result' && d.cleared && d.prize && d.boothId) {
+        if (!(d.boothId in state.prizes)) return;
+        state.prizes[d.boothId] = { id: d.prize.id, emoji: d.prize.emoji, label: d.prize.label };
+        if (prizeCount() >= BOOTHS.length && !state.completedAt) {
+            state.completedAt = new Date().toISOString();
+        }
+        saveState();
+        closeBooth();
+    }
+});
+
+// ── 完成画面・一枚絵 ──
+function showComplete() {
+    renderShelf();
+    switchScreen('completeScreen');
+    drawTrophy();
+}
+
+function drawTrophy() {
+    const cv = document.getElementById('trophyCanvas');
+    const c = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+
+    // 背景
+    const bg = c.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#3d1414');
+    bg.addColorStop(1, '#160b0b');
+    c.fillStyle = bg;
+    c.fillRect(0, 0, W, H);
+
+    // 提灯列
+    c.font = '34px serif';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (let i = 0; i < 5; i++) c.fillText('🏮', 60 + i * 90, 50);
+
+    // タイトル
+    c.fillStyle = '#f6d365';
+    c.font = 'bold 36px "Hiragino Sans", "Noto Sans JP", sans-serif';
+    c.fillText('縁日横丁', W / 2, 120);
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.font = 'bold 20px "Hiragino Sans", "Noto Sans JP", sans-serif';
+    c.fillText('戦利品棚', W / 2, 158);
+
+    // 棚板と景品
+    const shelfY = 300;
+    c.fillStyle = '#5b3a1e';
+    c.fillRect(40, shelfY + 52, W - 80, 16);
+    c.fillStyle = '#3d2712';
+    c.fillRect(40, shelfY + 68, W - 80, 6);
+
+    BOOTHS.forEach((b, i) => {
+        const prize = state.prizes[b.id];
+        const x = W / 2 + (i - 1) * 130;
+        if (prize) {
+            c.font = '64px serif';
+            c.fillText(prize.emoji, x, shelfY);
+            c.fillStyle = '#fff';
+            c.font = 'bold 15px "Hiragino Sans", "Noto Sans JP", sans-serif';
+            c.fillText(prize.label, x, shelfY + 90);
+            c.fillStyle = 'rgba(255,255,255,0.5)';
+            c.font = '11px "Hiragino Sans", "Noto Sans JP", sans-serif';
+            c.fillText(b.name, x, shelfY + 110);
+        }
+    });
+
+    // 完成スタンプ風
+    c.strokeStyle = '#c0392b'; c.lineWidth = 4;
+    c.beginPath(); c.arc(W - 80, 200, 42, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = '#c0392b';
+    c.font = 'bold 16px "Hiragino Sans", "Noto Sans JP", sans-serif';
+    c.fillText('三屋台', W - 80, 192);
+    c.fillText('制覇', W - 80, 212);
+
+    // 日付・クレジット
+    const d = state.completedAt ? new Date(state.completedAt) : new Date();
+    const dateStr = d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0');
+    c.fillStyle = 'rgba(255,255,255,0.6)';
+    c.font = '14px "Hiragino Sans", "Noto Sans JP", sans-serif';
+    c.fillText(dateStr + ' 縁日横丁にて', W / 2, 480);
+    c.fillStyle = 'rgba(255,255,255,0.4)';
+    c.font = '12px "Hiragino Sans", "Noto Sans JP", sans-serif';
+    c.fillText('Designium — 体験開発スタジオ', W / 2, 600);
+}
+
+function saveTrophyImage() {
+    const cv = document.getElementById('trophyCanvas');
+    const a = document.createElement('a');
+    a.href = cv.toDataURL('image/png');
+    a.download = 'ennichi_yokocho_shelf.png';
+    a.click();
+}
+
+// ── リセット（罰なし・任意のやり直し） ──
+function resetAll() {
+    state = defaultState();
+    saveState();
+    renderBooths();
+    renderShelf();
+    switchScreen('mapScreen');
+}
+
+// ── 起動: 再訪復元 ──
+(function init() {
+    renderShelf();
+    if (prizeCount() >= BOOTHS.length) {
+        // 完成済みで再訪 → 棚を復元して完成画面へ
+        showComplete();
+    } else if (prizeCount() > 0) {
+        // 途中離脱からの再開 → マップへ直行
+        enterMap();
+    }
+    // 0個ならタイトル（冒頭10秒予告）のまま
+})();
+</script>
+</body>
+</html>
